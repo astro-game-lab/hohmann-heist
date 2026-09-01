@@ -1,4 +1,4 @@
-# Design — __GAME_NAME__
+# Design — Hohmann Heist
 
 > Sketch this early and revise it often. It does not need to be long; it needs to be honest about what the game is and who it is for.
 >

@@ -1,4 +1,4 @@
-# Physics model — __GAME_NAME__
+# Physics model — Hohmann Heist
 
 > **This document is a contract, not a formality.** It states what the simulation claims to be true, and how each claim was checked. A reviewer should be able to read it and know exactly how far to trust a number the game prints. Fill it in before the first release, and update it in the same PR as any change to the model.
 >

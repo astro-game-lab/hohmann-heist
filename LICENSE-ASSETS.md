@@ -5,7 +5,7 @@ The **code** in this repository is licensed under the MIT License — see [`LICE
 The **game assets** are licensed separately, under
 [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 
-Copyright (c) __YEAR__ astro-game-lab
+Copyright (c) 2026 astro-game-lab
 
 ## What counts as an asset
 
@@ -19,8 +19,8 @@ You are free to share and adapt these assets, for any purpose including commerci
 
 Suggested attribution:
 
-> "__GAME_NAME__" assets by astro-game-lab, licensed under CC BY 4.0.
-> https://github.com/astro-game-lab/__GAME_SLUG__
+> "Hohmann Heist" assets by astro-game-lab, licensed under CC BY 4.0.
+> https://github.com/astro-game-lab/hohmann-heist
 
 ## Third-party material
 

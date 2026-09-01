@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**__GAME_NAME__** — __GAME_DESC__
+**Hohmann Heist** — Steal things in orbit. A browser puzzle game where the only weapon is real orbital mechanics.
 
 An [astro-game-lab](https://github.com/astro-game-lab) game. The org builds games where orbits are propagated rather than animated, and where the simulation is expected to agree with a textbook. Read [`docs/PHYSICS.md`](docs/PHYSICS.md) before touching anything in the simulation — it states what this game's model claims and how those claims were validated.
 

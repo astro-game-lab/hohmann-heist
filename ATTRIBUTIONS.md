@@ -1,6 +1,6 @@
 # Attributions
 
-Third-party material bundled with or used by __GAME_NAME__, and the terms it comes under.
+Third-party material bundled with or used by Hohmann Heist, and the terms it comes under.
 
 Every asset, dataset, and kernel that this repository ships or downloads is listed here. If you add one, add its row in the same commit — an unattributed asset is a licensing bug, and CI cannot catch it for us.
 

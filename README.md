@@ -1,65 +1,71 @@
-# .repo-template
+# Hohmann Heist
 
-Template repository for [astro-game-lab](https://github.com/astro-game-lab) games.
+Steal things in orbit. A browser puzzle game where the only weapon is real orbital mechanics.
 
-Stack-agnostic for now: it carries the org's licensing, documentation, and conventions, and leaves the toolchain to you. Language scaffolds will land under `stacks/` once the first game repos have settled on a shape worth copying.
+An [astro-game-lab](https://github.com/astro-game-lab) game — real orbital mechanics, playable.
 
-## Start a new repository
+> Freshly bootstrapped from the org template. Replace this note, and fill in the
+> sections below, as the repo becomes real.
 
-1. **Use this template → Create a new repository** on GitHub, or:
+## Play
 
-   ```bash
-   gh repo create astro-game-lab/<name> --template astro-game-lab/.repo-template --public
-   ```
+_Link to the deployed build, or the command to run it locally._
 
-2. Clone it, then run the bootstrap script from the repo root:
+## Status
 
-   ```bash
-   ./bootstrap.sh <name> ["One-line description"]
-   ```
+Early. Not yet playable.
 
-   For example:
+## The astrodynamics
 
-   ```bash
-   ./bootstrap.sh orbit-runner "A rendezvous puzzle game in the browser."
-   ```
+_One or two sentences: which concept this game is built around, and what the
+player should come away understanding._
 
-3. Set up your toolchain, fill in the docs, and commit.
+See [`docs/PHYSICS.md`](docs/PHYSICS.md) for the model — units, frames, what is
+neglected, and how the numbers were validated. If the simulation ever disagrees
+with a textbook, that is a bug: please
+[report it](https://github.com/astro-game-lab/hohmann-heist/issues/new/choose)
+using the physics discrepancy template.
 
-The script substitutes the placeholders below across every file, then deletes itself. What is left is a normal repository with no template scaffolding in it. It refuses to run on a dirty working tree, so `git checkout .` will always get you back.
+## Development
 
-### Placeholders
+### Requirements
 
-| Placeholder | Becomes | Example |
-| --- | --- | --- |
-| `__GAME_SLUG__` | the repo name, as given | `orbit-runner` |
-| `__GAME_NAME__` | title-cased from the slug | `Orbit Runner` |
-| `__GAME_PKG__` | slug as a valid identifier | `orbit_runner` |
-| `__GAME_DESC__` | the description argument | `A rendezvous puzzle game.` |
-| `__YEAR__` | the current year | `2026` |
+_Toolchain and versions._
 
-Substitution applies to file and directory names too, so a path like `src/__GAME_PKG__/` becomes `src/orbit_runner/`.
+### Setup
 
-## What you get
+```bash
+git clone https://github.com/astro-game-lab/hohmann-heist.git
+cd hohmann-heist
+# install dependencies
+```
 
-| File | Purpose |
+### Common tasks
+
+| Task | Command |
 | --- | --- |
-| `README.game.md` | Becomes the new repo's `README.md`, replacing this one. |
-| `docs/PHYSICS.md` | The model declaration — units, frames, time scale, what is neglected, and how each claim was validated. Filling this in is how this org keeps its simulations honest. |
-| `docs/DESIGN.md` | Game design doc skeleton, including an explicit list of where the game layer departs from the physics. |
-| `CLAUDE.md` | The org's simulation conventions, scoped to the repo, so Claude Code sessions start with them loaded. |
-| `LICENSE` | MIT, for code. |
-| `LICENSE-ASSETS.md` | CC BY 4.0, for art, audio, and authored content. |
-| `ATTRIBUTIONS.md` | Provenance table for third-party assets, data, and constants. |
-| `CHANGELOG.md` | Keep a Changelog format, with a dedicated section for physics-model changes. |
-| `.editorconfig` | Shared indentation and line-ending rules. |
-| `.gitattributes` | Line-ending normalization, binary markers, and commented-out Git LFS patterns. |
-| `.gitignore` | Common OS, editor, environment, and large-data ignores. |
+| Run locally | _todo_ |
+| Test | _todo_ |
+| Lint | _todo_ |
+| Build | _todo_ |
 
-Not included, because the organization provides them: issue templates, the pull request template, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, and `SUPPORT.md` are inherited from [`astro-game-lab/.github`](https://github.com/astro-game-lab/.github). Add a local copy only when a repo genuinely needs to override one.
+## Documentation
 
-## What is not here yet
+- [`docs/PHYSICS.md`](docs/PHYSICS.md) — the simulation model and its validation.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — what the game is and who it is for.
+- [`CHANGELOG.md`](CHANGELOG.md) — notable changes, including physics-model changes.
+- [`CLAUDE.md`](CLAUDE.md) — conventions, for humans and for Claude Code.
 
-- **Stack scaffolds.** The org expects TypeScript-in-the-browser for most games and Python for simulation-heavy work, with room for more later. Neither is scaffolded yet — set up the toolchain by hand, and once a shape proves itself, promote it into `stacks/` here.
-- **CI workflows.** They depend on the stack, so they arrive with it.
-- **Dependabot config.** Ecosystem-specific; same reasoning.
+## Contributing
+
+Contributions are welcome — code, playtest feedback, art, scenario design, and
+bug reports all count. See the org
+[contributing guide](https://github.com/astro-game-lab/.github/blob/main/CONTRIBUTING.md),
+which covers the extra requirements for physics changes: state your units and
+frame, cite your source, and include a validation test.
+
+## Licence
+
+Code is [MIT](LICENSE). Game assets are
+[CC BY 4.0](LICENSE-ASSETS.md). Third-party material and its terms are listed in
+[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
