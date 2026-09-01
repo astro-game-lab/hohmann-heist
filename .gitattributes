@@ -1,0 +1,43 @@
+# Normalize line endings: LF in the repo, native on checkout.
+* text=auto eol=lf
+
+# Shell scripts must keep LF even on Windows checkouts, or they will not run.
+*.sh text eol=lf
+
+# Explicitly binary — never diffed, never line-ending-converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.glb binary
+*.gltf binary
+*.bsp binary
+*.bpc binary
+*.tpc binary
+
+# Lockfiles are generated: collapse them in diffs and reviews.
+package-lock.json linguist-generated=true -diff
+uv.lock          linguist-generated=true -diff
+
+# Keep GitHub's language stats about the game, not the tooling.
+docs/*     linguist-documentation=true
+assets/*   linguist-vendored=true
+
+# --- Git LFS ---------------------------------------------------------------
+# Uncomment once this repo has real art, audio, or ephemeris data. Contributors
+# then need git-lfs installed, so do not enable it before it is earning its keep.
+# *.png  filter=lfs diff=lfs merge=lfs -text
+# *.jpg  filter=lfs diff=lfs merge=lfs -text
+# *.ogg  filter=lfs diff=lfs merge=lfs -text
+# *.mp3  filter=lfs diff=lfs merge=lfs -text
+# *.glb  filter=lfs diff=lfs merge=lfs -text
+# *.bsp  filter=lfs diff=lfs merge=lfs -text
