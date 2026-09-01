@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only by default. Nothing here needs to write to the repository.
+permissions:
+  contents: read
+
+# A newer push to the same branch makes an in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: typecheck · lint · layering · format · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Actions are pinned to full commit SHAs rather than tags. A tag can be
+      # moved to point at different code; a SHA cannot.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        # Version comes from `packageManager` in package.json — one source of truth.
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        # Fails if the lockfile is stale rather than quietly resolving something new.
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Layering (NFR-005)
+        run: pnpm layering
+
+      - name: Format
+        run: pnpm format:check
+
+      # test:all, not test — the guardrail suite is excluded from the inner-loop
+      # `test` script for speed, and CI is where it has to run.
+      - name: Test
+        run: pnpm test:all
+
+      - name: Coverage
+        run: pnpm coverage

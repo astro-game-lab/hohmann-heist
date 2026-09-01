@@ -1985,7 +1985,7 @@ The threat is a player submitting a Δv they did not achieve. The defence is tha
 | **Lint / format** | ESLint (flat config) + Prettier, plus `dependency-cruiser` for the layering rule and a custom rule banning `acos` in `@hh/astro` |
 | **Test** | Vitest for unit and property tests (`fast-check`), Playwright for browser and cross-runtime determinism, `@axe-core/playwright` for a11y |
 | **Environments** | `production` → GitHub Pages at the repo's Pages URL (custom domain optional later); `preview` → a Pages deployment per PR; `local` → `pnpm dev`. The API has `production` and `staging` Workers. |
-| **CI** (`.github/workflows/ci.yml`) | On every PR: install → typecheck → lint → layering check → unit tests → property tests → bundle-size gate → Playwright (Chromium/Firefox/WebKit) → axe → benchmark regression check |
+| **CI** (`.github/workflows/ci.yml`) | On every PR and every push to `main`: install (`--frozen-lockfile`) → typecheck → lint → layering check → format check → `test:all` (packages **and** the guardrail suite) → coverage. Browser, axe, bundle-size and benchmark steps are added by the issues that introduce them. Actions are pinned to commit SHAs, not tags. |
 | **CD** | On merge to `main`: build → deploy to Pages → smoke test the deployed URL. Tagged releases also deploy the Worker and publish the scenario JSON Schema to the Pages site. |
 | **Branch protection** | `main` protected, linear history, CI required, squash merges (matches the `issue` skill's assumptions) |
 | **Release** | Changesets for versioning, `CHANGELOG.md` maintained, **and any PR that changes a physics result must update `docs/PHYSICS.md` in the same PR** (CI check on the golden fixtures enforces this by failing loudly). |
