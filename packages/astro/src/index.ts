@@ -10,5 +10,7 @@
  * (package responsibilities).
  */
 
-/** Package identity. Placeholder until this package holds real code. */
+/** Package identity. */
 export const PACKAGE = '@hh/astro' as const;
+
+export { AU, J2_EARTH, MU_EARTH, OMEGA_EARTH, R_EARTH_EQ, R_GEO } from './constants.js';

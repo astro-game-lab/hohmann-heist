@@ -30,7 +30,10 @@ Values baked into the simulation, with their source. Keep this in sync with `doc
 | --- | --- | --- |
 | `MU_EARTH` | 3.986004418e14 m³/s² | EGM-96 / WGS-84 geocentric gravitational constant |
 | `R_EARTH_EQ` | 6378137.0 m | WGS-84 semi-major axis |
-| `J2_EARTH` | 1.08262668e-3 | EGM-96 |
+| `J2_EARTH` | 1.08262668e-3 | EGM-96. Stored but unused in v1.0 — the model is strictly two-body. |
+| `OMEGA_EARTH` | 7.2921150e-5 rad/s | IERS nominal mean sidereal rotation rate. Implies an 86164.1006 s sidereal day against the measured 86164.0905 s; the 10 ms gap is documented in `docs/PHYSICS.md`. |
+| `R_GEO` | 42164172.9 m | **Derived**, not sourced: `(μ/ω²)^(1/3)` from the two constants above. Agrees with the published 42164.17 km to 3 m. |
+| `AU` | 1.495978707e11 m | IAU 2012 definition (exact). Reserved; unused in v1.0. |
 
 ## Software dependencies
 
