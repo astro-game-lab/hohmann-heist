@@ -1,0 +1,11 @@
+{
+  "name": "@hh/math",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hohmann Heist \u2014 vectors, matrices, angles, root finders, and the seeded PRNG.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

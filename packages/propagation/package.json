@@ -1,0 +1,15 @@
+{
+  "name": "@hh/propagation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hohmann Heist \u2014 Keplerian arc propagation, event finding, and the DOP853 test oracle.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hh/astro": "workspace:*",
+    "@hh/math": "workspace:*"
+  }
+}

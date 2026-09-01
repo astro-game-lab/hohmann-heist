@@ -1,0 +1,17 @@
+{
+  "name": "@hh/game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hohmann Heist \u2014 rules, scenarios, objectives, scoring \u2014 and every deliberate departure from the physics.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hh/astro": "workspace:*",
+    "@hh/math": "workspace:*",
+    "@hh/propagation": "workspace:*",
+    "@hh/sim": "workspace:*"
+  }
+}

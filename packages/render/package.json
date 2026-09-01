@@ -1,0 +1,16 @@
+{
+  "name": "@hh/render",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hohmann Heist \u2014 Canvas 2-D scene, camera, orbit tessellation, and hit-testing.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hh/astro": "workspace:*",
+    "@hh/math": "workspace:*",
+    "@hh/sim": "workspace:*"
+  }
+}
