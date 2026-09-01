@@ -1981,7 +1981,7 @@ The threat is a player submitting a Δv they did not achieve. The defence is tha
 | | |
 | --- | --- |
 | **Package manager** | pnpm workspaces, lockfile committed, Node 24 LTS pinned via `.nvmrc`, `engines`, and `packageManager` |
-| **Build** | Vite, TypeScript strict (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`). **TypeScript is held at 5.x**: `typescript-eslint` peers on `<6.1.0`, so TS 7 would cost type-aware linting — and NFR-006/NFR-008 are type-aware lint rules. Revisit when `typescript-eslint` supports TS 7. |
+| **Build** | Vite, TypeScript strict (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`). **TypeScript is held at 5.x**: `typescript-eslint` peers on `<6.1.0`, and no release supports TS 7 yet, so upgrading would cost the type-aware `strictTypeChecked` rule set entirely. Revisit when `typescript-eslint` supports TS 7. |
 | **Lint / format** | ESLint (flat config) + Prettier, plus `dependency-cruiser` for the layering rule and a custom rule banning `acos` in `@hh/astro` |
 | **Test** | Vitest for unit and property tests (`fast-check`), Playwright for browser and cross-runtime determinism, `@axe-core/playwright` for a11y |
 | **Environments** | `production` → GitHub Pages at the repo's Pages URL (custom domain optional later); `preview` → a Pages deployment per PR; `local` → `pnpm dev`. The API has `production` and `staging` Workers. |
