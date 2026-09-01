@@ -14,12 +14,111 @@ export default defineConfig([
     languageOptions: {
       parserOptions: {
         projectService: {
-          // This file is not in tsconfig's `include`, so the project service has
-          // to be told about it explicitly before it can be type-aware linted.
+          // This file is outside tsconfig's `include`, so the project service has
+          // to be told about it explicitly before it can type-aware lint it.
           allowDefaultProject: ['eslint.config.js'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+  },
+
+  // CommonJS config files: no type-aware linting, and CommonJS globals.
+  {
+    files: ['**/*.cjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        module: 'writable',
+        exports: 'writable',
+        require: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
+  },
+
+  // ── Core determinism and portability guardrails ────────────────────────────
+  //
+  // NFR-005: the core references no browser or Node globals.
+  // NFR-006: `acos` on a dot product appears nowhere; use `atan2`, which knows the
+  //          quadrant. `acos` also loses precision badly near +/-1, which is exactly
+  //          where nearly-parallel vectors land.
+  // NFR-008: no ambient nondeterminism. Every random number comes from the seeded
+  //          PRNG threaded through the simulation, and simulation time never comes
+  //          from the wall clock.
+  //
+  // Applies to the four core packages and to `game`, per NFR-008's package list.
+  // `render` and `ui` are exempt: the DOM is their job.
+  {
+    files: ['packages/{math,astro,propagation,sim,game}/**/*.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...[
+          'document',
+          'window',
+          'self',
+          'navigator',
+          'localStorage',
+          'sessionStorage',
+          'fetch',
+          'XMLHttpRequest',
+          'WebSocket',
+          'process',
+          'performance',
+        ].map((name) => ({
+          name,
+          message:
+            `\`${name}\` is not available to this layer. The simulation core runs unchanged ` +
+            'under Node, a browser and a Cloudflare Worker, and must stay free of host globals. ' +
+            'See docs/PRODUCT.md §11.1 (NFR-005).',
+        })),
+      ],
+
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'Math',
+          property: 'random',
+          message:
+            'Use the seeded PRNG from @hh/math instead. Same seed plus same inputs must give ' +
+            'the same trajectory on every platform. See docs/PRODUCT.md §11.4 (NFR-008).',
+        },
+        {
+          object: 'Date',
+          property: 'now',
+          message:
+            'Simulation time is never wall-clock time. Use the epoch threaded through the ' +
+            'simulation. See docs/PRODUCT.md §7.2 (NFR-008).',
+        },
+        {
+          object: 'Math',
+          property: 'acos',
+          message:
+            'Use atan2 for anything where the quadrant matters. acos on a dot product cannot ' +
+            'recover the sign and loses precision near +/-1. See docs/PRODUCT.md §7.2 (NFR-006).',
+        },
+      ],
+
+      'no-restricted-syntax': [
+        'error',
+        {
+          // Catches a locally imported or destructured `acos`, which the
+          // `Math.acos` property rule above cannot see.
+          selector: "CallExpression[callee.name='acos']",
+          message:
+            'Use atan2 for anything where the quadrant matters. See docs/PRODUCT.md §7.2 (NFR-006).',
+        },
+        {
+          // `new Date()` with no arguments reads the wall clock.
+          selector: 'NewExpression[callee.name="Date"][arguments.length=0]',
+          message:
+            'new Date() reads the wall clock. Simulation time comes from the epoch threaded ' +
+            'through the simulation. See docs/PRODUCT.md §11.4 (NFR-008).',
+        },
+      ],
     },
   },
 
