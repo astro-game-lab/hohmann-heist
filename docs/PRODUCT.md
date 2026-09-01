@@ -551,7 +551,7 @@ Every constant, its value, and its source. Mirrored in `ATTRIBUTIONS.md`.
 | `R_EARTH_EQ` | 6378137.0 | m | WGS-84 semi-major axis |
 | `J2_EARTH` | 1.08262668e-3 | — | EGM-96 (**stored, unused in v1.0**; present so v1.2's J2 option has one source of truth) |
 | `OMEGA_EARTH` | 7.2921150e-5 | rad s⁻¹ | IERS, mean sidereal rotation rate |
-| `R_GEO` | 42164140.0 | m | Derived: (μ/ω²)^(1/3), rounded; the derivation is a test |
+| `R_GEO` | 42164172.9 | m | **Derived at module load** from `MU_EARTH` and `OMEGA_EARTH`: `(μ/ω²)^(1/3)`. Not a literal — an independently written one drifts. An earlier draft of this table said `42164140.0`, which was 33 m from what these constants imply; the error changed the LEO→GEO Hohmann by 0.0005 m/s, so no par moved, but it is exactly the class of mistake deriving the value prevents. |
 | `ALT_FLOOR` | 100000.0 | m | Game constant (Kármán line), not physics — see DEP-08 |
 | `AU` | 1.495978707e11 | m | IAU 2012 (unused in v1.0; reserved) |
 
@@ -629,7 +629,7 @@ Catches unit, frame, and algebra errors. Cheap, fast, runs on every commit.
 | Orbital period | `T = 2π√(a³/μ)` | Kepler's third law |
 | Speed at radius | `v² = μ(2/r − 1/a)` | Vis-viva |
 | Circular speed | `v = √(μ/r)`; asserts 7 668.6 m/s at 400 km, 3 074.66 m/s at GEO | Derived from §7.3 |
-| GEO radius | `(μ/ω²)^(1/3) = R_GEO ± 1 m` | Derived from §7.3 |
+| GEO radius | `R_GEO` satisfies ω²r³ = μ, and agrees with the published 42 164.17 km to 10 m | Derived from §7.3, cross-checked against an independent published value |
 | Hohmann Δv | LEO 400 km → GEO = 3 854.0 m/s (2 397.5 + 1 456.5) | Closed form |
 | Hohmann time | Same transfer = 19 048.6 s = 5.29 h | `π√(a³/μ)` |
 | Bi-elliptic threshold | Hohmann wins below r₂/r₁ = 11.94; bi-elliptic wins above 15.58 | Standard result; verified numerically across the range |
