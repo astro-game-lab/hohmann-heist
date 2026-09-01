@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+node_modules/
+dist/
+coverage/
+
+# Markdown is hand-authored here — product docs, the physics contract, and the
+# org's community files. Prettier's table realignment produces large diffs with no
+# readability gain, and docs/PRODUCT.md is a copy of a file maintained outside this
+# repo, so reformatting it would make every future sync a spurious diff.
+*.md

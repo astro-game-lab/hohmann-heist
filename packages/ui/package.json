@@ -1,0 +1,17 @@
+{
+  "name": "@hh/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hohmann Heist \u2014 Preact components, panels, message catalogue, palettes, and accessibility utilities.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hh/astro": "workspace:*",
+    "@hh/game": "workspace:*",
+    "@hh/math": "workspace:*",
+    "@hh/sim": "workspace:*"
+  }
+}
