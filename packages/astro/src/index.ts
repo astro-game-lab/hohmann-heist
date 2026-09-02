@@ -53,15 +53,42 @@ export {
 export type { ClassicalElements, Degeneracy, OrbitShape, State } from './elements.js';
 export {
   apoapsisRadius,
+  CIRCULAR_TOLERANCE,
   elementsFromState,
+  EQUATORIAL_TOLERANCE,
   periapsisRadius,
   semiMajorAxis,
   specificAngularMomentum,
   stateFromElements,
 } from './elements.js';
 
+export type { EquinoctialElements } from './equinoctial.js';
+export {
+  classicalFromEquinoctial,
+  eccentricity,
+  equinoctialFromClassical,
+  equinoctialFromState,
+  inclination,
+  stateFromEquinoctial,
+} from './equinoctial.js';
+
+export type { BiEllipticTransfer, HohmannTransfer } from './twobody.js';
+export {
+  biEllipticTransfer,
+  circularSpeed,
+  escapeSpeed,
+  hohmannTransfer,
+  meanMotion,
+  period,
+  specificEnergy,
+  visVivaSpeed,
+} from './twobody.js';
+
 export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
 export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
+
+export type { LambertMethod, LambertOptions, LambertResult, TransferDirection } from './lambert.js';
+export { solveLambert, stumpffC, stumpffS } from './lambert.js';
 
 export {
   eccentricFromTrue,

@@ -52,16 +52,38 @@ const EXPECTED = [
   'rtnToEciMatrix',
   'toRtn',
   // elements
+  'CIRCULAR_TOLERANCE',
+  'EQUATORIAL_TOLERANCE',
   'apoapsisRadius',
   'elementsFromState',
   'periapsisRadius',
   'semiMajorAxis',
   'specificAngularMomentum',
   'stateFromElements',
+  // equinoctial
+  'classicalFromEquinoctial',
+  'eccentricity',
+  'equinoctialFromClassical',
+  'equinoctialFromState',
+  'inclination',
+  'stateFromEquinoctial',
+  // twobody
+  'biEllipticTransfer',
+  'circularSpeed',
+  'escapeSpeed',
+  'hohmannTransfer',
+  'meanMotion',
+  'period',
+  'specificEnergy',
+  'visVivaSpeed',
   // kepler
   'solveBarker',
   'solveKeplerElliptic',
   'solveKeplerHyperbolic',
+  // lambert
+  'solveLambert',
+  'stumpffC',
+  'stumpffS',
   // anomaly
   'eccentricFromTrue',
   'hyperbolicFromTrue',
