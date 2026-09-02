@@ -65,15 +65,14 @@
  * Mechanics for Engineering Students*, 4th ed., Algorithm 5.2, and by Vallado,
  * *Fundamentals of Astrodynamics and Applications*, Algorithm 57.
  *
- * **No printed worked example is asserted here.** Section 7.6's process rule
- * requires a textbook value to be verified against the physical book by the person
- * writing the test, and that has not been done for Lambert. `docs/PHYSICS.md`
- * accordingly still carries the Tier 3 Lambert row against #54, where Vallado's
- * example and a `poliastro.iod.izzo` cross-check belong. What `lambert.test.ts`
- * does instead is check against oracles that are independent of this solver without
- * being independent of the repository: an ellipse built by the element machinery
- * whose transfer time comes from Kepler's equation, and the endpoint reproduced by
- * propagating the returned velocity.
+ * Validated against Curtis Examples 5.2 (elliptical) and 5.3 (hyperbolic), read
+ * from that edition per the section 7.6 process rule, to `3e-5` relative — the
+ * book's printed precision. `lambert.test.ts` also checks two oracles that are
+ * independent of this solver without being independent of the repository: an
+ * ellipse built by the element machinery whose transfer time comes from Kepler's
+ * equation, and the endpoint reproduced by propagating the returned velocity.
+ *
+ * The `poliastro.iod.izzo` cross-check remains #54's, as does Vallado.
  */
 import type { Metres, MetresPerSec, Seconds, Vec3 } from '@hh/math';
 import { brent, metresPerSec, normalize, TAU, V } from '@hh/math';

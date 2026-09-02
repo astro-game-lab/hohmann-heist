@@ -42,6 +42,9 @@ they relied on has moved.
 - **New documented singularity.** The equinoctial set is an atlas of two charts switched at
   `i = π/2`; the singularity table records the switch, and that at `i = π/2` exactly the
   chart a round trip returns in is decided by round-off. Determinism is unaffected.
+- **Lambert is validated against an independent reference.** Curtis §5.3 Examples 5.2
+  (elliptical) and 5.3 (hyperbolic), to the book's printed precision. The hyperbolic case
+  is the only external check on the negative-`z` branch of the Stumpff functions.
 - **New documented limit.** The zero-revolution Lambert search stops at `4π² − 1e-4`,
   because the Stumpff `C(z)` cancels to exactly zero closer than that. The ceiling admits a
   transfer of roughly `4e19` s; beyond it the solver reports out-of-domain.

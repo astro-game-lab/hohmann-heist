@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { metres, normalize, radians, seconds, TAU, V } from '@hh/math';
+import { metres, normalize, radians, seconds, TAU, toDegrees, V } from '@hh/math';
 
 import { eccentricFromTrue, meanFromEccentric, trueFromEccentric } from './anomaly.js';
 import { MU_EARTH, R_EARTH_EQ } from './constants.js';
 import type { Seconds } from '@hh/math';
 
 import type { OrbitShape, State } from './elements.js';
-import { elementsFromState, semiMajorAxis, stateFromElements } from './elements.js';
+import {
+  elementsFromState,
+  periapsisRadius,
+  semiMajorAxis,
+  specificAngularMomentum,
+  stateFromElements,
+} from './elements.js';
 import { eci } from './frames.js';
 import { solveLambert, stumpffC, stumpffS } from './lambert.js';
 import { solveKeplerElliptic } from './kepler.js';
@@ -58,14 +64,8 @@ const expectClose = <T extends number>(
  * ---------------------------------------------------------------------------
  * The oracles.
  *
- * No printed textbook value is asserted anywhere in this file. Section 7.6's
- * process rule requires a citation to be verified against the physical book by
- * the person writing the test, which has not been done for Lambert, so
- * docs/PHYSICS.md keeps the Tier 3 Lambert row against #54 where Vallado's
- * worked example and a poliastro cross-check belong.
- *
- * What is here instead are two oracles that do not depend on the Lambert solver
- * at all:
+ * Two closed-form oracles that do not depend on the Lambert solver at all, plus
+ * the Tier 3 reference cases from Curtis at the bottom of this file:
  *
  *   1. An orbit built by stateFromElements, sampled at two true anomalies, with
  *      the elapsed time between them computed from Kepler's equation. The right
@@ -78,7 +78,7 @@ const expectClose = <T extends number>(
  *      lambert.ts.
  *
  * Both are genuinely independent of the code under test while remaining inside
- * the repository, which is the strongest thing available without opening a book.
+ * the repository. The Curtis examples are the independent check from outside it.
  * ---------------------------------------------------------------------------
  */
 
@@ -531,5 +531,165 @@ describe('Lambert — a Hohmann transfer is a Lambert solution', () => {
     if (!result.converged) return;
 
     expectRelative(V.norm(result.departureVelocity), hohmannSpeed, 2e-4, 'departure speed');
+  });
+});
+
+/*
+ * ===========================================================================
+ * Tier 3 — independent reference.
+ *
+ * Curtis, H.D., "Orbital Mechanics for Engineering Students", 4th edition,
+ * Butterworth-Heinemann / Elsevier, 2020. ISBN 978-0-08-102133-0. Section 5.3,
+ * Algorithm 5.2, Examples 5.2 (pp. 245-247) and 5.3 (pp. 248-249).
+ *
+ * PROVENANCE. Read from that edition, per the process rule in docs/PRODUCT.md
+ * section 7.6 — the same copy elements.test.ts cites for Examples 4.3 and 4.7.
+ * One thing worth recording about how: the copy is a PDF, and extracting its text
+ * loses minus signs. Rather than guess them, every sign below was re-derived from
+ * the book's own given data and intermediate quantities, and each derivation
+ * agrees with the printed digits. Example 5.2's r2 is negative in x, for
+ * instance, because only that sign produces the transfer angle of 100.29 degrees
+ * and the cross product 64.75 i - 65.66 j + 158.5 k that the book prints.
+ *
+ * TOLERANCE 3e-5 relative, and that is the book's printed precision rather than a
+ * tuned number. Curtis prints five significant figures: a velocity component
+ * printed as 1.9254 km/s carries a half-ulp of 0.00005, which is 2.6e-5 relative,
+ * and that is the loosest of the printed components. The observed worst deviation
+ * across both examples is 2.0e-5, just inside where the book's own rounding puts
+ * it. Tightening past 3e-5 would be asserting digits the book never printed.
+ * ===========================================================================
+ */
+
+const KM = 1e3;
+
+/**
+ * Curtis works in km, km/s and km^3/s^2 throughout, and his mu is 398,600, which
+ * differs from our MU_EARTH by 1.1e-8 relative. The book's value is passed, not
+ * ours: a reference test that silently substitutes a different constant is no
+ * longer testing what it cites. Conversion happens here and nowhere else.
+ */
+const MU_CURTIS = 398_600 * KM ** 3;
+
+const CURTIS_TOL = 3e-5;
+
+describe('Curtis 4th ed., Example 5.2 (section 5.3, pp. 245-247) — elliptical transfer', () => {
+  // Given, from the printed example. r2's x component is negative; see the
+  // provenance note above for how that was established rather than assumed.
+  const r1 = position(5000 * KM, 10_000 * KM, 2100 * KM);
+  const r2 = position(-14_600 * KM, 2500 * KM, 7000 * KM);
+  const dt = seconds(3600);
+
+  const result = solveLambert(r1, r2, dt, 'prograde', MU_CURTIS);
+
+  it('converges on the prograde branch the book chose', () => {
+    expect(result.converged).toBe(true);
+    if (!result.converged) return;
+    // The book: "Since the trajectory is prograde and the z component of r1 x r2
+    // is positive, it follows that dtheta = 100.29 degrees."
+    expectRelative((result.transferAngle * 180) / Math.PI, 100.29, CURTIS_TOL, 'transfer angle');
+  });
+
+  it('reproduces the departure and arrival velocities the book prints', () => {
+    if (!result.converged) throw new Error('expected convergence');
+
+    // v1 = -5.9925 I + 1.9254 J + 3.2456 K (km/s)
+    expectRelative(result.departureVelocity.x / KM, -5.9925, CURTIS_TOL, 'v1 x');
+    expectRelative(result.departureVelocity.y / KM, 1.9254, CURTIS_TOL, 'v1 y');
+    expectRelative(result.departureVelocity.z / KM, 3.2456, CURTIS_TOL, 'v1 z');
+
+    // v2 = -3.3125 I - 4.1966 J - 0.38529 K (km/s)
+    expectRelative(result.arrivalVelocity.x / KM, -3.3125, CURTIS_TOL, 'v2 x');
+    expectRelative(result.arrivalVelocity.y / KM, -4.1966, CURTIS_TOL, 'v2 y');
+    expectRelative(result.arrivalVelocity.z / KM, -0.38529, CURTIS_TOL, 'v2 z');
+  });
+
+  it('yields the orbital elements the book goes on to compute', () => {
+    /*
+     * The book's step 8 feeds r1 and v1 into its Algorithm 4.2, which is our
+     * elementsFromState. Running the same chain here is what ties the two modules
+     * together against an outside source: a Lambert solution that satisfied its own
+     * residual while describing the wrong conic would produce different elements.
+     *
+     * These are printed to four significant figures, so they get 1e-3 — the same
+     * tolerance and the same reasoning as elements.test.ts.
+     */
+    if (!result.converged) throw new Error('expected convergence');
+    const elements = elementsFromState(r1, result.departureVelocity, MU_CURTIS);
+
+    expectRelative(
+      specificAngularMomentum(elements, MU_CURTIS),
+      80_470 * KM ** 2,
+      1e-3,
+      'angular momentum',
+    );
+    expectRelative(semiMajorAxis(elements), 20_000 * KM, 1e-3, 'semi-major axis');
+    expectRelative(elements.eccentricity, 0.4335, 1e-3, 'eccentricity');
+    expectRelative(toDegrees(elements.raan), 44.6, 1e-3, 'RAAN');
+    expectRelative(toDegrees(elements.inclination), 30.19, 1e-3, 'inclination');
+    expectRelative(toDegrees(elements.argp), 30.71, 1e-3, 'argument of periapsis');
+    expectRelative(toDegrees(elements.trueAnomaly), 350.8, 1e-3, 'true anomaly');
+  });
+
+  it('is an ellipse, which is what the sign of z told the book', () => {
+    // "The fact that z is positive means the orbit is an ellipse."
+    if (!result.converged) throw new Error('expected convergence');
+    expect(elementsFromState(r1, result.departureVelocity, MU_CURTIS).eccentricity).toBeLessThan(1);
+  });
+});
+
+describe('Curtis 4th ed., Example 5.3 (section 5.3, pp. 248-249) — hyperbolic transfer', () => {
+  /*
+   * The hyperbolic case, z = -0.17344, and the only test in this file that
+   * exercises the negative-z branch of the Stumpff functions against a source
+   * outside the repository.
+   *
+   * A meteoroid sighted at 267,000 km altitude, then at 140,000 km after 13.5 h,
+   * with a change in true anomaly of 5 degrees. The book works it in a problem
+   * plane -- x along r1, y at 90 degrees in the direction of motion -- because no
+   * orientation was given. That plane is placed on the equator here, which the
+   * solver does not care about and which makes the transfer prograde by
+   * construction.
+   */
+  const R1 = (6378 + 267_000) * KM;
+  const R2 = (6378 + 140_000) * KM;
+  const DELTA_THETA = (5 * Math.PI) / 180;
+
+  const r1 = position(R1, 0, 0);
+  const r2 = position(R2 * Math.cos(DELTA_THETA), R2 * Math.sin(DELTA_THETA), 0);
+  const result = solveLambert(r1, r2, seconds(13.5 * 3600), 'prograde', MU_CURTIS);
+
+  it('reproduces the departure velocity the book prints', () => {
+    expect(result.converged).toBe(true);
+    if (!result.converged) return;
+
+    // v1 = -2.4356 i + 0.26741 j (km/s), in the book's problem plane.
+    expectRelative(result.departureVelocity.x / KM, -2.4356, CURTIS_TOL, 'v1 x');
+    expectRelative(result.departureVelocity.y / KM, 0.26741, CURTIS_TOL, 'v1 y');
+    expect(Math.abs(result.departureVelocity.z)).toBeLessThan(1e-6);
+  });
+
+  it('finds the hyperbola the book found', () => {
+    if (!result.converged) throw new Error('expected convergence');
+    const elements = elementsFromState(r1, result.departureVelocity, MU_CURTIS);
+
+    // "Since z is negative, the path of the meteoroid is a hyperbola."
+    expect(elements.eccentricity).toBeGreaterThan(1);
+    expectRelative(elements.eccentricity, 1.0506, 1e-3, 'eccentricity');
+    expectRelative(
+      specificAngularMomentum(elements, MU_CURTIS),
+      73_105 * KM ** 2,
+      1e-3,
+      'angular momentum',
+    );
+    // Perigee radius 6538.2 km — an alarming 160 km altitude, as the book notes.
+    expectRelative(periapsisRadius(elements), 6538.2 * KM, 1e-3, 'perigee radius');
+  });
+
+  it('handles a transfer angle of 5 degrees, which is near the collinear limit', () => {
+    // Worth stating: 5 degrees is close to the singularity at 0, and the solver is
+    // expected to work there rather than refuse. The rejection threshold is 1e-8
+    // on sin(dnu); this is 0.0872.
+    if (!result.converged) throw new Error('expected convergence');
+    expectRelative((result.transferAngle * 180) / Math.PI, 5, 1e-9, 'transfer angle');
   });
 });
