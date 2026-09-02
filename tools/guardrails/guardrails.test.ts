@@ -35,8 +35,15 @@ async function ruleIdsFor(code: string, filePath: string): Promise<string[]> {
 describe('core guardrails (NFR-006, NFR-008)', () => {
   // The first lint builds the whole type-aware program, which takes tens of
   // seconds. Pay it once here rather than charging it to whichever case runs first.
+  //
+  // Both programs, not one. `packages/render` compiles against its own tsconfig -- it
+  // needs the DOM library and the root project deliberately has none -- so linting a
+  // file there builds a second program from scratch. Warming only the core one left
+  // that cost falling on the first render case, which is a five-second timeout rather
+  // than anything to do with the rule under test.
   beforeAll(async () => {
     await ruleIdsFor('export const warmup = 1;\n', CORE_FILE);
+    await ruleIdsFor('export const warmup = 1;\n', RENDER_FILE);
   }, 180_000);
 
   const cases: readonly (readonly [label: string, code: string, rule: string])[] = [
@@ -154,6 +161,54 @@ describe('the DOP853 oracle is unreachable from the game path (FR-009)', () => {
 
     expect(await cruise()).toContain('no dependency violations found');
   }, 60_000);
+});
+
+describe('the core compiles without the DOM library (NFR-005)', () => {
+  // The lint rule above is one of two mechanisms, and it is the weaker one: it lists
+  // globals by name, so it catches `document` and misses `CanvasRenderingContext2D`.
+  // The other is that the root TypeScript project has no DOM library at all, which
+  // makes any browser type a compile error in the core.
+  //
+  // That mechanism became easy to break silently when `packages/render` was given its
+  // own tsconfig -- it draws on a canvas, so it genuinely needs the DOM -- because the
+  // obvious way to give it one is to widen the root project for everyone. This checks
+  // both halves of the split still hold.
+  const TSC = path.join('node_modules', '.bin', 'tsc');
+  const dir = 'packages/math/src/__guardrail__';
+  const file = `${dir}/dom-type.ts`;
+
+  const typecheck = (project: string): Promise<{ stdout: string }> =>
+    execFileAsync(TSC, ['--noEmit', '-p', project]);
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('rejects a DOM type in a core package', async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      file,
+      'export const width = (c: HTMLCanvasElement): number => c.width;\n',
+      'utf8',
+    );
+
+    await expect(typecheck('tsconfig.json')).rejects.toMatchObject({
+      stdout: expect.stringContaining("Cannot find name 'HTMLCanvasElement'") as unknown as string,
+    });
+  }, 120_000);
+
+  it('accepts the same type in the render layer, which is what its own project is for', async () => {
+    await expect(typecheck('packages/render/tsconfig.json')).resolves.toBeDefined();
+  }, 120_000);
+
+  it("keeps @hh/render's barrel reachable from the no-DOM project", async () => {
+    // `tools/bench/tessellation.bench.test.ts` imports `@hh/render` and is inside the
+    // root project, so everything the barrel re-exports is compiled without a DOM. That
+    // is what keeps the camera and the tessellator runnable under Node and in a Worker,
+    // and it is why `createCanvas2DRenderer` sits behind the `@hh/render/canvas2d`
+    // subpath instead. Re-exporting it from the barrel fails this.
+    await expect(typecheck('tsconfig.json')).resolves.toBeDefined();
+  }, 120_000);
 });
 
 describe('shell tooling is executable', () => {

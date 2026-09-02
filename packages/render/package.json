@@ -3,10 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Hohmann Heist \u2014 Canvas 2-D scene, camera, orbit tessellation, and hit-testing.",
+  "description": "Hohmann Heist — Canvas 2-D scene, camera, orbit tessellation, and hit-testing.",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./canvas2d": "./src/canvas2d.ts"
   },
   "dependencies": {
     "@hh/astro": "workspace:*",

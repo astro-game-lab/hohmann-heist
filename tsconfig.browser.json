@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // The core packages deliberately compile without DOM, so that a stray
+    // `document` in @hh/math or @hh/astro is a type error rather than something
+    // only the lint rule catches. Workspaces that legitimately touch the browser
+    // extend this file instead of widening the base for everyone.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  }
+}

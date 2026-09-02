@@ -20,6 +20,9 @@ importers:
       '@hh/propagation':
         specifier: workspace:*
         version: link:packages/propagation
+      '@hh/render':
+        specifier: workspace:*
+        version: link:packages/render
       '@size-limit/file':
         specifier: ^13.0.3
         version: 13.0.3(size-limit@13.0.3)
