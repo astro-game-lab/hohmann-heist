@@ -103,3 +103,22 @@ describe('layering rule (NFR-005)', () => {
     expect(await cruise()).toContain('no dependency violations found');
   }, 60_000);
 });
+
+describe('shell tooling is executable', () => {
+  // CI invokes these scripts by path, so a mode of 100644 fails the job with
+  // "Permission denied" rather than anything about the script. The bit is easy to
+  // lose: a working copy on a filesystem that cannot express it -- a Windows drive
+  // mounted into WSL, which is where this repository is developed -- sets
+  // core.filemode to false, and `chmod +x` there changes nothing git will record.
+  it('records every script under tools/ as mode 100755', async () => {
+    const { stdout } = await execFileAsync('git', ['ls-files', '-s', '--', 'tools']);
+
+    const notExecutable = stdout
+      .split('\n')
+      .filter((line) => line.endsWith('.sh'))
+      .filter((line) => !line.startsWith('100755'))
+      .map((line) => line.split('\t')[1] ?? line);
+
+    expect(notExecutable).toEqual([]);
+  });
+});

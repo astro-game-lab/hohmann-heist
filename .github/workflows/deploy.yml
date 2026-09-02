@@ -10,14 +10,19 @@ on:
     types: [completed]
   workflow_dispatch:
 
-# Read-only by default. The deploy job widens this for itself, and only itself.
+# Read-only by default. The publish job widens this for itself, and only itself.
 permissions:
   contents: read
 
-# One deployment at a time, and never cancel one in flight — a superseded deploy
-# is about to be replaced anyway, but a half-applied one is a broken site.
+# Production deploys are serialised against each other, and nothing else. It is
+# tempting to put every `gh-pages` writer in one group, but GitHub keeps only one
+# *pending* run per group and cancels the rest: two pull requests queued behind a
+# deploy would lose a preview outright. Cross-writer safety is publish.sh's push
+# retry instead, which rebuilds on the new tip and pushes again. Never cancel a
+# deploy in flight — a superseded one is about to be replaced anyway, but a
+# half-applied one is a broken site.
 concurrency:
-  group: pages
+  group: gh-pages-production
   cancel-in-progress: false
 
 jobs:
@@ -34,6 +39,11 @@ jobs:
       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # The site's entry script, so the publish job can prove the deployment it is
+    # smoke-testing is this build rather than the one it replaced.
+    outputs:
+      entry: ${{ steps.entry.outputs.path }}
 
     steps:
       # Actions are pinned to full commit SHAs rather than tags. A tag can be
@@ -62,27 +72,38 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: apps/web/dist
+      # Read from the manifest, then drop it: it is a build-time index, not part
+      # of the site, and there is no reason to serve it.
+      - name: Resolve entry script
+        id: entry
+        run: |
+          path=$(jq -r 'to_entries[] | select(.value.isEntry) | .value.file' \
+            apps/web/dist/.vite/manifest.json | head -n 1)
+          [ -n "$path" ] || { echo 'no entry chunk in the build manifest' >&2; exit 1; }
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          rm -rf apps/web/dist/.vite
 
-  deploy:
-    name: Deploy and smoke test
+      - name: Upload site
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site
+          path: apps/web/dist
+          retention-days: 1
+
+  publish:
+    name: Publish and smoke test
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
-    # Job-level permissions replace the top-level block outright, so `contents`
-    # has to be restated for the checkout.
+    # The one job that writes. Splitting it from `build` is the point: the build
+    # runs the repository's own code and every dependency in its lockfile, and it
+    # does that without a token that can push anywhere.
     permissions:
-      contents: read
-      pages: write # create the Pages deployment
-      id-token: write # the OIDC token deploy-pages exchanges for it
+      contents: write
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      SITE_URL: https://astro-game-lab.github.io/hohmann-heist/
 
     steps:
       - name: Checkout
@@ -90,11 +111,29 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Download site
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site
+          path: site
+
+      # `${{ }}` values are passed through the environment rather than pasted into
+      # the script, so nothing carried by the event can be read as shell.
+      - name: Publish to gh-pages
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          tools/pages/publish.sh publish site . "deploy: ${SHA}"
 
       # A deploy that reports success and serves a blank page is the failure mode
       # worth automating against, so the run is not green until the live URL is.
+      # The retry window is wide because a Pages branch build is slower to go live
+      # than the artifact deployment this replaced, and pinning the entry script
+      # means the wait ends when the new build is serving rather than when the old
+      # one answers.
       - name: Smoke test
-        run: tools/smoke/smoke.sh "${{ steps.deploy.outputs.page_url }}"
+        env:
+          ENTRY: ${{ needs.build.outputs.entry }}
+          SMOKE_TIMEOUT: '420'
+          SMOKE_RETRY_DELAY: '10'
+        run: tools/smoke/smoke.sh "$SITE_URL" "$ENTRY"
