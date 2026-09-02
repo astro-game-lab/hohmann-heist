@@ -11,9 +11,9 @@ It is updated in the same pull request as any change to the model. If the simula
 | **Model** | Two-body, point-mass Earth. Impulsive (zero-duration) maneuvers. Massless targets. |
 | **Fidelity claim** | Delta-v and time of flight for any closed transfer are intended to be exact to within float64 round-off of the closed-form two-body solution. **Not suitable for mission planning**: no drag, no J2, no third body. |
 | **Propagation** | Analytic, via universal-variable Kepler propagation. No numerical integration in the game path. |
-| **Last validated** | 2026-09-01 — constants only. The solvers do not exist yet; see [Validation](#validation) for exactly what is and is not checked. |
+| **Last validated** | 2026-09-01 — constants, time, frames and the Kepler solvers. Element conversion, propagation and Lambert do not exist yet; see [Validation](#validation) for exactly what is and is not checked. |
 
-> **Read the validation section before trusting a number from this build.** At the time of writing, the only physics in the repository is the constants module. Every other row in the validation tables names the issue that will provide it rather than a passing test, so the gap is visible rather than implied away.
+> **Read the validation section before trusting a number from this build.** At the time of writing the repository has constants, time, reference frames and the Kepler solvers — no element conversion, no propagation, no Lambert. Every validation row without a passing test names the issue that will provide it rather than being left to look covered.
 
 ## Conventions
 
@@ -24,7 +24,7 @@ These follow the [org defaults](https://github.com/astro-game-lab/.github/blob/m
 | **Units** | SI throughout the core: metres, seconds, kilograms, radians. Conversion happens at the UI and file-format boundary only. |
 | **Inertial frame** | ECI, J2000-aligned. Named `r_eci_m`, `v_eci_mps`. |
 | **Other frames used** | **Perifocal (PQW)** for element → Cartesian conversion. **RTN/LVLH** (radial, transverse, normal) for expressing maneuver Δv relative to the spacecraft's instantaneous state — this is the only frame a player ever sees a vector in. |
-| **Time scale** | **TAI**, as a float64 offset in seconds from the J2000 TAI epoch. UTC appears only in the daily-challenge date key and in display strings, and is converted at the boundary. Mission elapsed time is a separate scalar starting at 0 per contract, and is what the UI shows. |
+| **Time scale** | **TAI**, as a float64 offset in seconds from the J2000 epoch. Mission elapsed time is a separate scalar starting at 0 per contract, and is what the UI shows. **Leap seconds are not implemented, so there is no TAI↔UTC conversion.** Nothing in v1.0 needs one: the UI shows mission elapsed time, and the daily-challenge key is a UTC calendar *date* used as a seed, never derived from an epoch. Calendar output is therefore labelled **TAI**, because a formatter that says UTC while doing TAI arithmetic is the kind of quiet lie this document exists to prevent. |
 | **Angle normalization** | **`[0, 2π)`**, everywhere, without exception. Any function returning an angle normalizes before returning. |
 | **Quadrant** | `atan2` only. `acos` on a dot product appears nowhere in the codebase. This is enforced as a lint rule, not left as a convention — see `eslint.config.js`. |
 | **Precision** | Float64 for all simulation state; float32 only inside the renderer, after the camera transform. |
@@ -89,7 +89,24 @@ Specific and quantitative, because "simplified" is not an answer.
 ## Domain of validity
 
 - **Valid for:** closed orbits about Earth, altitudes from 100 km to about 400 000 km, eccentricity 0 ≤ e ≤ 0.95, timescales up to about 30 days.
-- **Degrades when:** e → 1 (near-parabolic — the universal-variable formulation stays stable but the *elements* do not, so the UI switches to a state-vector readout above e = 0.95); altitude below 200 km over multi-day spans (drag would dominate); beyond ~200 000 km over weeks (lunar third-body).
+- **Degrades when:** altitude below 200 km over multi-day spans (drag would dominate); beyond ~200 000 km over weeks (lunar third-body).
+
+### Near-parabolic orbits, measured
+
+Folklore says Kepler solvers fall over as e → 1. Ours do not, and the distinction matters enough to record the actual numbers.
+
+| e | Worst residual | Max Newton iterations | Failures |
+| --- | --- | --- | --- |
+| 0.9 | 8.9 × 10⁻¹⁶ | 9 | 0 |
+| 0.999 | 8.9 × 10⁻¹⁶ | 14 | 0 |
+| 0.99999 | 8.9 × 10⁻¹⁶ | 19 | 0 |
+| 0.9999999 | 8.9 × 10⁻¹⁶ | 20 (cap; fallback engages) | 0 |
+| 1.000001 | 3.6 × 10⁻¹⁶ (relative) | — | 0 |
+| 1.1 | 2.8 × 10⁻¹⁶ (relative) | — | 0 |
+
+Sampled over 200 mean anomalies per eccentricity for the elliptic case, and ten spanning ±100 for the hyperbolic one.
+
+**What actually degrades is iteration count, not accuracy** — and when Newton hits its cap the bracketed fallback takes over and still converges. What remains genuinely ill-conditioned near e = 1 is the *element set itself*: a small change in eccentric anomaly produces a large change in radius, so the elements stop being a good way to describe the orbit long before the solver stops being able to invert Kepler's equation. That is a representation problem, which the universal-variable formulation (#56) addresses, and it is why the UI switches to a state-vector readout above e = 0.95.
 
 ### Known singularities
 
@@ -149,7 +166,7 @@ Catches unit, frame and algebra errors. Cheap and fast.
 | Element ↔ Cartesian round-trip, including e = 0, i = 0, and both | ⏳ #53 |
 | Specific orbital energy conserved over a full period | ⏳ #53 |
 | Angular momentum conserved in magnitude and direction | ⏳ #53 |
-| Kepler solver converges across e ∈ [0, 0.999] ∪ (1, 10] | ⏳ #53 |
+| Kepler solver converges across e ∈ [0, 0.999] ∪ (1, 10] | ✅ `kepler.test.ts` — and cross-checked against an independent bisection to 1e-15 |
 | Universal-variable vs classical elliptic solver agreement | ⏳ #53 |
 | Lambert round-trip reproduces the target position | ⏳ #53 |
 | Propagate +Δt then −Δt is the identity | ⏳ #53 |
@@ -182,4 +199,5 @@ Closed-form tests share the code's assumptions and cannot catch a wrong constant
 - **Timestep:** not applicable to propagation. The game's fixed timestep governs playback, not state.
 - **Tolerances:** solver convergence criteria and iteration caps are set per solver and recorded with it. Not yet implemented.
 - **Cancellation risks:** specific orbital energy and the eccentricity vector both suffer catastrophic cancellation at low eccentricity. This is why the equinoctial formulation is used internally where elements feed logic.
+- **Julian Date precision:** a JD near 2 451 545 has a float64 ULP of about 5 × 10⁻¹⁰ days, or ~47 µs, and differencing two nearby Julian Dates loses that entirely to cancellation. The `Epoch` scalar does not have this problem — seconds past J2000 stay near 10⁹ at most, giving ~2 × 10⁻⁷ s resolution. Simulation arithmetic is done on epochs; Julian Dates and calendar dates appear only at display.
 - **Cross-platform equality:** bit-identical results are **not** claimed. `Math.sin`, `Math.cos` and friends are not required to be correctly rounded and do differ between JavaScript engines. Determinism is achieved by quantising inputs (DEP-09) and scoring on rounded bands, not by assuming float equality.

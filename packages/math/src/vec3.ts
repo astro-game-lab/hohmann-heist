@@ -42,12 +42,23 @@ export const scale = <T extends number>(v: Vec3<T>, s: number): Vec3<T> =>
 /** Negate. */
 export const negate = <T extends number>(v: Vec3<T>): Vec3<T> => scale(v, -1);
 
-/** Dot product. The result carries the square of the input unit, so it is plain. */
-export const dot = <T extends number>(a: Vec3<T>, b: Vec3<T>): number =>
-  a.x * b.x + a.y * b.y + a.z * b.z;
+/**
+ * Dot product.
+ *
+ * Takes vectors of any units, because combining different ones is meaningful — the
+ * flight-path angle comes from `r · v`, which mixes metres with metres per second.
+ * The result's unit is the product of the inputs', which this package does not
+ * model, so it is returned plain.
+ */
+export const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
 
-/** Cross product. Also unit-squared, so plain. */
-export const cross = <T extends number>(a: Vec3<T>, b: Vec3<T>): Vec3 => ({
+/**
+ * Cross product.
+ *
+ * Mixed units for the same reason as `dot`: specific angular momentum is `r x v`,
+ * in m² s⁻¹. The product unit is not modelled, so the result is plain.
+ */
+export const cross = (a: Vec3, b: Vec3): Vec3 => ({
   x: a.y * b.z - a.z * b.y,
   y: a.z * b.x - a.x * b.z,
   z: a.x * b.y - a.y * b.x,
@@ -83,7 +94,7 @@ export const normalize = <T extends number>(v: Vec3<T>): Vec3 => {
  * comparing orbit normals or checking alignment. `Math.acos` is banned by lint
  * (NFR-006); this is the function that exists so nobody needs it.
  */
-export const angleBetween = <T extends number>(a: Vec3<T>, b: Vec3<T>): Radians =>
+export const angleBetween = (a: Vec3, b: Vec3): Radians =>
   radians(Math.atan2(norm(cross(a, b)), dot(a, b)));
 
 /** Linear interpolation, `t = 0` giving `a` and `t = 1` giving `b`. */
