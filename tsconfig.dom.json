@@ -1,12 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "./tsconfig.base.json",
+  "extends": "./tsconfig.browser.json",
   "compilerOptions": {
-    // The core packages deliberately compile without DOM, so that a stray
-    // `document` in @hh/math or @hh/astro is a type error rather than something
-    // only the lint rule catches. Workspaces that legitimately touch the browser
-    // extend this file instead of widening the base for everyone.
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // The browser *and* Preact. Split from `tsconfig.browser.json` because
+    // `@hh/render` needs the DOM and must never contain Preact (§11.2) — pointing
+    // it at this file would hand it a JSX runtime it is not allowed to use, and
+    // duplicating the `lib` list instead would leave two of them to drift apart.
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   }

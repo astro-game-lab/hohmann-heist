@@ -17,7 +17,7 @@
   "scripts": {
     "dev": "pnpm --filter @hh/web dev",
     "build": "pnpm --filter @hh/web build",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p apps/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/render/tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "layering": "depcruise packages apps",

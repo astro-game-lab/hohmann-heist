@@ -1,5 +1,9 @@
 {
   "extends": "./tsconfig.base.json",
   "include": ["packages/*/src/**/*.ts", "tools/**/*.ts", "*.config.ts"],
-  "exclude": ["**/node_modules", "**/dist", "**/coverage", "apps"]
+  // `packages/render` is excluded because it has its own tsconfig: it draws on a
+  // canvas, so it needs the DOM library, and this project must stay without one so
+  // that a stray `document` in the simulation core is a type error. `pnpm
+  // typecheck` runs all three projects; see the `typecheck` script.
+  "exclude": ["**/node_modules", "**/dist", "**/coverage", "apps", "packages/render"]
 }
