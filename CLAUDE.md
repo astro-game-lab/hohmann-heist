@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An [astro-game-lab](https://github.com/astro-game-lab) game. The org builds games where orbits are propagated rather than animated, and where the simulation is expected to agree with a textbook.
 
-**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math`, `@hh/astro` and `@hh/propagation` hold real code; `sim`, `game`, `render` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
+**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math`, `@hh/astro`, `@hh/propagation` and `@hh/render` hold real code; `sim`, `game` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
 
 ## The three documents
 
@@ -33,7 +33,7 @@ A pnpm workspace: seven packages under one application.
 
 ```
 apps/web               Vite + Preact, hash routing, composition only
-  ├── @hh/render       canvas 2-D, camera, tessellation        (empty)
+  ├── @hh/render       canvas 2-D, camera, orbit tessellation
   ├── @hh/ui           Preact components, palettes, a11y       (empty)
   └── @hh/game         rules, scenarios, scoring, every DEP-xx (empty)
         └── @hh/sim    plan, timeline, world state, events     (empty)
@@ -44,11 +44,12 @@ apps/web               Vite + Preact, hash routing, composition only
 
 Dependencies point one way. `math`, `astro`, `propagation` and `sim` are the **core**: they may never import from `game`, `render`, `ui`, `apps/*` or `services/*`, and the core is itself a strict stack — `astro` may reach `math`, `sim` may reach all three below it, and nothing reaches upward. See `docs/PRODUCT.md` §11.1 and §11.2 for what each package owns and, more usefully, what it must never contain.
 
-**This is enforced, not reviewed.** Three mechanisms, all of which have been verified by deliberate violation:
+**This is enforced, not reviewed.** Four mechanisms, all of which have been verified by deliberate violation:
 
 - `dependency-cruiser` (`pnpm layering`) catches an illegal dependency even when it has been declared in `package.json`, and catches a deep relative import that sidesteps the package boundary.
 - A scoped ESLint block bans `document`, `window`, `process`, `fetch`, `performance` and friends in `packages/{math,astro,propagation,sim,game}`, along with `Math.random`, `Date.now`, `new Date()` and `Math.acos`.
-- The core packages compile without TypeScript's DOM library, so a stray `document` is a type error before it is a lint error. `apps/web` gets its own tsconfig; `pnpm typecheck` runs both.
+- The core packages compile without TypeScript's DOM library, so a stray `document` is a type error before it is a lint error — and so is a `CanvasRenderingContext2D`, which the lint rule's list of global names would miss. `apps/web` and `@hh/render` get their own tsconfigs; `pnpm typecheck` runs all three, and the guardrail suite checks both halves of the split by deliberate violation.
+- Only `packages/render/src/canvas2d.ts` genuinely needs a DOM, and it is reachable only through the `@hh/render/canvas2d` subpath. The package's own barrel stays DOM-free — the camera and the tessellator are plain geometry — which is what keeps them testable under Node and measurable from `tools/bench`. That is enforced too: the benchmark imports `@hh/render` and lives inside the no-DOM root project.
 
 If a guardrail is in your way, that is the guardrail working. Do not widen it — say why the code needs the exception.
 
@@ -99,7 +100,7 @@ Do not loosen a tolerance to make a failing test pass without understanding why 
 
 | Task | Command |
 | --- | --- |
-| Typecheck | `pnpm typecheck` — both projects |
+| Typecheck | `pnpm typecheck` — all three projects |
 | Lint | `pnpm lint` — `pnpm lint:fix` to apply |
 | Layering rule | `pnpm layering` |
 | Format | `pnpm format:check` — `pnpm format` to apply |

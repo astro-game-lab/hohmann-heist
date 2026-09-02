@@ -18,8 +18,9 @@ the sections below describe what actually exists rather than what is planned.
 | | |
 | --- | --- |
 | **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, and universal-variable propagation with the arc abstraction over it. No event finding, no timeline. |
+| **Rendering** | The `Renderer` seam with a Canvas 2-D implementation behind it, an orthographic camera with pan, zoom and auto-framing, and adaptive orbit tessellation with its cache. Geometry only — no Earth, no markers, no labels yet. |
 | **Application** | A skeleton: routing works and imports the simulation packages. No screens. |
-| **Quality** | 450 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. |
+| **Quality** | 581 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. |
 | **Milestone** | M0 of eight. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
 
 [`docs/PHYSICS.md`](docs/PHYSICS.md) is the honest account of what the simulation
@@ -85,7 +86,7 @@ packages/astro         constants, time, frames, elements, Kepler, Lambert
 packages/propagation   universal-variable propagation, arcs, oracle
 packages/sim           plan, timeline, world state            (empty)
 packages/game          rules, scenarios, and every departure  (empty)
-packages/render        canvas 2-D                             (empty)
+packages/render        renderer, camera, orbit tessellation
 packages/ui            components, palettes, accessibility    (empty)
 apps/web               the browser application
 ```
@@ -94,6 +95,12 @@ Dependencies point one way: `render → game → sim`. The simulation core must 
 import from the layers above it, must not touch the DOM, and must not read the wall
 clock or call `Math.random`. All three are enforced in CI rather than left to
 review — see [`docs/PRODUCT.md`](docs/PRODUCT.md) §11.1.
+
+`packages/render` is the one package below `apps/web` that draws, so it compiles
+against its own TypeScript project with the DOM library; the root project has none, so
+a browser type in the core is a compile error. Only the Canvas 2-D implementation
+actually needs a DOM, and it sits behind the `@hh/render/canvas2d` subpath — the
+camera and the tessellator are plain geometry and run under Node.
 
 ## Documentation
 

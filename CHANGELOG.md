@@ -12,6 +12,28 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- `@hh/render` gains the **`Renderer` seam and a Canvas 2-D implementation**. The interface takes a
+  whole `Scene` bucketed by layer rather than a stream of drawing calls, so §11.8's draw order lives
+  in the package as a constant instead of emerging from the order a caller happens to make its
+  calls. There is no text primitive at all — that is what keeps labels in the DOM (D8) rather than
+  leaving it to review — and the backing store is capped at 2x for battery.
+- `@hh/render` gains an **orthographic camera**: pan and zoom as pure state transforms with no
+  canvas anywhere, auto-framing of the ship ∪ target ∪ plan ∪ Earth union with a 12% margin, the
+  20% re-frame rule, and manual zoom clamped to [0.5x, 40x] of the auto-frame scale. Scale is
+  linear, per §8.4. The world-to-camera transform runs in float64 and `projectInto` is the only
+  float32 in the package (NFR-010) — a test asserts that narrowing the world coordinate first
+  loses more than a pixel of a 100 m detail at 1e8 m, which is the failure the rule exists to
+  prevent.
+- `@hh/render` gains **orbit tessellation with adaptive subdivision**, sampled in eccentric
+  anomaly for an ellipse, hyperbolic anomaly for a hyperbola, and Barker's `D` inside a band around
+  `e = 1`, refined until the screen-space sagitta is under 0.5 px and capped at 512 vertices. The
+  cache is keyed by (elements, scale bucket) and the bucket rounds *up*, so a reused tessellation is
+  never coarser than the scale it is drawn at. True anomaly is not in the key — scrubbing the
+  timeline does not change the path — and neither is the camera basis or centre, so panning and
+  rotating cost nothing. Measured at 0.009–0.09 ms per orbit against §11.9's 0.5 ms target, and
+  0.0006 ms on a cache hit.
+- **A benchmark for §11.9's orbit-tessellation budget**, alongside the propagation one, asserting the
+  2 ms hard limit and reporting the 0.5 ms target.
 - `@hh/propagation` gains **universal-variable Kepler propagation**: an arbitrary time offset,
   forwards or backwards, analytically, with one formulation covering elliptic, parabolic and
   hyperbolic orbits and no branch on conic class. Whole revolutions are removed before solving,
@@ -36,6 +58,15 @@ they relied on has moved.
   vis-viva, circular and escape speed, specific energy, and the Hohmann and bi-elliptic
   transfers.
 - Initial project scaffold from `astro-game-lab/.repo-template`.
+
+### Changed
+- `@hh/render` compiles against its own TypeScript project. It draws on a canvas, so it needs the
+  DOM library, and the root project deliberately has none so that a browser type in the simulation
+  core is a compile error rather than something only the lint rule's list of global names catches.
+  `pnpm typecheck` now runs three projects, and the guardrail suite checks both halves of the split
+  by deliberate violation. Only the Canvas 2-D implementation actually needs a DOM; it sits behind
+  the `@hh/render/canvas2d` subpath so the package's barrel — and the camera and tessellator behind
+  it — stays runnable under Node.
 
 ### Physics
 - **Propagation exists, and is checked against an independent numerical method.** The analytic

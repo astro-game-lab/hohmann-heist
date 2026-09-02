@@ -201,6 +201,14 @@ describe('the core compiles without the DOM library (NFR-005)', () => {
     await expect(typecheck('packages/render/tsconfig.json')).resolves.toBeDefined();
   }, 120_000);
 
+  it("keeps @hh/render's barrel reachable from the no-DOM project", async () => {
+    // `tools/bench/tessellation.bench.test.ts` imports `@hh/render` and is inside the
+    // root project, so everything the barrel re-exports is compiled without a DOM. That
+    // is what keeps the camera and the tessellator runnable under Node and in a Worker,
+    // and it is why `createCanvas2DRenderer` sits behind the `@hh/render/canvas2d`
+    // subpath instead. Re-exporting it from the barrel fails this.
+    await expect(typecheck('tsconfig.json')).resolves.toBeDefined();
+  }, 120_000);
 });
 
 describe('shell tooling is executable', () => {
