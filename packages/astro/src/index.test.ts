@@ -80,6 +80,10 @@ const EXPECTED = [
   'solveBarker',
   'solveKeplerElliptic',
   'solveKeplerHyperbolic',
+  // lambert
+  'solveLambert',
+  'stumpffC',
+  'stumpffS',
   // anomaly
   'eccentricFromTrue',
   'hyperbolicFromTrue',

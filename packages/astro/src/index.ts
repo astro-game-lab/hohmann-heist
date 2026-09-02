@@ -87,6 +87,9 @@ export {
 export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
 export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
 
+export type { LambertMethod, LambertOptions, LambertResult, TransferDirection } from './lambert.js';
+export { solveLambert, stumpffC, stumpffS } from './lambert.js';
+
 export {
   eccentricFromTrue,
   hyperbolicFromTrue,
