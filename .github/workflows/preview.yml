@@ -1,0 +1,174 @@
+name: Preview
+
+# Built from the pull request's head, not from a merge with `main`. A preview is
+# there to answer "what does this branch look like running", and a merge preview
+# would answer a question about a commit that does not exist yet.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Read-only by default. The publish job widens this for itself, and only itself.
+permissions:
+  contents: read
+
+# Per pull request, and cancelled in flight: a second push supersedes the preview
+# the first one was building, and there is no point publishing a build nobody will
+# look at. Deliberately *not* one group shared with every other `gh-pages` writer
+# — GitHub keeps a single pending run per group and cancels the rest, so a shared
+# group would drop one of two previews queued behind a deploy. Concurrent pushes
+# to the branch are made safe by publish.sh's push retry, not by queueing.
+concurrency:
+  group: gh-pages-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    outputs:
+      entry: ${{ steps.entry.outputs.path }}
+      base: ${{ steps.base.outputs.path }}
+      url: ${{ steps.base.outputs.url }}
+
+    steps:
+      # Actions are pinned to full commit SHAs rather than tags. A tag can be
+      # moved to point at different code; a SHA cannot.
+      - name: Checkout the pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # A preview is served from a deeper path than production, and Vite bakes the
+      # base into every asset URL at build time. Building with production's base
+      # and serving it here is the blank-page failure smoke.sh exists to catch, so
+      # the path is computed once and both the build and the check read it.
+      - name: Resolve the preview path
+        id: base
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "path=/hohmann-heist/pr-preview/pr-${PR}/"
+            echo "url=https://astro-game-lab.github.io/hohmann-heist/pr-preview/pr-${PR}/"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          BASE: ${{ steps.base.outputs.path }}
+        run: pnpm --filter @hh/web exec vite build --base="$BASE"
+
+      - name: Resolve entry script
+        id: entry
+        run: |
+          path=$(jq -r 'to_entries[] | select(.value.isEntry) | .value.file' \
+            apps/web/dist/.vite/manifest.json | head -n 1)
+          [ -n "$path" ] || { echo 'no entry chunk in the build manifest' >&2; exit 1; }
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          rm -rf apps/web/dist/.vite
+
+      - name: Upload preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: preview
+          path: apps/web/dist
+          retention-days: 1
+
+  publish:
+    name: Publish preview
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # A pull request from a fork carries a read-only GITHUB_TOKEN whatever this
+    # block asks for, so a fork preview cannot publish and is not attempted. The
+    # alternative is `pull_request_target`, which would run a fork's build scripts
+    # with a token that can write to this repository — not a trade worth making
+    # for a preview link. The build job above still runs on forks, so a fork PR
+    # gets the same build signal, minus the deployment. The `report` job below
+    # says so on the run, because a check that quietly does nothing is worse than
+    # one that says what it declined to do.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    permissions:
+      contents: write # push the preview to gh-pages
+      pull-requests: write # post the preview link
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download preview
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: preview
+          path: preview
+
+      # `${{ }}` values go through the environment rather than into the script
+      # text, so nothing carried by the pull request can be read as shell.
+      - name: Publish to gh-pages
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          tools/pages/publish.sh publish preview "pr-preview/pr-${PR}" \
+            "preview: pr-${PR} at ${SHA}"
+
+      - name: Smoke test the preview
+        env:
+          URL: ${{ needs.build.outputs.url }}
+          ENTRY: ${{ needs.build.outputs.entry }}
+          SMOKE_RETRIES: '30'
+          SMOKE_RETRY_DELAY: '10'
+        run: tools/smoke/smoke.sh "$URL" "$ENTRY"
+
+      - name: Comment the preview link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          URL: ${{ needs.build.outputs.url }}
+        run: |
+          {
+            echo "### Preview"
+            echo
+            echo "[$URL]($URL)"
+            echo
+            echo "Built from \`${SHA}\` and smoke-tested against that URL."
+            echo "It is replaced on every push to this pull request and removed when it closes."
+          } > preview-comment.md
+          tools/pages/pr-comment.sh "$PR" preview-comment.md
+
+  report:
+    name: Explain a skipped fork preview
+    needs: build
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Say why there is no preview
+        run: |
+          {
+            echo "### Preview skipped"
+            echo
+            echo "This pull request comes from a fork. A fork's \`GITHUB_TOKEN\` is"
+            echo "read-only, so it cannot publish to \`gh-pages\`, and running the"
+            echo "build with a writable token — what \`pull_request_target\` would"
+            echo "do — is not a trade worth making for a preview link."
+            echo
+            echo "The build ran and its result is the signal here. A maintainer who"
+            echo "wants a hosted preview can push the branch to this repository."
+          } >> "$GITHUB_STEP_SUMMARY"

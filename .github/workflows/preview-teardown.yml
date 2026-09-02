@@ -1,0 +1,61 @@
+name: Preview teardown
+
+# Merged or abandoned, a pull request's preview stops being a preview of anything.
+# Leaving them would turn the branch into an archive of every PR the project has
+# ever had, each one a live URL serving a build nobody is looking at.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+# The same group this pull request's preview publishes under, so a teardown cannot
+# overtake a publish still in flight and leave the directory behind. Never
+# cancelled: this is the run that cleans up, and a cancelled cleanup is a preview
+# that lives forever.
+concurrency:
+  group: gh-pages-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  teardown:
+    name: Remove the preview
+    # Nothing was ever published for a fork, so there is nothing to remove.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write # remove the preview from gh-pages
+      pull-requests: write # note that it is gone
+
+    steps:
+      # The default branch, not the pull request: its head may already have been
+      # deleted, and the only thing needed here is the tooling.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Remove from gh-pages
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          tools/pages/publish.sh remove "pr-preview/pr-${PR}" \
+            "preview: tear down pr-${PR}"
+
+      # The link in the pull request outlives the deployment otherwise, and a dead
+      # link that used to work reads as a broken deploy rather than a cleanup.
+      - name: Update the preview comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### Preview removed"
+            echo
+            echo "This pull request is closed, so its preview deployment has been"
+            echo "torn down and its URL no longer resolves."
+          } > preview-comment.md
+          tools/pages/pr-comment.sh "$PR" preview-comment.md
