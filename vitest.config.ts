@@ -2,12 +2,41 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['packages/*/src/**/*.test.ts', 'tools/**/*.test.ts'],
+    // Split into projects because `apps/web` needs a DOM and the simulation
+    // packages must not have one. This was deliberately deferred when the toolchain
+    // landed — nothing needed a different environment then, and one config was
+    // simpler. The browser app is the first thing that does.
+    projects: [
+      {
+        test: {
+          name: 'packages',
+          environment: 'node',
+          include: ['packages/*/src/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'guardrails',
+          environment: 'node',
+          include: ['tools/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'web',
+          // The simulation core is tested under node precisely because it must not
+          // depend on a browser. Only the app gets jsdom.
+          environment: 'jsdom',
+          include: ['apps/web/src/**/*.test.{ts,tsx}'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
       // Gated packages only. `render` and `ui` join once they hold code and have a
-      // browser-environment testing story — see docs/PRODUCT.md NFR-022.
+      // browser-environment testing story — see docs/PRODUCT.md NFR-022. `apps/web`
+      // is a composition layer and is covered by its own tests, not by this gate.
       include: ['packages/{math,astro,propagation,sim,game}/src/**/*.ts'],
       exclude: ['**/*.test.ts'],
       thresholds: {
