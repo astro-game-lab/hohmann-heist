@@ -51,6 +51,13 @@ const EXPECTED = [
   'rtn',
   'rtnToEciMatrix',
   'toRtn',
+  // elements
+  'apoapsisRadius',
+  'elementsFromState',
+  'periapsisRadius',
+  'semiMajorAxis',
+  'specificAngularMomentum',
+  'stateFromElements',
   // kepler
   'solveBarker',
   'solveKeplerElliptic',
