@@ -15,7 +15,14 @@ import {
   stateFromElements,
 } from './elements.js';
 import { eci } from './frames.js';
-import { solveLambert, stumpffC, stumpffS } from './lambert.js';
+import {
+  lambertMinimumTime,
+  revolutionCeilingFor,
+  solveLambert,
+  solveLambertBranches,
+  stumpffC,
+  stumpffS,
+} from './lambert.js';
 import { solveKeplerElliptic } from './kepler.js';
 import { meanMotion, period } from './twobody.js';
 
@@ -571,6 +578,642 @@ const KM = 1e3;
 const MU_CURTIS = 398_600 * KM ** 3;
 
 const CURTIS_TOL = 3e-5;
+/*
+ * ---------------------------------------------------------------------------
+ * Multiple revolutions (#51, FR-007).
+ *
+ * The oracles above extend to the multi-revolution problem without weakening,
+ * and that is the point of building them the way they were built. An orbit
+ * sampled at two true anomalies still knows its own velocity at both ends; the
+ * only change is that the elapsed time gains N whole periods, which turns the
+ * same question into the N-revolution one. Propagation still has to land on r2.
+ *
+ * What these cannot supply is a Tier 3 reference. Curtis does not treat the
+ * multi-revolution case at all -- Algorithm 5.2 is zero-revolution only, and the
+ * book has no worked example -- so docs/PHYSICS.md carries that row as still
+ * owed by #54 and #55 rather than as covered here.
+ * ---------------------------------------------------------------------------
+ */
+
+/** The transfer an orbit itself makes between two true anomalies, after N laps. */
+const revolutionCase = (orbit: OrbitShape, nuFrom: number, nuTo: number, revolutions: number) => {
+  const from = stateFromElements({ ...orbit, trueAnomaly: normalize(nuFrom) }, MU_EARTH);
+  const to = stateFromElements({ ...orbit, trueAnomaly: normalize(nuTo) }, MU_EARTH);
+  const dt = seconds(
+    timeBetween(orbit, nuFrom, nuTo) + revolutions * period(semiMajorAxis(orbit), MU_EARTH),
+  );
+  return { from, to, dt };
+};
+
+/** Semi-major axis of the transfer a solution describes. */
+const transferSemiMajorAxis = (position: State['position'], velocity: State['velocity']): number =>
+  semiMajorAxis(elementsFromState(position, velocity, MU_EARTH));
+
+const multiRevOrbits: readonly (readonly [string, OrbitShape, number, number])[] = [
+  ['circular LEO, quarter turn', shape(6.9e6, 0, 0.0, 0, 0, 0), 0, Math.PI / 2],
+  ['circular LEO, past half a turn', shape(6.9e6, 0, 0.0, 0, 0, 0), 0.3, 0.3 + 4.0],
+  ['inclined circular', shape(7.2e6, 0, 0.9, 1.1, 0, 0), 0.2, 0.2 + 1.4],
+  ['mild ellipse', shape(9.0e6, 0.2, 0.4, 1.1, 2.3, 0), 0.4, 2.6],
+  ['eccentric, across periapsis', shape(9.0e6, 0.7, 0.4, 1.1, 2.3, 0), 5.6, 0.9],
+  ['GEO-scale, long arc', shape(4.2e7, 0.1, 0.05, 0.3, 0.7, 0), 0.5, 5.4],
+];
+
+describe('Lambert — multiple revolutions recover an orbit they were not told about', () => {
+  /*
+   * The primary oracle again, with N whole periods added to the elapsed time. The
+   * orbit is then one of the N-revolution transfers between the same two points,
+   * so the correct answer is still known exactly and the solver still has to find
+   * it without being told which orbit it is looking for -- only now it has to
+   * find it among several transfers that all take exactly as long.
+   */
+  for (const revolutions of [1, 2, 3]) {
+    it.each(multiRevOrbits)(`%s, ${String(revolutions)} revolutions`, (_l, orbit, nuA, nuB) => {
+      const { from, to, dt } = revolutionCase(orbit, nuA, nuB, revolutions);
+      const found = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+
+      expect(found.failures).toEqual([]);
+
+      const matches = found.branches.filter(
+        (b) => V.norm(V.sub(b.departureVelocity, from.velocity)) / V.norm(from.velocity) < 1e-9,
+      );
+      expect(matches, 'exactly one branch is the orbit itself').toHaveLength(1);
+
+      const [orbitBranch] = matches;
+      if (orbitBranch === undefined) return;
+      expect(orbitBranch.revolutions, 'and it is the N-revolution one').toBe(revolutions);
+      expectClose(orbitBranch.arrivalVelocity, to.velocity, 1e-9, 'arrival velocity');
+
+      // The same transfer is reachable by name, which is what a stored plan does.
+      const byName = solveLambert(from.position, to.position, dt, 'prograde', MU_EARTH, {
+        revolutions: orbitBranch.revolutions,
+        branch: orbitBranch.branch === 'single' ? 'low' : orbitBranch.branch,
+      });
+      expect(byName.converged).toBe(true);
+      if (!byName.converged) return;
+      expectClose(byName.departureVelocity, orbitBranch.departureVelocity, 1e-11, 'by name');
+    });
+  }
+});
+
+describe('Lambert — every returned branch is a real transfer', () => {
+  /*
+   * docs/PHYSICS.md Tier 2, and the acceptance criterion #51 states: EVERY branch,
+   * not just the one that happens to be the orbit the case was built from,
+   * independently reproduces the endpoint when propagated.
+   *
+   * This is the check that stops a second branch from being decoration. A solver
+   * that found the minimum in the wrong place, or that returned the same root
+   * twice under two labels, or that reported a branch on the strength of a
+   * residual it never actually drove to zero, all fail here.
+   *
+   * TOLERANCE 1e-9 relative on the arrival position, the figure section 7.6
+   * states. Observed worst case across the 158 branches this grid produces is
+   * 1.1e-11, on the two-revolution low branch of the eccentric case -- two orders
+   * inside the tolerance, and two orders looser than the zero-revolution grid
+   * above, which is the cost of a transfer that crosses periapsis three times.
+   */
+  it('lands on r2 to 1e-9 relative, across a grid of geometries and revolutions', () => {
+    let checked = 0;
+    for (const [label, orbit, nuA, nuB] of multiRevOrbits) {
+      for (const revolutions of [1, 2, 3]) {
+        const { from, to, dt } = revolutionCase(orbit, nuA, nuB, revolutions);
+        const found = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+        expect(found.failures, `${label}, ${String(revolutions)} revs`).toEqual([]);
+
+        for (const branch of found.branches) {
+          const arrived = propagate(
+            { position: from.position, velocity: branch.departureVelocity },
+            dt,
+          );
+          expectClose(
+            arrived.position,
+            to.position,
+            1e-9,
+            `${label}: ${String(branch.revolutions)} revs, ${branch.branch} branch`,
+          );
+          checked++;
+        }
+      }
+    }
+    // Guards against the whole loop passing because nothing was returned.
+    expect(checked).toBeGreaterThan(50);
+  });
+
+  it('returns branches that are genuinely different transfers', () => {
+    const { from, to, dt } = revolutionCase(shape(9.0e6, 0.2, 0.4, 1.1, 2.3, 0), 0.4, 2.6, 2);
+    const { branches } = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+
+    const speeds = branches.map((b) => V.norm(b.departureVelocity));
+    for (let i = 0; i < speeds.length; i++) {
+      for (let j = i + 1; j < speeds.length; j++) {
+        const [a, b] = [speeds[i], speeds[j]];
+        if (a === undefined || b === undefined) continue;
+        expect(
+          Math.abs(a - b),
+          `branches ${String(i)} and ${String(j)} are the same`,
+        ).toBeGreaterThan(0.5);
+      }
+    }
+  });
+});
+
+describe('Lambert — the revolution count comes from the time of flight', () => {
+  const orbit = shape(6.9e6, 0, 0.0, 0, 0, 0);
+  const { from, to } = revolutionCase(orbit, 0, Math.PI / 2, 0);
+
+  it('never claims a ceiling below a transfer that demonstrably exists', () => {
+    /*
+     * The ceiling is an upper bound derived from the time of flight, so the way to
+     * catch it being wrong is to hold up a transfer that does exist and check the
+     * bound admits it. Each orbit provides one per revolution count: itself.
+     */
+    for (const [label, o, nuA, nuB] of multiRevOrbits) {
+      for (const revolutions of [1, 2, 3, 7]) {
+        const c = revolutionCase(o, nuA, nuB, revolutions);
+        const ceiling = revolutionCeilingFor(c.from.position, c.to.position, c.dt, MU_EARTH);
+        expect(ceiling, `${label}, ${String(revolutions)} revs`).toBeGreaterThanOrEqual(
+          revolutions,
+        );
+      }
+    }
+  });
+
+  it('does not depend on which way round the transfer goes', () => {
+    const dt = seconds(4 * period(semiMajorAxis(orbit), MU_EARTH));
+    // The chord is a property of the two points, so both directions share a bound.
+    expect(revolutionCeilingFor(from.position, to.position, dt, MU_EARTH)).toBe(
+      revolutionCeilingFor(to.position, from.position, dt, MU_EARTH),
+    );
+  });
+
+  it('asking for more revolutions than the clock allows returns no solution, not a wrong one', () => {
+    const dt = seconds(timeBetween(orbit, 0, Math.PI / 2) + period(semiMajorAxis(orbit), MU_EARTH));
+    const ceiling = revolutionCeilingFor(from.position, to.position, dt, MU_EARTH);
+
+    const beyond = solveLambert(from.position, to.position, dt, 'prograde', MU_EARTH, {
+      revolutions: ceiling + 1,
+    });
+    expect(beyond.converged).toBe(false);
+    if (beyond.converged) return;
+    expect(beyond.reason).toBe('out-of-domain');
+    expect(beyond.revolutions).toBe(ceiling + 1);
+  });
+
+  it('steps the branch count up exactly as the time of flight crosses each minimum', () => {
+    /*
+     * The structural claim, tested through the public surface: below the
+     * N-revolution minimum there is no N-revolution transfer, above it there are
+     * two. If lambertMinimumTime put the minimum too high the first case would
+     * find branches it says cannot exist; too low and the second would fail to
+     * converge, which shows up as a non-empty `failures`.
+     */
+    for (const revolutions of [1, 2, 3]) {
+      const minimum = lambertMinimumTime(
+        from.position,
+        to.position,
+        'prograde',
+        MU_EARTH,
+        revolutions,
+      );
+      expect(minimum).not.toBeNull();
+      if (minimum === null) return;
+
+      const countAt = (dt: number): number => {
+        const found = solveLambertBranches(
+          from.position,
+          to.position,
+          seconds(dt),
+          'prograde',
+          MU_EARTH,
+        );
+        expect(found.failures, `failures at ${String(dt)}`).toEqual([]);
+        return found.branches.filter((b) => b.revolutions === revolutions).length;
+      };
+
+      expect(countAt(minimum.timeOfFlight * (1 - 1e-6)), 'below the minimum').toBe(0);
+      expect(countAt(minimum.timeOfFlight * (1 + 1e-6)), 'above the minimum').toBe(2);
+      expect(countAt(minimum.timeOfFlight * 3), 'well above the minimum').toBe(2);
+    }
+  });
+
+  it('the minimum is never slower than a transfer that exists', () => {
+    // The other side of the same coin, on the geometries the orbits provide.
+    for (const [label, o, nuA, nuB] of multiRevOrbits) {
+      for (const revolutions of [1, 2, 3]) {
+        const c = revolutionCase(o, nuA, nuB, revolutions);
+        const minimum = lambertMinimumTime(
+          c.from.position,
+          c.to.position,
+          'prograde',
+          MU_EARTH,
+          revolutions,
+        );
+        expect(minimum, `${label}, ${String(revolutions)} revs`).not.toBeNull();
+        if (minimum === null) continue;
+        expect(minimum.timeOfFlight).toBeLessThanOrEqual(c.dt);
+      }
+    }
+  });
+
+  it('caps the search without pretending the ceiling was lower', () => {
+    const dt = seconds(20 * period(semiMajorAxis(orbit), MU_EARTH));
+    const found = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH, {
+      maxRevolutions: 2,
+    });
+    expect(found.revolutionsSearched).toBe(2);
+    expect(found.revolutionCeiling).toBeGreaterThan(2);
+    expect(Math.max(...found.branches.map((b) => b.revolutions))).toBe(2);
+  });
+});
+
+describe('Lambert — the two branches meet at the minimum', () => {
+  const orbit = shape(7.5e6, 0.05, 0.5, 1.0, 2.0, 0);
+  const { from, to } = revolutionCase(orbit, 0.2, 3.0, 0);
+
+  it('returns one branch there, not two identical ones and not a NaN', () => {
+    /*
+     * The acceptance criterion's boundary case. At exactly the minimum the two
+     * roots have collapsed onto each other, and both wrong answers are easy to
+     * produce: bracket each side anyway and get the same transfer twice, or divide
+     * by a bracket of zero width and get NaN out of the Lagrange coefficients.
+     */
+    for (const revolutions of [1, 2]) {
+      const minimum = lambertMinimumTime(
+        from.position,
+        to.position,
+        'prograde',
+        MU_EARTH,
+        revolutions,
+      );
+      expect(minimum).not.toBeNull();
+      if (minimum === null) return;
+
+      const found = solveLambertBranches(
+        from.position,
+        to.position,
+        minimum.timeOfFlight,
+        'prograde',
+        MU_EARTH,
+      );
+      expect(found.failures).toEqual([]);
+
+      const atN = found.branches.filter((b) => b.revolutions === revolutions);
+      expect(atN, `${String(revolutions)} revolutions`).toHaveLength(1);
+      const [only] = atN;
+      if (only === undefined) return;
+      expect(only.branch).toBe('minimum');
+
+      for (const component of [only.departureVelocity, only.arrivalVelocity]) {
+        for (const v of [component.x, component.y, component.z]) {
+          expect(Number.isFinite(v)).toBe(true);
+        }
+      }
+
+      // And it is a transfer, not merely a finite number.
+      const arrived = propagate(
+        { position: from.position, velocity: only.departureVelocity },
+        minimum.timeOfFlight,
+      );
+      expectClose(arrived.position, to.position, 1e-9, 'arrival at the minimum');
+    }
+  });
+
+  it('is reachable by name, so a plan stored at the minimum round-trips', () => {
+    const minimum = lambertMinimumTime(from.position, to.position, 'prograde', MU_EARTH, 1);
+    if (minimum === null) throw new Error('expected a minimum');
+
+    const named = solveLambert(
+      from.position,
+      to.position,
+      minimum.timeOfFlight,
+      'prograde',
+      MU_EARTH,
+      {
+        revolutions: 1,
+        branch: 'minimum',
+      },
+    );
+    expect(named.converged).toBe(true);
+    if (!named.converged) return;
+    expect(named.branch).toBe('minimum');
+
+    // Either ordinary label finds the same transfer, because both brackets end on it.
+    for (const branch of ['low', 'high'] as const) {
+      const either = solveLambert(
+        from.position,
+        to.position,
+        minimum.timeOfFlight,
+        'prograde',
+        MU_EARTH,
+        {
+          revolutions: 1,
+          branch,
+        },
+      );
+      expect(either.converged).toBe(true);
+      if (!either.converged) continue;
+      expectClose(
+        either.departureVelocity,
+        named.departureVelocity,
+        1e-9,
+        `${branch} at the minimum`,
+      );
+    }
+  });
+
+  it('refuses the minimum label away from the minimum', () => {
+    const minimum = lambertMinimumTime(from.position, to.position, 'prograde', MU_EARTH, 1);
+    if (minimum === null) throw new Error('expected a minimum');
+
+    const away = solveLambert(
+      from.position,
+      to.position,
+      seconds(minimum.timeOfFlight * 1.5),
+      'prograde',
+      MU_EARTH,
+      {
+        revolutions: 1,
+        branch: 'minimum',
+      },
+    );
+    expect(away.converged).toBe(false);
+    if (away.converged) return;
+    expect(away.reason).toBe('out-of-domain');
+  });
+
+  it('the two branches converge on each other as the time of flight approaches it', () => {
+    const minimum = lambertMinimumTime(from.position, to.position, 'prograde', MU_EARTH, 1);
+    if (minimum === null) throw new Error('expected a minimum');
+
+    const separation = (excess: number): number => {
+      const low = solveLambert(
+        from.position,
+        to.position,
+        seconds(minimum.timeOfFlight * (1 + excess)),
+        'prograde',
+        MU_EARTH,
+        { revolutions: 1, branch: 'low' },
+      );
+      const high = solveLambert(
+        from.position,
+        to.position,
+        seconds(minimum.timeOfFlight * (1 + excess)),
+        'prograde',
+        MU_EARTH,
+        { revolutions: 1, branch: 'high' },
+      );
+      if (!low.converged || !high.converged) throw new Error('expected convergence');
+      return V.norm(V.sub(low.departureVelocity, high.departureVelocity));
+    };
+
+    expect(separation(1e-2)).toBeGreaterThan(separation(1e-4));
+    expect(separation(1e-4)).toBeGreaterThan(separation(1e-6));
+  });
+});
+
+describe('Lambert — branch order is a contract', () => {
+  /*
+   * docs/PRODUCT.md section 11.4. A plan that names a branch has to name the same
+   * transfer on every runtime, so the order is asserted as an exact sequence
+   * rather than left to whatever the search happens to produce.
+   */
+  it('is zero-revolution first, then low before high, ascending', () => {
+    const orbit = shape(6.9e6, 0, 0.0, 0, 0, 0);
+    const { from, to } = revolutionCase(orbit, 0, Math.PI / 2, 0);
+    const dt = seconds(4 * period(semiMajorAxis(orbit), MU_EARTH));
+
+    // Four revolutions fit, not three: the minimum-energy ellipse through these
+    // two points is smaller than the circular orbit they were sampled from, so it
+    // laps faster and four of its transfers fit inside four of the orbit's periods.
+    const { branches } = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+    expect(branches.map((b) => [b.revolutions, b.branch])).toEqual([
+      [0, 'single'],
+      [1, 'low'],
+      [1, 'high'],
+      [2, 'low'],
+      [2, 'high'],
+      [3, 'low'],
+      [3, 'high'],
+      [4, 'low'],
+      [4, 'high'],
+    ]);
+  });
+
+  it('is the same sequence whichever route the zero-revolution solve took', () => {
+    // The iteration count is data-dependent; the ordering must not be.
+    const orbit = shape(9.0e6, 0.4, 0.5, 1.0, 2.0, 0);
+    const { from, to } = revolutionCase(orbit, 0.3, 2.8, 0);
+    const dt = seconds(3 * period(semiMajorAxis(orbit), MU_EARTH));
+
+    const a = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+    const b = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH, {
+      maxRevolutions: 99,
+    });
+    expect(a.branches.map((x) => [x.revolutions, x.branch])).toEqual(
+      b.branches.map((x) => [x.revolutions, x.branch]),
+    );
+  });
+});
+
+describe('Lambert — what the branch names mean', () => {
+  it('the low branch is the higher-energy transfer', () => {
+    /*
+     * Named for its side of the minimum in z, because that is definitional and a
+     * stored plan needs a label that cannot drift. The physical correspondence is
+     * an observation, so it is measured rather than asserted in the name: across
+     * this grid the low branch always has the larger semi-major axis, and the
+     * asymptotic argument is a_low^(3/2) N = a_high^(3/2) (N + 1).
+     */
+    let compared = 0;
+    for (const [label, orbit, nuA, nuB] of multiRevOrbits) {
+      for (const revolutions of [1, 2, 3]) {
+        const { from, to, dt } = revolutionCase(orbit, nuA, nuB, revolutions);
+        const { branches } = solveLambertBranches(
+          from.position,
+          to.position,
+          dt,
+          'prograde',
+          MU_EARTH,
+        );
+
+        const low = branches.find((b) => b.revolutions === revolutions && b.branch === 'low');
+        const high = branches.find((b) => b.revolutions === revolutions && b.branch === 'high');
+        if (low === undefined || high === undefined) continue;
+
+        expect(
+          transferSemiMajorAxis(from.position, low.departureVelocity),
+          `${label}, ${String(revolutions)} revs`,
+        ).toBeGreaterThan(transferSemiMajorAxis(from.position, high.departureVelocity));
+        compared++;
+      }
+    }
+    expect(compared).toBeGreaterThan(15);
+  });
+
+  it('both branches are ellipses, whatever the zero-revolution transfer was', () => {
+    // A transfer that comes back round cannot be open, so a negative or infinite
+    // semi-major axis here would mean the branch was not what it claimed.
+    const { from, to, dt } = revolutionCase(shape(9.0e6, 0.7, 0.4, 1.1, 2.3, 0), 5.6, 0.9, 2);
+    const { branches } = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+
+    for (const branch of branches.filter((b) => b.revolutions > 0)) {
+      const a = transferSemiMajorAxis(from.position, branch.departureVelocity);
+      expect(Number.isFinite(a), `${String(branch.revolutions)} ${branch.branch}`).toBe(true);
+      expect(a).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('Lambert — the zero-revolution answer is unchanged', () => {
+  const orbit = shape(9.0e6, 0.2, 0.4, 1.1, 2.3, 0);
+  const { from, to } = revolutionCase(orbit, 0.4, 2.6, 0);
+  const dt = timeBetween(orbit, 0.4, 2.6);
+
+  it('is what an explicit revolutions: 0 asks for', () => {
+    const implicit = solveLambert(from.position, to.position, dt, 'prograde', MU_EARTH);
+    const explicit = solveLambert(from.position, to.position, dt, 'prograde', MU_EARTH, {
+      revolutions: 0,
+    });
+    expect(explicit).toEqual(implicit);
+    expect(implicit.converged).toBe(true);
+    if (!implicit.converged) return;
+    expect(implicit.revolutions).toBe(0);
+    expect(implicit.branch).toBe('single');
+  });
+
+  it('is the only branch when the time of flight clears no minimum', () => {
+    const found = solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH);
+    expect(found.branches).toHaveLength(1);
+    expect(found.revolutionCeiling).toBe(0);
+    expect(found.failures).toEqual([]);
+
+    const direct = solveLambert(from.position, to.position, dt, 'prograde', MU_EARTH);
+    expect(found.branches[0]).toEqual(direct);
+  });
+
+  it('is still reported as a failure rather than thrown when it cannot be found', () => {
+    // The zero-revolution ceiling, reached through the enumerating entry point:
+    // the failure is carried in `failures` rather than dropped from `branches`.
+    const found = solveLambertBranches(
+      from.position,
+      to.position,
+      seconds(1e25),
+      'prograde',
+      MU_EARTH,
+      { maxRevolutions: 0 },
+    );
+    expect(found.branches).toEqual([]);
+    expect(found.failures).toHaveLength(1);
+    expect(found.failures[0]?.reason).toBe('out-of-domain');
+    expect(found.failures[0]?.branch).toBe('single');
+  });
+});
+
+describe('Lambert — rejected multi-revolution inputs', () => {
+  const orbit = shape(6.9e6, 0, 0.0, 0, 0, 0);
+  const { from, to, dt } = revolutionCase(orbit, 0, Math.PI / 2, 2);
+
+  it('rejects a revolution count that is not a non-negative integer', () => {
+    for (const revolutions of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        solveLambert(from.position, to.position, dt, 'prograde', MU_EARTH, { revolutions }),
+      ).toThrow(RangeError);
+    }
+  });
+
+  it('rejects a search cap that is not a non-negative integer', () => {
+    for (const maxRevolutions of [-1, 2.5, Number.NaN]) {
+      expect(() =>
+        solveLambertBranches(from.position, to.position, dt, 'prograde', MU_EARTH, {
+          maxRevolutions,
+        }),
+      ).toThrow(RangeError);
+    }
+  });
+
+  it('rejects asking the zero-revolution problem for a minimum it does not have', () => {
+    // dt(z) is strictly increasing below one revolution, so there is no interior
+    // minimum to return and no sensible number to invent.
+    expect(() => lambertMinimumTime(from.position, to.position, 'prograde', MU_EARTH, 0)).toThrow(
+      RangeError,
+    );
+    expect(() => lambertMinimumTime(from.position, to.position, 'prograde', MU_EARTH, 1.5)).toThrow(
+      RangeError,
+    );
+  });
+
+  it('runs out on the low branch before the high one, and says so either way', () => {
+    /*
+     * The multi-revolution face of the ceiling the zero-revolution solver
+     * documents, and it is not symmetric. Each branch reaches its own revolution
+     * boundary, where the time of flight diverges, and the low branch's boundary
+     * is the nearer one -- at this geometry it tops out around 1.4e19 s against
+     * the high branch's 4.0e20 s. So there is a window where one branch of the
+     * same revolution has an answer and the other has none.
+     *
+     * Past that, both stop converging rather than starting to lie. At 1e19 s the
+     * time of flight moves by about 4e10 s per ULP of z, so the 1e-12 relative
+     * tolerance is not reachable at any z float64 can represent, and the solver
+     * reports max-iterations. That is the honest outcome: bracketed, but not
+     * resolvable to the precision it promises.
+     */
+    const orbit = shape(6.9e6, 0, 0.0, 0, 0, 0);
+    const far = revolutionCase(orbit, 0, Math.PI / 2, 0);
+    const ask = (dt: number, branch: 'low' | 'high') =>
+      solveLambert(far.from.position, far.to.position, seconds(dt), 'prograde', MU_EARTH, {
+        revolutions: 1,
+        branch,
+      });
+
+    const low = ask(2e19, 'low');
+    expect(low.converged, 'the low branch has no root left at 2e19 s').toBe(false);
+    if (low.converged) return;
+    expect(low.reason).toBe('out-of-domain');
+    expect(low.branch).toBe('low');
+
+    // The high branch still brackets it, and still refuses to claim a precision
+    // it cannot deliver.
+    const high = ask(2e19, 'high');
+    expect(high.converged).toBe(false);
+    if (high.converged) return;
+    expect(high.reason).toBe('max-iterations');
+
+    // Far enough out, neither has anything at all.
+    expect(ask(5e20, 'high').converged).toBe(false);
+  });
+
+  it('carries a branch failure in `failures` rather than dropping it', () => {
+    const orbit = shape(6.9e6, 0, 0.0, 0, 0, 0);
+    const far = revolutionCase(orbit, 0, Math.PI / 2, 0);
+    const found = solveLambertBranches(
+      far.from.position,
+      far.to.position,
+      seconds(2e19),
+      'prograde',
+      MU_EARTH,
+      { maxRevolutions: 1 },
+    );
+    expect(found.branches).toEqual([]);
+    expect(found.failures.map((f) => [f.revolutions, f.branch, f.reason])).toEqual([
+      [0, 'single', 'max-iterations'],
+      [1, 'low', 'out-of-domain'],
+      [1, 'high', 'max-iterations'],
+    ]);
+  });
+
+  it('rejects the same geometry and times the zero-revolution solver rejects', () => {
+    const straight = position(-9.0e6, 0, 0);
+    expect(() =>
+      solveLambertBranches(position(7.0e6, 0, 0), straight, dt, 'prograde', MU_EARTH),
+    ).toThrow(RangeError);
+    expect(() =>
+      solveLambertBranches(from.position, to.position, seconds(0), 'prograde', MU_EARTH),
+    ).toThrow(RangeError);
+    expect(() => revolutionCeilingFor(from.position, to.position, seconds(-1), MU_EARTH)).toThrow(
+      RangeError,
+    );
+  });
+});
 
 describe('Curtis 4th ed., Example 5.2 (section 5.3, pp. 245-247) — elliptical transfer', () => {
   // Given, from the printed example. r2's x component is negative; see the

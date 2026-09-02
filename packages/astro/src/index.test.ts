@@ -81,7 +81,10 @@ const EXPECTED = [
   'solveKeplerElliptic',
   'solveKeplerHyperbolic',
   // lambert
+  'lambertMinimumTime',
+  'revolutionCeilingFor',
   'solveLambert',
+  'solveLambertBranches',
   'stumpffC',
   'stumpffS',
   // anomaly
