@@ -62,11 +62,15 @@ import { perifocalToInertialMatrix, pqw, pqwToEci } from './frames.js';
 /**
  * Below this eccentricity the periapsis direction is treated as undefined.
  * From `docs/PHYSICS.md`, which states the threshold as a contract.
+ *
+ * Exported because `equinoctial.ts` has to apply the same conventions when it
+ * converts back to this element set, and a threshold stated twice is a threshold
+ * that will eventually disagree with itself.
  */
-const CIRCULAR_TOLERANCE = 1e-8;
+export const CIRCULAR_TOLERANCE = 1e-8;
 
 /** Below this `sin i` the node line is treated as undefined. See the note above. */
-const EQUATORIAL_TOLERANCE = 1e-8;
+export const EQUATORIAL_TOLERANCE = 1e-8;
 
 /** Which angular elements were suppressed, and what the survivors mean. */
 export type Degeneracy =

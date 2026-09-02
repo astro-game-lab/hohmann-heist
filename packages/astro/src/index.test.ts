@@ -52,12 +52,21 @@ const EXPECTED = [
   'rtnToEciMatrix',
   'toRtn',
   // elements
+  'CIRCULAR_TOLERANCE',
+  'EQUATORIAL_TOLERANCE',
   'apoapsisRadius',
   'elementsFromState',
   'periapsisRadius',
   'semiMajorAxis',
   'specificAngularMomentum',
   'stateFromElements',
+  // equinoctial
+  'classicalFromEquinoctial',
+  'eccentricity',
+  'equinoctialFromClassical',
+  'equinoctialFromState',
+  'inclination',
+  'stateFromEquinoctial',
   // kepler
   'solveBarker',
   'solveKeplerElliptic',

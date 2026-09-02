@@ -53,12 +53,24 @@ export {
 export type { ClassicalElements, Degeneracy, OrbitShape, State } from './elements.js';
 export {
   apoapsisRadius,
+  CIRCULAR_TOLERANCE,
   elementsFromState,
+  EQUATORIAL_TOLERANCE,
   periapsisRadius,
   semiMajorAxis,
   specificAngularMomentum,
   stateFromElements,
 } from './elements.js';
+
+export type { EquinoctialElements } from './equinoctial.js';
+export {
+  classicalFromEquinoctial,
+  eccentricity,
+  equinoctialFromClassical,
+  equinoctialFromState,
+  inclination,
+  stateFromEquinoctial,
+} from './equinoctial.js';
 
 export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
 export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
