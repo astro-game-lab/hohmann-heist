@@ -104,6 +104,58 @@ describe('layering rule (NFR-005)', () => {
   }, 60_000);
 });
 
+describe('the DOP853 oracle is unreachable from the game path (FR-009)', () => {
+  // FR-009 permits a numerical integrator to exist and forbids using it to advance
+  // game state. The prohibition is only real if it is enforced, and it is enforced
+  // in two places because the two import routes fail differently: a deep relative
+  // path resolves on the filesystem, and a subpath export resolves only once
+  // dependency-cruiser is told to read `exports`. Both are checked here by
+  // deliberate violation.
+  const cases: readonly (readonly [label: string, dir: string, file: string, source: string])[] = [
+    [
+      'a subpath import from another package',
+      'packages/sim/src/__guardrail__',
+      'packages/sim/src/__guardrail__/oracle-leak.ts',
+      "import { integrate } from '@hh/propagation/oracle';\nexport const leak = integrate;\n",
+    ],
+    [
+      'a deep relative import from inside @hh/propagation',
+      'packages/propagation/src/__guardrail__',
+      'packages/propagation/src/__guardrail__/oracle-leak.ts',
+      "import { integrate } from '../oracle/dop853.js';\nexport const leak = integrate;\n",
+    ],
+  ];
+
+  afterEach(async () => {
+    await rm('packages/sim/src/__guardrail__', { recursive: true, force: true });
+    await rm('packages/propagation/src/__guardrail__', { recursive: true, force: true });
+  });
+
+  it.each(cases)(
+    'rejects %s',
+    async (_label, dir, file, source) => {
+      await mkdir(dir, { recursive: true });
+      await writeFile(file, source, 'utf8');
+
+      await expect(cruise()).rejects.toMatchObject({
+        stdout: expect.stringContaining('no-oracle-in-game-path') as unknown as string,
+      });
+    },
+    60_000,
+  );
+
+  it('allows a test file to import it, which is the whole point', async () => {
+    await mkdir('packages/sim/src/__guardrail__', { recursive: true });
+    await writeFile(
+      'packages/sim/src/__guardrail__/oracle-leak.test.ts',
+      "import { integrate } from '@hh/propagation/oracle';\nexport const allowed = integrate;\n",
+      'utf8',
+    );
+
+    expect(await cruise()).toContain('no dependency violations found');
+  }, 60_000);
+});
+
 describe('shell tooling is executable', () => {
   // CI invokes these scripts by path, so a mode of 100644 fails the job with
   // "Permission denied" rather than anything about the script. The bit is easy to

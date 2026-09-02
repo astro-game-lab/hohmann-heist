@@ -6,7 +6,8 @@
   "description": "Hohmann Heist \u2014 Keplerian arc propagation, event finding, and the DOP853 test oracle.",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./oracle": "./src/oracle/index.ts"
   },
   "dependencies": {
     "@hh/astro": "workspace:*",

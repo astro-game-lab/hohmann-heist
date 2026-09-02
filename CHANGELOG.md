@@ -12,6 +12,19 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- `@hh/propagation` gains **universal-variable Kepler propagation**: an arbitrary time offset,
+  forwards or backwards, analytically, with one formulation covering elliptic, parabolic and
+  hyperbolic orbits and no branch on conic class. Whole revolutions are removed before solving,
+  which is what keeps the accuracy of a month-long propagation usable. Non-convergence is a typed
+  return value. A single call costs about 1 µs against §11.9's 5 µs target.
+- `@hh/propagation` gains the **`Arc`**: one Keplerian segment between impulses, an immutable value
+  object whose classical elements are computed on first access and cached. Editing produces a new
+  arc rather than mutating an existing one, which is what makes FR-104's incremental recompute safe
+  rather than merely fast.
+- `@hh/propagation` gains a **numerical integration oracle** — DOP853's 8th-order tableau with
+  Richardson step control — reachable only from tests. FR-009 forbids advancing game state with it,
+  and that prohibition is now a `dependency-cruiser` rule checked by deliberate violation rather
+  than a comment.
 - `@hh/astro` gains **equinoctial elements** `(p, f, g, h, k, L)`, with conversions to and
   from both a Cartesian state and the classical set. Non-singular at `e = 0` and at
   `sin i = 0`, which are the common case in this game. Retrograde orbits are supported
@@ -25,6 +38,22 @@ they relied on has moved.
 - Initial project scaffold from `astro-game-lab/.repo-template`.
 
 ### Physics
+- **Propagation exists, and is checked against an independent numerical method.** The analytic
+  propagator and the DOP853-tableau oracle share no code, and agree to between 4e-14 and 7e-12
+  relative across elliptic, near-parabolic and hyperbolic cases — inside the oracle's own
+  sensitivity to its tolerance, which is where the test's threshold comes from rather than from
+  what made it pass. **No published number has moved.** What is still missing is a Tier 3 external
+  reference: both methods are ours, so the cross-check cannot catch a shared misunderstanding of a
+  convention. The `poliastro`/Horizons row stays open against #55.
+- **Corrected claim.** `docs/PHYSICS.md` implied §13.3's time-reversal requirement — 1e-12 relative
+  over ±30 days — held across the element domain. It does not, and no propagator can make it: a
+  float64 state determines its own orbital period to about one `eps`, and a few hundred revolutions
+  amplify that past 1e-12. The measured envelope is now tabulated, together with the region where
+  the flat 1e-12 does hold (`N·(1−e)^−2.5 ≤ 60`, which covers every v1.0 contract).
+- **New measurement.** The oracle's energy drift is linear in orbit count and proportional to the
+  requested tolerance — 4.5e-11 relative over a hundred orbits at `rtol = 1e-13` — and angular
+  momentum drifts about three times less, not orders less. Recorded because an oracle whose fitness
+  is assumed is not an oracle.
 - **The Tier 1 closed-form validation suite is complete.** Every Tier 1 row in
   [`docs/PHYSICS.md`](docs/PHYSICS.md) now has a passing test with its expected value
   re-derived from the constants and, wherever one exists, an external anchor that does not

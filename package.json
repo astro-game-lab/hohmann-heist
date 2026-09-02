@@ -27,6 +27,7 @@
     "test:watch": "vitest --project packages",
     "test:web": "vitest run --project web",
     "test:guardrails": "vitest run --project guardrails",
+    "bench": "vitest run --project bench",
     "test:all": "vitest run",
     "coverage": "vitest run --coverage",
     "size": "size-limit",
@@ -34,6 +35,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@hh/astro": "workspace:*",
+    "@hh/math": "workspace:*",
+    "@hh/propagation": "workspace:*",
     "@size-limit/file": "^13.0.3",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.11",

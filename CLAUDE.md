@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An [astro-game-lab](https://github.com/astro-game-lab) game. The org builds games where orbits are propagated rather than animated, and where the simulation is expected to agree with a textbook.
 
-**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math` and `@hh/astro` hold real code; `propagation`, `sim`, `game`, `render` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
+**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math`, `@hh/astro` and `@hh/propagation` hold real code; `sim`, `game`, `render` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
 
 ## The three documents
 
@@ -37,7 +37,7 @@ apps/web               Vite + Preact, hash routing, composition only
   ├── @hh/ui           Preact components, palettes, a11y       (empty)
   └── @hh/game         rules, scenarios, scoring, every DEP-xx (empty)
         └── @hh/sim    plan, timeline, world state, events     (empty)
-              ├── @hh/propagation   Kepler propagation, event finding, DOP853 oracle (empty)
+              ├── @hh/propagation   universal-variable propagation, arcs, DOP853 oracle
               ├── @hh/astro         constants, time, frames, elements, Kepler, Lambert
               └── @hh/math          vec3, mat3, angles, root finders, branded units, PCG32
 ```
