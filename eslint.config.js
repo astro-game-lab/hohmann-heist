@@ -39,6 +39,21 @@ export default defineConfig([
     },
   },
 
+  // Build tooling that runs under Node and sits outside every tsconfig: the size
+  // budgets and the scripts that resolve and report them. Type-aware linting needs
+  // a project to place a file in, and adding these to `allowDefaultProject` would
+  // put untyped tooling through the `strictTypeChecked` rule set for no gain.
+  {
+    files: ['.size-limit.js', 'tools/**/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+
   // The browser application: DOM globals are expected here, and JSX needs parsing.
   // The core guardrail block below still applies to `packages/**` only, so nothing
   // in the simulation gains access to the DOM by way of this.

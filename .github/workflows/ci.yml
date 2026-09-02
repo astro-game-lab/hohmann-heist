@@ -59,3 +59,18 @@ jobs:
 
       - name: Coverage
         run: pnpm coverage
+
+      # The bundle-size gate lives here rather than in its own workflow because
+      # `main` requires this job by name, so a budget bust blocks the merge without
+      # a second required status check. docs/PRODUCT.md §11.13 puts it here too.
+      - name: Build
+        run: pnpm build
+
+      - name: Bundle size (NFR-020)
+        run: pnpm size
+
+      # Always, so the run that busts a budget is also the run that shows by how
+      # much. Reports; never gates -- the step above is the gate.
+      - name: Size report
+        if: always()
+        run: pnpm size:report >> "$GITHUB_STEP_SUMMARY"
