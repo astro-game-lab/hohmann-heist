@@ -11,6 +11,15 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.9.1)
+      '@hh/astro':
+        specifier: workspace:*
+        version: link:packages/astro
+      '@hh/math':
+        specifier: workspace:*
+        version: link:packages/math
+      '@hh/propagation':
+        specifier: workspace:*
+        version: link:packages/propagation
       '@size-limit/file':
         specifier: ^13.0.3
         version: 13.0.3(size-limit@13.0.3)

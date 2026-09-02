@@ -59,6 +59,21 @@ module.exports = {
       to: { circular: true },
     },
     {
+      name: 'no-oracle-in-game-path',
+      comment:
+        'FR-009: a numerical integrator must never advance game state. The DOP853 oracle ' +
+        'is reachable only from tests. A rule that is only a comment is not a rule, and ' +
+        'this is the rule -- see packages/propagation/src/oracle/dop853.ts.',
+      severity: 'error',
+      from: {
+        path: '^(packages|apps|services)/',
+        // Tests are the whole point of the oracle, and the oracle's own barrel has to
+        // be able to reach the module it re-exports.
+        pathNot: ['\\.test\\.ts$', '^packages/propagation/src/oracle/'],
+      },
+      to: { path: '^packages/propagation/src/oracle/' },
+    },
+    {
       name: 'not-to-dev-dep',
       comment: 'Runtime code must not import a devDependency.',
       severity: 'error',
@@ -68,6 +83,16 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
+    // Without this, a subpath import like `@hh/propagation/oracle` resolves for
+    // TypeScript and Vite but not for dependency-cruiser, which records no dependency
+    // at all -- so `no-oracle-in-game-path` would pass on the one import route anybody
+    // would actually take. Verified by deliberate violation in the guardrail suite.
+    // It also collapses four unresolvable bare-specifier placeholder nodes into the
+    // real modules they name, which is why the cruised module count drops by four.
+    enhancedResolveOptions: {
+      exportsFields: ['exports'],
+      conditionNames: ['import', 'require', 'node', 'default'],
+    },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
     exclude: { path: 'node_modules|/dist/|/coverage/' },

@@ -18,7 +18,19 @@ export default defineConfig({
         test: {
           name: 'guardrails',
           environment: 'node',
-          include: ['tools/**/*.test.ts'],
+          include: ['tools/guardrails/**/*.test.ts'],
+        },
+      },
+      {
+        // Performance budgets from docs/PRODUCT.md §11.9. These live under `tools/`
+        // rather than beside the code they measure because measuring needs a clock,
+        // and `performance` is banned in `packages/**` by the core guardrail block —
+        // correctly, since the simulation must never read one. The benchmark is not
+        // the simulation.
+        test: {
+          name: 'bench',
+          environment: 'node',
+          include: ['tools/bench/**/*.test.ts'],
         },
       },
       {

@@ -17,14 +17,15 @@ the sections below describe what actually exists rather than what is planned.
 
 | | |
 | --- | --- |
-| **Simulation** | Constants, time, reference frames, and the Kepler solvers. No element conversion, no propagation, no Lambert. |
+| **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, and universal-variable propagation with the arc abstraction over it. No event finding, no timeline. |
 | **Application** | A skeleton: routing works and imports the simulation packages. No screens. |
-| **Quality** | 180 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. |
+| **Quality** | 450 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. |
 | **Milestone** | M0 of eight. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
 
 [`docs/PHYSICS.md`](docs/PHYSICS.md) is the honest account of what the simulation
-currently claims: five validation rows pass, twenty are still pending and each names
-the issue that will provide it.
+currently claims — including where a stated requirement turns out not to be
+attainable in float64, and what holds instead. Every row that has no passing test
+names the issue that will provide it.
 
 ## The astrodynamics
 
@@ -80,8 +81,8 @@ belongs in `test:all`.
 
 ```
 packages/math          vectors, matrices, angles, root finders, seeded PRNG
-packages/astro         constants, time, frames, Kepler solvers
-packages/propagation   propagation and event finding          (empty)
+packages/astro         constants, time, frames, elements, Kepler, Lambert
+packages/propagation   universal-variable propagation, arcs, oracle
 packages/sim           plan, timeline, world state            (empty)
 packages/game          rules, scenarios, and every departure  (empty)
 packages/render        canvas 2-D                             (empty)
