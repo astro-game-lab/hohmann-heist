@@ -41,4 +41,14 @@ Runtime and build dependencies are declared in the manifest and lockfile, and th
 
 | Path | Upstream | Licence | Why vendored |
 | --- | --- | --- | --- |
+| _none_ | | | |
+
+## Algorithms
+
+Published algorithms implemented from their specifications, and the reference data used to validate them.
+
+| Where | Algorithm | Source | Validation |
+| --- | --- | --- | --- |
+| `packages/math/src/rng.ts` | PCG32 (PCG-XSH-RR 64/32) | M. E. O'Neill, *PCG: A Family of Simple Fast Space-Efficient Statistically Good Algorithms for Random Number Generation* (2014); reference implementation at <https://www.pcg-random.org/>. Apache-2.0 / MIT. | Reference vectors from `pcg32-demo.c` for `seed=42, seq=54`, asserted in `rng.test.ts` |
+| `packages/math/src/root.ts` | Brent's method | R. P. Brent, *Algorithms for Minimization without Derivatives* (1973), ch. 4 | Convergence and bracket-handling tests in `root.test.ts` |
 | _none yet_ | | | |
