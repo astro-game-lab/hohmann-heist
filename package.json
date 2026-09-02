@@ -15,15 +15,18 @@
     "pnpm": ">=11.0.0"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "dev": "pnpm --filter @hh/web dev",
+    "build": "pnpm --filter @hh/web build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p apps/web/tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "layering": "depcruise packages",
+    "layering": "depcruise packages apps",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run packages",
-    "test:watch": "vitest packages",
-    "test:guardrails": "vitest run tools",
+    "test": "vitest run --project packages",
+    "test:watch": "vitest --project packages",
+    "test:web": "vitest run --project web",
+    "test:guardrails": "vitest run --project guardrails",
     "test:all": "vitest run",
     "coverage": "vitest run --coverage"
   },
@@ -35,9 +38,11 @@
     "eslint": "^10.9.1",
     "eslint-config-prettier": "^10.1.8",
     "fast-check": "^4.9.0",
+    "jsdom": "^30.0.1",
     "prettier": "^3.9.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.69.0",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "@hh/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hohmann Heist — the browser application.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@hh/astro": "workspace:*",
+    "@hh/math": "workspace:*",
+    "@preact/signals": "^2.0.0",
+    "preact": "^10.0.0"
+  }
+}

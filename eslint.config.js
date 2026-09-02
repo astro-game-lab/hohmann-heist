@@ -39,6 +39,36 @@ export default defineConfig([
     },
   },
 
+  // The browser application: DOM globals are expected here, and JSX needs parsing.
+  // The core guardrail block below still applies to `packages/**` only, so nothing
+  // in the simulation gains access to the DOM by way of this.
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        // `projectService` is deliberately NOT set again here. typescript-eslint
+        // builds one project service for the whole run, so a second declaration
+        // wins over the first and silently drops its `allowDefaultProject` — which
+        // then makes this very file unlintable. The service already discovers
+        // apps/web/tsconfig.json on its own.
+        ecmaFeatures: { jsx: true },
+      },
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        fetch: 'readonly',
+        performance: 'readonly',
+        HTMLElement: 'readonly',
+        Element: 'readonly',
+        Event: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+
   // ── Core determinism and portability guardrails ────────────────────────────
   //
   // NFR-005: the core references no browser or Node globals.
