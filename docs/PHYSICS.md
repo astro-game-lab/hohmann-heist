@@ -11,9 +11,9 @@ It is updated in the same pull request as any change to the model. If the simula
 | **Model** | Two-body, point-mass Earth. Impulsive (zero-duration) maneuvers. Massless targets. |
 | **Fidelity claim** | Delta-v and time of flight for any closed transfer are intended to be exact to within float64 round-off of the closed-form two-body solution. **Not suitable for mission planning**: no drag, no J2, no third body. |
 | **Propagation** | Analytic, via universal-variable Kepler propagation. No numerical integration in the game path. |
-| **Last validated** | 2026-09-01 — constants, time, frames and the Kepler solvers. Element conversion, propagation and Lambert do not exist yet; see [Validation](#validation) for exactly what is and is not checked. |
+| **Last validated** | 2026-09-02 — constants, time, frames, the Kepler solvers, and classical element ↔ Cartesian conversion. Propagation and Lambert do not exist yet; see [Validation](#validation) for exactly what is and is not checked. |
 
-> **Read the validation section before trusting a number from this build.** At the time of writing the repository has constants, time, reference frames and the Kepler solvers — no element conversion, no propagation, no Lambert. Every validation row without a passing test names the issue that will provide it rather than being left to look covered.
+> **Read the validation section before trusting a number from this build.** At the time of writing the repository has constants, time, reference frames, the Kepler solvers, and conversion between classical elements and a Cartesian state — no propagation, no Lambert. Every validation row without a passing test names the issue that will provide it rather than being left to look covered.
 
 ## Conventions
 
@@ -115,7 +115,7 @@ Circular and equatorial orbits are the **common case** in this game, not an edge
 | Singularity | Handling |
 | --- | --- |
 | **e = 0** — argument of periapsis undefined | Detected at e < 1e-8. Equinoctial elements are used internally wherever an element feeds logic; the UI shows "circular" and suppresses ω. Never an error. |
-| **i = 0** — RAAN undefined | Detected at i < 1e-8. Same treatment; the UI suppresses Ω. Every v1.0 contract is equatorial-equivalent, so this is the ordinary path. |
+| **i = 0** — RAAN undefined | Detected at **sin i < 1e-8**, which catches retrograde equatorial orbits (i near π) as well as prograde ones — the node vector vanishes at both ends, and a test on i alone would return a Ω derived from the direction of a zero-length vector. Same treatment; the UI suppresses Ω. Every v1.0 contract is equatorial-equivalent, so this is the ordinary path. |
 | **e = 0 and i = 0** | Both suppressed; true longitude is the only angular element. |
 | **Rectilinear orbits** — h = 0 | Rejected at construction with a typed error. Unreachable in normal play. |
 
@@ -158,12 +158,15 @@ Catches unit, frame and algebra errors. Cheap and fast.
 | Hohmann Δv | LEO 400 km → GEO = 3 854.0 m/s | ⏳ #52 |
 | Hohmann time of flight | 19 048.6 s = 5.29 h | ⏳ #52 |
 | Bi-elliptic threshold | Hohmann wins below r₂/r₁ = 11.94; bi-elliptic above 15.58 | ⏳ #52 |
+| Element → Cartesian at periapsis | `r = a(1−e)`, `v = √(μ(1+e)/(a(1−e)))`, purely transverse | ✅ `elements.test.ts` |
+| Converted state satisfies `\|r × v\| = √(μp)` | Definition of the semi-latus rectum | ✅ `elements.test.ts` |
+| Converted state satisfies `ε = −μ/2a` | Energy integral; and `ε = 0` for the parabolic case | ✅ `elements.test.ts` |
 
 ### Tier 2 — properties
 
 | Property | Status |
 | --- | --- |
-| Element ↔ Cartesian round-trip, including e = 0, i = 0, and both | ⏳ #53 |
+| Element ↔ Cartesian round-trip, including e = 0, i = 0, and both | ✅ `elements.test.ts` — a curated grid covering both conversion directions across every conic class and every degenerate combination, prograde and retrograde, to 1e-12. The **randomised** sweep is still ⏳ #53. |
 | Specific orbital energy conserved over a full period | ⏳ #53 |
 | Angular momentum conserved in magnitude and direction | ⏳ #53 |
 | Kepler solver converges across e ∈ [0, 0.999] ∪ (1, 10] | ✅ `kepler.test.ts` — and cross-checked against an independent bisection to 1e-15 |
@@ -178,7 +181,7 @@ Closed-form tests share the code's assumptions and cannot catch a wrong constant
 
 | Case | Reference | Status |
 | --- | --- | --- |
-| State ↔ elements | Curtis, *Orbital Mechanics for Engineering Students*, Ch. 4 worked examples | ⏳ #54 |
+| State ↔ elements | Curtis, *Orbital Mechanics for Engineering Students*, 4th ed. (Elsevier, 2020), Examples 4.3 (§4.4, pp. 193–195) and 4.7 (§4.6, p. 211) | ✅ `elements.test.ts`, to 1e-3 relative — the book's printed precision, not a tuned tolerance. Read from the book per the §7.6 process rule. Covers the general and hyperbolic paths; the degenerate cases appear in neither example and rest on closed forms instead. |
 | Kepler's equation | Vallado, *Fundamentals of Astrodynamics and Applications*, Ch. 2 | ⏳ #54 |
 | Lambert | Vallado Ch. 7; cross-checked against `poliastro.iod.izzo` | ⏳ #54 |
 | Two-body propagation over a range of a, e | `poliastro` / `astropy` fixture, generated by a committed script with a pinned version | ⏳ #55 |

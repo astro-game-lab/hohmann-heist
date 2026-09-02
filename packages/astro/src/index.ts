@@ -50,6 +50,16 @@ export {
   toRtn,
 } from './frames.js';
 
+export type { ClassicalElements, Degeneracy, OrbitShape, State } from './elements.js';
+export {
+  apoapsisRadius,
+  elementsFromState,
+  periapsisRadius,
+  semiMajorAxis,
+  specificAngularMomentum,
+  stateFromElements,
+} from './elements.js';
+
 export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
 export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
 
