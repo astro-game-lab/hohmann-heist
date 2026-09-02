@@ -26,15 +26,21 @@
 # production. Hardcoding production's path would make this pass a preview built
 # with the wrong base, which is precisely the failure previews exist to surface.
 #
-# SMOKE_RETRIES and SMOKE_RETRY_DELAY widen the poll. A Pages branch build is
-# slower to go live than an artifact deployment, so the preview workflow asks for
-# longer than the default.
+# SMOKE_TIMEOUT and SMOKE_RETRY_DELAY widen the poll. A Pages branch build is
+# slower to go live than an artifact deployment, so the workflows ask for longer
+# than the default. The budget is wall-clock rather than a number of attempts,
+# because an attempt can cost anything up to curl's --max-time: counting attempts
+# gives a bound that looks like a minute and can take twenty, which is long enough
+# for a CI job to cancel the step before it can report what went wrong.
 
 set -euo pipefail
 
 readonly EXPECTED_TITLE='<title>Hohmann Heist</title>'
-readonly RETRIES=${SMOKE_RETRIES:-5}
 readonly RETRY_DELAY=${SMOKE_RETRY_DELAY:-3}
+readonly TIMEOUT=${SMOKE_TIMEOUT:-30}
+
+deadline=$(($(date +%s) + TIMEOUT))
+before_deadline() { [ "$(date +%s)" -lt "$deadline" ]; }
 
 url=${1:-}
 expected_entry=${2:-}
@@ -49,17 +55,22 @@ fail() {
   exit 1
 }
 
-# Echoes the HTTP status code and writes the body to $2. Retries a non-2xx a few
-# times: a deployment can be reported live a beat before every edge node agrees.
+# Echoes the HTTP status code and writes the body to $2. Retries a non-2xx until
+# the deadline: a deployment can be reported live a beat before every edge node
+# agrees.
 http_get() {
-  local target=$1 out=$2 code='000' attempt
-  for attempt in $(seq "$RETRIES"); do
+  local target=$1 out=$2 code='000'
+  while :; do
+    # curl prints its own '000' on a connection failure *and* exits non-zero, so
+    # an `|| echo` fallback here would concatenate the two into '000000'.
     code=$(curl -sS -L -o "$out" -w '%{http_code}' \
-      --connect-timeout 10 --max-time 30 "$target" 2>/dev/null || echo '000')
+      --connect-timeout 10 --max-time 30 "$target" 2>/dev/null) || code=''
+    [ -n "$code" ] || code='000'
     case "$code" in
       2??) break ;;
     esac
-    [ "$attempt" -lt "$RETRIES" ] && sleep "$RETRY_DELAY"
+    before_deadline || break
+    sleep "$RETRY_DELAY"
   done
   echo "$code"
 }
@@ -95,22 +106,24 @@ echo "smoke: $doc_url"
 # replacing. Waiting for the expected entry script to appear is both the wait and
 # the proof that the wait ended for the right reason.
 fetch_document() {
-  local attempt code='000' seen_ok=''
-  for attempt in $(seq "$RETRIES"); do
+  local code='000' seen_ok=''
+  while :; do
     code=$(curl -sS -L -o "$document" -w '%{http_code}' \
-      --connect-timeout 10 --max-time 30 "$doc_url" 2>/dev/null || echo '000')
+      --connect-timeout 10 --max-time 30 "$doc_url" 2>/dev/null) || code=''
+    [ -n "$code" ] || code='000'
     if [ "$code" = '200' ]; then
       [ -z "$expected_src" ] && return 0
       grep -qF "\"$expected_src\"" "$document" && return 0
       seen_ok='yes'
     fi
-    [ "$attempt" -lt "$RETRIES" ] && sleep "$RETRY_DELAY"
+    before_deadline || break
+    sleep "$RETRY_DELAY"
   done
 
   if [ -n "$seen_ok" ]; then
-    fail "document never referenced $expected_src within ~$((RETRIES * RETRY_DELAY))s; the deployment is still serving an older build"
+    fail "document never referenced $expected_src within ${TIMEOUT}s; the deployment is still serving an older build"
   fi
-  fail "document returned HTTP $code"
+  fail "document returned HTTP $code after ${TIMEOUT}s"
 }
 
 fetch_document
