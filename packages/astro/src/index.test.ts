@@ -67,6 +67,15 @@ const EXPECTED = [
   'equinoctialFromState',
   'inclination',
   'stateFromEquinoctial',
+  // twobody
+  'biEllipticTransfer',
+  'circularSpeed',
+  'escapeSpeed',
+  'hohmannTransfer',
+  'meanMotion',
+  'period',
+  'specificEnergy',
+  'visVivaSpeed',
   // kepler
   'solveBarker',
   'solveKeplerElliptic',

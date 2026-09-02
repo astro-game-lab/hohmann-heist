@@ -72,6 +72,18 @@ export {
   stateFromEquinoctial,
 } from './equinoctial.js';
 
+export type { BiEllipticTransfer, HohmannTransfer } from './twobody.js';
+export {
+  biEllipticTransfer,
+  circularSpeed,
+  escapeSpeed,
+  hohmannTransfer,
+  meanMotion,
+  period,
+  specificEnergy,
+  visVivaSpeed,
+} from './twobody.js';
+
 export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
 export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
 
