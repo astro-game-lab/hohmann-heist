@@ -87,8 +87,27 @@ export {
 export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
 export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
 
-export type { LambertMethod, LambertOptions, LambertResult, TransferDirection } from './lambert.js';
-export { solveLambert, stumpffC, stumpffS } from './lambert.js';
+export type {
+  LambertBranch,
+  LambertBranchChoice,
+  LambertBranches,
+  LambertBranchesOptions,
+  LambertFailure,
+  LambertMethod,
+  LambertMinimum,
+  LambertOptions,
+  LambertResult,
+  LambertSolution,
+  TransferDirection,
+} from './lambert.js';
+export {
+  lambertMinimumTime,
+  revolutionCeilingFor,
+  solveLambert,
+  solveLambertBranches,
+  stumpffC,
+  stumpffS,
+} from './lambert.js';
 
 export {
   eccentricFromTrue,
