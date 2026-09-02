@@ -1,0 +1,100 @@
+name: Deploy
+
+# CI is the gate: this runs after the CI workflow succeeds on a push to `main`,
+# not on the push itself. `main` is protected and requires CI, so the gap being
+# closed is narrow — two individually-green pull requests that break each other
+# once both are on `main`. That is precisely the commit that must not ship.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+# Read-only by default. The deploy job widens this for itself, and only itself.
+permissions:
+  contents: read
+
+# One deployment at a time, and never cancel one in flight — a superseded deploy
+# is about to be replaced anyway, but a half-applied one is a broken site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    # `workflow_run` fires for every CI completion — pull requests and failures
+    # included — so the trigger has to be narrowed here rather than in `on`.
+    # A manual dispatch carries no `workflow_run` payload and passes on the first
+    # clause instead.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Actions are pinned to full commit SHAs rather than tags. A tag can be
+      # moved to point at different code; a SHA cannot.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A `workflow_run` job checks out the default branch's tip by default.
+          # Pin it to the commit CI actually validated, or a merge landing while
+          # this run is queued would deploy code that was never tested as a unit.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up pnpm
+        # Version comes from `packageManager` in package.json — one source of truth.
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: Deploy and smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Job-level permissions replace the top-level block outright, so `contents`
+    # has to be restated for the checkout.
+    permissions:
+      contents: read
+      pages: write # create the Pages deployment
+      id-token: write # the OIDC token deploy-pages exchanges for it
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      # A deploy that reports success and serves a blank page is the failure mode
+      # worth automating against, so the run is not green until the live URL is.
+      - name: Smoke test
+        run: tools/smoke/smoke.sh "${{ steps.deploy.outputs.page_url }}"
