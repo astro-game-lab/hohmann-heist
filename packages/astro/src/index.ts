@@ -14,3 +14,50 @@
 export const PACKAGE = '@hh/astro' as const;
 
 export { AU, J2_EARTH, MU_EARTH, OMEGA_EARTH, R_EARTH_EQ, R_GEO } from './constants.js';
+
+export type { CalendarDate, Epoch, Met } from './time.js';
+export {
+  addSeconds,
+  differenceSeconds,
+  epoch,
+  epochAtMet,
+  formatMet,
+  fromCalendarTAI,
+  fromJulianDateTT,
+  J2000,
+  J2000_JD_TT,
+  met,
+  metAt,
+  SECONDS_PER_DAY,
+  toCalendarTAI,
+  toJulianDateTAI,
+  toJulianDateTT,
+  TT_MINUS_TAI,
+} from './time.js';
+
+export type { EciVector, Framed, PqwVector, RtnVector } from './frames.js';
+export {
+  eci,
+  eciToPqw,
+  eciToRtnMatrix,
+  fromRtn,
+  inertialToPerifocalMatrix,
+  perifocalToInertialMatrix,
+  pqw,
+  pqwToEci,
+  rtn,
+  rtnToEciMatrix,
+  toRtn,
+} from './frames.js';
+
+export type { KeplerMethod, KeplerOptions, KeplerResult } from './kepler.js';
+export { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
+
+export {
+  eccentricFromTrue,
+  hyperbolicFromTrue,
+  meanFromEccentric,
+  meanFromHyperbolic,
+  trueFromEccentric,
+  trueFromHyperbolic,
+} from './anomaly.js';
