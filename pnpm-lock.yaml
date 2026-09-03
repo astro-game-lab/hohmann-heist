@@ -77,6 +77,12 @@ importers:
       '@hh/math':
         specifier: workspace:*
         version: link:../../packages/math
+      '@hh/render':
+        specifier: workspace:*
+        version: link:../../packages/render
+      '@hh/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
       '@preact/signals':
         specifier: ^2.0.0
         version: 2.11.1(preact@10.29.8)

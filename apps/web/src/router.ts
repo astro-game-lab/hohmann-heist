@@ -30,6 +30,7 @@ export type RouteName =
   | 'codex'
   | 'replay'
   | 'settings'
+  | 'spike'
   | 'notFound';
 
 /**
@@ -49,6 +50,8 @@ const ROUTES: readonly (readonly [pattern: string, name: RouteName])[] = [
   ['/codex/:slug', 'codex'],
   ['/replay', 'replay'],
   ['/settings', 'settings'],
+  // #238's throwaway spike page. Goes when the real planner lands.
+  ['/spike', 'spike'],
 ];
 
 const segmentsOf = (path: string): string[] =>

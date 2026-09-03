@@ -9,6 +9,7 @@ import { R_GEO, formatMet, met, MU_EARTH } from '@hh/astro';
 import { useEffect, useState } from 'preact/hooks';
 
 import { hrefFor, onRouteChange, parseHash, type Route } from './router.js';
+import { SpikePage } from './spike/SpikePage.js';
 
 const NAV: readonly (readonly [path: string, label: string])[] = [
   ['/', 'Title'],
@@ -17,6 +18,7 @@ const NAV: readonly (readonly [path: string, label: string])[] = [
   ['/daily', 'Daily'],
   ['/codex/phasing', 'Codex'],
   ['/settings', 'Settings'],
+  ['/spike', 'M1 spike'],
 ];
 
 /**
@@ -35,6 +37,10 @@ export const App = (): preact.JSX.Element => {
   // every load — and would make the route unobservable to a synchronous test.
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => onRouteChange(setRoute), []);
+
+  // The one hook the spike has into the app. Deleting `src/spike/` and these two lines
+  // removes it completely — #238 asks for a page nothing inherits from.
+  if (route.name === 'spike') return <SpikePage />;
 
   return (
     <main>
