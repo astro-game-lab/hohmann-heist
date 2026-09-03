@@ -12,6 +12,64 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **`@hh/game`'s evaluation surface (FR-106, FR-107, FR-108).** Given a timeline and a contract:
+  what did the player achieve, what rules did they break, and may they commit. Objectives are
+  `reach_orbit`, `intercept`, `rendezvous` and `soft_rendezvous`; `station` is a separate type and
+  arrives with contract 07. Constraints are the Δv budget, the deadline and the 100 km altitude
+  floor. Legality is `L1`–`L6`, with every simultaneous failure returned together rather than one
+  at a time. All of it is pure computation — no DOM, no clock, no randomness — so it runs under
+  Node and would run unchanged in a Worker.
+- **`reach_orbit` compares the final arc, not a sample (§6.4).** A Keplerian arc has constant
+  elements, so the orbit a plan leaves the spacecraft in *is* the last arc's elements, held to the
+  horizon by construction. There is no sampling window in which a transient mid-plan match could be
+  caught, which is what "held at the end of the plan" asks for. Which elements are compared, and at
+  what tolerance, is now written down rather than implied: periapsis and apoapsis radius to 10 km,
+  inclination, RAAN and argument of periapsis to 0.1°, each corresponding to about 10 km of
+  position error at a LEO radius. A circular goal does not compare the apse line and an equatorial
+  goal does not compare the node line — tested on the **goal**, so a plan cannot pass by being
+  accidentally degenerate.
+- **Proximity objectives use the closest-approach finder, never a sampling grid (#61).** Two orbits
+  crossing at 1° inclination close at 134 m/s, so a 1 km intercept window is about fifteen seconds
+  wide against a sample spacing of about 172 s: a sampled evaluator would step over the transfer
+  and tell the player they missed it. Every local minimum is tested rather than only the global
+  one, because for a rendezvous the closest pass may be the fastest one and a later, wider, slower
+  pass can be the one that satisfies both limits at once.
+- **Constraints return every violating interval, never a boolean (FR-107).** §6.5 draws these as
+  shaded bands on the timeline, and a band needs two epochs. The altitude floor runs the
+  shell-crossing finder (#62) per arc and merges intervals that abut, so one dip that spans a burn
+  draws as one band. Even the Δv budget has an interval: it is exceeded from the burn that crossed
+  the cap onward.
+- **Scenario format v1 (FR-201, FR-202).** A JSON Schema with the TypeScript types **and the
+  validator** generated from it by `pnpm schema:write` and gated by `pnpm schema:check`. Unknown
+  fields are rejected rather than ignored — a typo in a contributed scenario has to be an error,
+  because silence would mean the contributor's intent quietly did nothing. The loader reports every
+  field-level error at once, each with a JSON pointer and a catalogue key, and checks the semantics
+  a schema cannot express: an objective naming a target that is not there, a deadline past the
+  horizon, a duplicate constraint, a ship starting below its own floor, and a tolerance looser than
+  the departures table promises the player. Loading and validating measures **9.4 µs** against
+  §11.9's 20 ms budget.
+- **The validator ships as generated code, not as a runtime dependency.** Ajv compiles the schema
+  ahead of time in `tools/schema/generate.mjs`; `@hh/game` keeps its zero third-party runtime
+  dependencies, the bundle avoids ~35 kB gzip, and nothing calls `new Function` at load time.
+- **Message catalogue (FR-910, NFR-028).** `@hh/game` emits keys and parameters; `@hh/ui` resolves
+  them. A message is a **function** of its parameters and the locale's formatters rather than a
+  template string, so it can put a parameter wherever the language wants it and branch on
+  `Intl.PluralRules` — Polish has four plural categories and English has two. The catalogue is a
+  mapped type over every declared key, so a missing message and a spare one are both compile
+  errors; `tools/guardrails/catalogue.test.ts` covers the rot a type cannot see, a key nothing
+  produces. A missing dynamic key — a scenario's `briefKey` — throws in development and renders a
+  visible marker in production, never a blank.
+- **An ESLint rule against literal text in JSX (NFR-028).** Three `no-restricted-syntax` selectors,
+  no new dependency: element text, string literals in expression containers, and the attributes a
+  screen reader reads out. `{' '}`, interpolated values and non-visible attributes stay legal. The
+  guardrail suite demonstrates each selector firing and each legitimate construct staying silent,
+  and asserts the application passes. `apps/web`'s own strings moved to the catalogue in the same
+  change — a rule with an exemption for the code that was already there is a rule nobody trusts.
+- **Departures registry (§7.5, NFR-005).** The gameplay-departures table now exists as data as well
+  as prose, and `tools/guardrails/departures.test.ts` fails when the two disagree about which
+  departures exist, which package each lives in, or which the player is told about. This closes the
+  half of NFR-005 `dependency-cruiser` cannot see: a tolerance written straight into the wrong
+  package needs no illegal import and looks exactly like a physical constant.
 - **Golden trajectories (§7.6 Tier 4).** 31 committed plans with their evaluated states at fixed
   epochs — 326 sampled states in all — covering every conic class including exactly parabolic, the
   degenerate geometries (e = 0, i = 0, both, i = π, polar), the degenerate plan structures (empty,
@@ -179,6 +237,18 @@ they relied on has moved.
   vis-viva, circular and escape speed, specific energy, and the Hohmann and bi-elliptic
   transfers.
 - Initial project scaffold from `astro-game-lab/.repo-template`.
+
+### Physics
+- **DEP-01 is a core row, not a game-layer one.** `docs/PRODUCT.md` §7.5 places impulsive burns in
+  `@hh/game/maneuver`; they are in `packages/sim/src/maneuver.ts` and cannot move, because FR-102
+  defines a timeline as alternating Keplerian arcs and impulses and `@hh/sim` may not import the
+  layer above it to ask what a burn means. It is now marked in `docs/PHYSICS.md` the way DEP-09 and
+  DEP-11 already were — a departure that is not a simplification for fun, with the reason stated.
+  No number moved; the model is unchanged.
+- **DEP-13 added.** §6.4 requires `reach_orbit` to match its goal "within tolerance" without saying
+  which elements or how much. The answer is now a numbered row rather than a constant in a file.
+- Both differ from `docs/PRODUCT.md` §7.5, which is maintained upstream. `docs/PHYSICS.md` records
+  the divergence and is the authority for this repository until the next sync.
 
 ### Changed
 - `pnpm coverage` no longer runs the benchmark project (`vitest run --project !bench`). V8 coverage

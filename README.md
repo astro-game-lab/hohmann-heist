@@ -19,7 +19,8 @@ the sections below describe what actually exists rather than what is planned.
 | --- | --- |
 | **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, universal-variable propagation with the arc abstraction over it, `@hh/sim` — nodes, quantisation, impulsive Δv, replay codes, and the **timeline**: a plan applied to a state becomes alternating Keplerian arcs and impulses over a horizon, evaluable at any epoch by binary search and re-evaluable from an edited node onward. Plus the five event finders: apsis crossings, closest approach, altitude-shell crossings, ground-station visibility and umbra intervals. |
 | **Rendering** | The `Renderer` seam with a Canvas 2-D implementation behind it, an orthographic camera with pan, zoom and auto-framing, and adaptive orbit tessellation with its cache. Geometry only — no Earth, no markers, no labels yet. |
-| **Application** | A skeleton: routing works and imports the simulation packages. No screens. |
+| **Game rules** | `@hh/game` — the evaluation surface. Objectives (`reach_orbit`, `intercept`, `rendezvous`, `soft_rendezvous`), the Δv budget, deadline and 100 km altitude floor as *intervals* rather than booleans, and plan legality `L1`–`L6` with a specific, translatable reason for each. Plus the scenario format: a JSON Schema with the TypeScript types generated from it, and a loader that refuses an invalid contract with a field-level error. Every tolerance in it is a numbered departure in [`docs/PHYSICS.md`](docs/PHYSICS.md), and a test fails if the code and that table disagree. |
+| **Application** | A skeleton: routing works and imports the simulation packages. No screens. Every string in it comes from `@hh/ui`'s message catalogue, and a lint rule refuses literal text in JSX. |
 | **Quality** | 921 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. Plus three regression layers over plan evaluation: 31 committed golden trajectories gated at 1e-9 relative, a 10 000-plan in-process determinism fuzz asserting bit-identity, and a benchmark suite gated against a committed baseline rather than only against an absolute limit. |
 | **Milestone** | M0 of eight. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
 
@@ -97,9 +98,9 @@ packages/math          vectors, matrices, angles, root finders, seeded PRNG
 packages/astro         constants, time, frames, elements, Kepler, Lambert
 packages/propagation   universal-variable propagation, arcs, event finders, oracle
 packages/sim           plan, nodes, impulses, timeline, replay codes
-packages/game          rules, scenarios, and every departure  (empty)
+packages/game          rules, scenarios, and every departure
 packages/render        renderer, camera, orbit tessellation
-packages/ui            components, palettes, accessibility    (empty)
+packages/ui            message catalogue, components, palettes
 apps/web               the browser application
 ```
 
