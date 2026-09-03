@@ -10,6 +10,7 @@ import {
   trueFromEccentric,
   trueFromHyperbolic,
 } from './anomaly.js';
+import { MU_EARTH } from './constants.js';
 import { solveBarker, solveKeplerElliptic, solveKeplerHyperbolic } from './kepler.js';
 
 const anomalyOf = (r: ReturnType<typeof solveKeplerElliptic>): number => {
@@ -217,5 +218,141 @@ describe('anomaly conversions', () => {
         if (r.converged) expect(r.anomaly).toBeCloseTo(h, 9);
       }
     }
+  });
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Tier 3 — independent reference (#54)
+ *
+ * Vallado, D. A., "Fundamentals of Astrodynamics and Applications", 4th edition,
+ * Microcosm Press / Springer, 2013. ISBN 978-1-881883-18-0.
+ *
+ * All three examples were read from that edition, per the process rule in
+ * docs/PRODUCT.md section 7.6. Nothing here was copied out of docs/PRODUCT.md.
+ *
+ * SIGNS AND DIGITS WERE READ FROM THE RENDERED PAGE, not from the PDF's text
+ * layer. `lambert.test.ts` records that the Curtis PDF drops minus signs under
+ * text extraction; the same hazard applies here and every value below was
+ * confirmed against an image of the printed page (pp. 67, 69 and 71).
+ *
+ * ## Vallado's mu is ours, exactly
+ *
+ * The book works in km and uses mu = 398,600.4418 km^3/s^2, which is
+ * 3.986004418e14 m^3/s^2 -- `MU_EARTH` to the digit. Unlike Curtis, whose 398,600
+ * differs from ours by 1.1e-8 relative and has to be passed explicitly, there is
+ * no constant to substitute here and none of these tests needs a book-specific mu.
+ * Only Example 2-2 uses mu at all; the other two are pure Kepler solves.
+ *
+ * ## Why the tolerances differ by six orders of magnitude between examples
+ *
+ * They are the *books's* printed precisions, and Vallado does not print the same
+ * number of digits in each example. See each case.
+ * ---------------------------------------------------------------------------
+ */
+
+describe('Vallado 4th ed., Example 2-1 (section 2.2, p. 67) — elliptical Kepler', () => {
+  // GIVEN M = 235.4 deg, e = 0.4. FIND E.
+  //
+  // The book prints the mean anomaly as 4.108 505 059 194 65 rad and the answer
+  // twice: E = 220.512 074 767 522 deg in the body text, and 3.848 661 745 097 17
+  // rad in Table 2-2. Those two are independent transcriptions of the same
+  // quantity and they agree to 1.8e-15 when converted, which is float64 round-off
+  // -- so the reference is exact to the precision a double can hold, and the
+  // deviation this test measures is entirely ours.
+  const M = 4.10850505919465;
+  const E_EXPECTED_RAD = 3.84866174509717;
+  const E_EXPECTED_DEG = 220.512074767522;
+
+  it('reproduces the eccentric anomaly the book prints', () => {
+    const result = solveKeplerElliptic(M, 0.4);
+    expect(result.converged).toBe(true);
+
+    // 1e-13 is `kepler.ts`'s own default convergence tolerance, and therefore the
+    // most this solver promises. It is not the book's limit: the book is tighter
+    // than we are, which is the opposite of the Curtis situation and is why this
+    // number is not a "printed precision" like the two below.
+    expect(Math.abs(anomalyOf(result) - E_EXPECTED_RAD)).toBeLessThanOrEqual(1e-13);
+  });
+
+  it('agrees with the book in degrees as well as radians', () => {
+    // Not redundant: it checks the transcription rather than the solver. If either
+    // printed value had been mistyped, the two would disagree by far more than the
+    // 1.8e-15 that separates them in the book.
+    const degrees = (anomalyOf(solveKeplerElliptic(M, 0.4)) * 180) / Math.PI;
+    expect(Math.abs(degrees - E_EXPECTED_DEG)).toBeLessThanOrEqual(1e-11);
+  });
+
+  it("satisfies Kepler's equation to round-off at the book's own answer", () => {
+    // The book's value, not ours, put back into M = E - e sin E. This is what
+    // establishes that the printed 15 digits are real rather than a long decimal
+    // expansion of a shorter answer.
+    expect(Math.abs(E_EXPECTED_RAD - 0.4 * Math.sin(E_EXPECTED_RAD) - M)).toBeLessThanOrEqual(
+      1e-14,
+    );
+  });
+});
+
+describe('Vallado 4th ed., Example 2-2 (section 2.2, p. 69) — parabolic Barker', () => {
+  // GIVEN dt = 53.7874 min, p = 25,512 km, e = 1. FIND B.
+  //
+  // Vallado's B is `tan(nu/2)`, which is exactly the `D` in `solveBarker`'s
+  // `M_p = D + D^3/3`, and his parabolic mean motion `n_p = 2 sqrt(mu/p^3)` is the
+  // same one. So the conventions coincide and no re-derivation is needed -- but
+  // `solveBarker` returns the *true anomaly*, since a parabola has no eccentric
+  // anomaly, so the comparison converts back through `tan(nu/2)`.
+  const P_METRES = 25_512e3;
+  const DT_SECONDS = 53.7874 * 60;
+  const B_EXPECTED = 0.817751;
+
+  it('reproduces the parabolic anomaly the book prints', () => {
+    // SI in, SI out: the book's kilometres are converted here, at the boundary.
+    const parabolicMeanMotion = 2 * Math.sqrt(MU_EARTH / P_METRES ** 3);
+    const trueAnomaly = solveBarker(parabolicMeanMotion * DT_SECONDS);
+    const b = Math.tan(trueAnomaly / 2);
+
+    // 1.5e-6 relative. Vallado prints six significant figures for B, so a half-ulp
+    // of the last printed digit is 5e-7 / 0.8178 = 6.1e-7 relative; the observed
+    // deviation is 1.3e-7, comfortably inside where rounding alone puts it. The
+    // tolerance is the book's precision with a small margin, not a tuned number.
+    expect(Math.abs(b - B_EXPECTED) / B_EXPECTED).toBeLessThanOrEqual(1.5e-6);
+  });
+
+  it("reproduces the book's parabolic mean motion", () => {
+    // The book prints n_p = 0.000 309 9 rad/s -- four significant figures, so this
+    // asserts four. Worth its line because it is where a wrong mu or a kilometre /
+    // metre slip would show up first, before it could hide inside the cubic.
+    const parabolicMeanMotion = 2 * Math.sqrt(MU_EARTH / P_METRES ** 3);
+    expect(Math.abs(parabolicMeanMotion - 0.0003099) / 0.0003099).toBeLessThanOrEqual(1e-3);
+  });
+});
+
+describe('Vallado 4th ed., Example 2-3 (section 2.2, p. 71) — hyperbolic Kepler', () => {
+  // GIVEN M = 235.4 deg (the same 4.108 505 059 194 65 rad as Example 2-1), e = 2.4.
+  // FIND H. The body text gives H = 1.601 376 144 rad and Table 2-3's final
+  // iteration gives 1.601 376 144 9.
+  //
+  // Vallado's Algorithm 4 drives the residual M - (e sinh H - H) to zero, which is
+  // `kepler.ts`'s `M = e sinh H - H` -- the same convention, so H is directly
+  // comparable with no sign or definition change.
+  const M = 4.10850505919465;
+  const H_EXPECTED = 1.6013761449;
+
+  it('reproduces the hyperbolic anomaly the book prints', () => {
+    const result = solveKeplerHyperbolic(M, 2.4);
+    expect(result.converged).toBe(true);
+
+    // 1e-9 relative. Table 2-3 prints eleven digits and stops iterating at a step
+    // of 2.2e-10, so the printed value is itself converged to about that -- putting
+    // the book's own uncertainty an order of magnitude above float64. Asserting
+    // tighter would be asserting digits the book did not converge.
+    expect(Math.abs(anomalyOf(result) - H_EXPECTED) / H_EXPECTED).toBeLessThanOrEqual(1e-9);
+  });
+
+  it("satisfies the hyperbolic Kepler equation at the book's own answer", () => {
+    // As in Example 2-1, this checks the transcription rather than the solver. The
+    // residual here is 1.7e-10 rather than round-off, which is the book's
+    // convergence showing through and is consistent with the tolerance above.
+    expect(Math.abs(2.4 * Math.sinh(H_EXPECTED) - H_EXPECTED - M)).toBeLessThanOrEqual(1e-9);
   });
 });

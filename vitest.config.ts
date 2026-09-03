@@ -62,6 +62,22 @@ export default defineConfig({
         },
       },
       {
+        // Tier 3 external-library fixtures (#55). Its own project so
+        // `pnpm reference:write` -- which regenerates the committed fixture through
+        // Python -- is a separate, deliberate act from running the suite, the same
+        // arrangement `goldens` has and for the same reason.
+        //
+        // Under `tools/` rather than beside the code it checks because it reads a
+        // file, and `process`/`node:fs` are banned in `packages/**` by the core
+        // guardrail block. **This project never invokes Python**: the fixture is
+        // committed and this reads it like any other data file.
+        test: {
+          name: 'reference',
+          environment: 'node',
+          include: ['tools/reference/**/*.test.ts'],
+        },
+      },
+      {
         // The in-process determinism fuzz (FR-109). Its own project for the same
         // reason, and because its iteration count is worth being able to raise on its
         // own — see `tools/fuzz/determinism.fuzz.test.ts`.

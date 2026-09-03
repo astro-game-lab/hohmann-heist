@@ -40,3 +40,10 @@ coverage/
 # Benchmark results, written by `pnpm bench` and read by `pnpm bench:check`.
 # The committed baseline is tools/bench/baseline.json; these are one run of it.
 tools/bench/.results/
+
+# Python — the offline reference-fixture generator in tools/reference/.
+# The generator, its lockfile and the fixture it writes are committed; the
+# environment it runs in is not.
+.venv/
+__pycache__/
+*.py[cod]

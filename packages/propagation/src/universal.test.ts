@@ -23,7 +23,7 @@
  */
 import { MU_EARTH, eci, elementsFromState, period, stateFromElements } from '@hh/astro';
 import type { State } from '@hh/astro';
-import { V, metres, radians, seconds } from '@hh/math';
+import { V, metres, metresPerSec, radians, seconds } from '@hh/math';
 import { describe, expect, it } from 'vitest';
 
 import { propagate } from './universal.js';
@@ -510,5 +510,126 @@ describe('determinism (NFR-008)', () => {
     expect({ position: { ...start.position }, velocity: { ...start.velocity } }).toStrictEqual(
       snapshot,
     );
+  });
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Tier 3 — independent reference (#54)
+ *
+ * Vallado, D. A., "Fundamentals of Astrodynamics and Applications", 4th edition,
+ * Microcosm Press / Springer, 2013. ISBN 978-1-881883-18-0. Example 2-4,
+ * "Solving Kepler's Problem", section 2.3, pp. 94-95.
+ *
+ * Read from that edition per the process rule in docs/PRODUCT.md section 7.6, and
+ * from an image of the printed page rather than the PDF's text layer -- four of
+ * the twelve numbers below are negative and a dropped sign would be a passing
+ * test of the wrong thing.
+ *
+ * ## Why this is here and not only in @hh/astro
+ *
+ * The Tier 3 table's propagation row said a `poliastro`/`astropy` fixture would be
+ * the first external reference for propagation (#55, and that fixture lands in the
+ * same pull request). This is a *textbook* one, and it is a stronger check in one
+ * specific way: the fixture and this propagator could in principle share a
+ * misconception about universal variables, whereas a worked example computed by
+ * hand in 2013 cannot have inherited anything from either.
+ *
+ * It is a Chapter 2 Kepler worked example, so it belongs to #54; it happens to
+ * exercise the propagator, which is #55's row. Both are in this pull request.
+ *
+ * ## mu and conventions
+ *
+ * Vallado's 398,600.4418 km^3/s^2 is `MU_EARTH` exactly. His chi is our universal
+ * anomaly and his psi our z; the algorithm is the same one `universal.ts` cites.
+ * The book works in km and km/s throughout and the conversion happens here, at the
+ * boundary, and nowhere else.
+ * ---------------------------------------------------------------------------
+ */
+
+describe("Vallado 4th ed., Example 2-4 (section 2.3, pp. 94-95) — Kepler's problem", () => {
+  const KM = 1e3;
+
+  // GIVEN, in the geocentric equatorial frame:
+  //   r = 1131.340 I - 2282.343 J + 6672.423 K km
+  //   v = -5.643 05 I + 4.303 33 J + 2.428 79 K km/s
+  //   dt = 40 min
+  const initial: State = {
+    position: eci(V.vec3(metres(1131.34 * KM), metres(-2282.343 * KM), metres(6672.423 * KM))),
+    velocity: eci(
+      V.vec3(metresPerSec(-5.64305 * KM), metresPerSec(4.30333 * KM), metresPerSec(2.42879 * KM)),
+    ),
+  };
+  const dt = seconds(40 * 60);
+
+  const result = propagate(initial, dt, MU_EARTH);
+
+  it('converges', () => {
+    expect(result.converged).toBe(true);
+  });
+
+  it("reproduces the book's intermediate orbit size", () => {
+    // The book computes xi = -27.678 777 km^2/s^2 and a = 7200.4706 km on the way
+    // through. Asserted because they are where a unit slip would surface before it
+    // could be absorbed into the final state.
+    const r0 = V.norm(initial.position);
+    const energy = V.normSq(initial.velocity) / 2 - MU_EARTH / r0;
+    expect(Math.abs(energy / KM ** 2 - -27.678777) / 27.678777).toBeLessThanOrEqual(1e-6);
+
+    const a = -MU_EARTH / (2 * energy);
+    expect(Math.abs(a / KM - 7200.4706) / 7200.4706).toBeLessThanOrEqual(1e-6);
+  });
+
+  it('reproduces the state the book prints after 40 minutes', () => {
+    if (!result.converged) throw new Error('expected convergence');
+
+    /*
+     * r = -4219.7527 I + 4363.0292 J - 3958.7666 K km
+     * v =  3.689 866 I - 1.916 735 J - 6.112 511 K km/s
+     *
+     * TOLERANCE. 1e-6 relative on each component -- the book's precision, not
+     * ours. The binding component is the velocity, printed to seven significant
+     * figures, whose half-ulp is 5e-7 / 3.69 = 1.4e-7 relative; 1e-6 sits a small
+     * margin above that, because Vallado reaches these numbers through
+     * intermediates he prints to six or seven figures (f to -0.806 632, g to
+     * 586.061 95 s) and stops iterating at |chi_n - chi_{n-1}| < 1e-6 sqrt(km) by
+     * the algorithm's own UNTIL clause.
+     *
+     * Observed: 9.0e-9 on position and 1.2e-7 on velocity. The position agrees to
+     * very nearly all eight printed figures and the velocity to its half-ulp, so
+     * the book earned its last digit in both -- which the stopping rule above did
+     * not guarantee and is worth recording as a measurement rather than assuming.
+     */
+    const TOL = 1e-6;
+    const expectComponent = (actual: number, expected: number, what: string): void => {
+      const deviation = Math.abs(actual - expected) / Math.abs(expected);
+      expect(
+        deviation,
+        `${what}: expected ${String(expected)}, got ${String(actual)} (relative ${deviation.toExponential(2)})`,
+      ).toBeLessThanOrEqual(TOL);
+    };
+
+    expectComponent(result.state.position.x / KM, -4219.7527, 'r x');
+    expectComponent(result.state.position.y / KM, 4363.0292, 'r y');
+    expectComponent(result.state.position.z / KM, -3958.7666, 'r z');
+
+    expectComponent(result.state.velocity.x / KM, 3.689866, 'v x');
+    expectComponent(result.state.velocity.y / KM, -1.916735, 'v y');
+    expectComponent(result.state.velocity.z / KM, -6.112511, 'v z');
+  });
+
+  it('conserves the orbit it was propagated along', () => {
+    // Independent of the book: the propagated state must lie on the same conic.
+    // A reference test that passed while the orbit changed would be checking a
+    // coincidence.
+    if (!result.converged) throw new Error('expected convergence');
+    const before = elementsFromState(initial.position, initial.velocity, MU_EARTH);
+    const after = elementsFromState(result.state.position, result.state.velocity, MU_EARTH);
+
+    expect(
+      Math.abs(after.semiLatusRectum - before.semiLatusRectum) / before.semiLatusRectum,
+    ).toBeLessThanOrEqual(1e-13);
+    expect(Math.abs(after.eccentricity - before.eccentricity)).toBeLessThanOrEqual(1e-13);
+    expect(Math.abs(after.inclination - before.inclination)).toBeLessThanOrEqual(1e-13);
   });
 });
