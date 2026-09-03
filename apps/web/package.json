@@ -15,6 +15,7 @@
     "@hh/math": "workspace:*",
     "@hh/render": "workspace:*",
     "@hh/sim": "workspace:*",
+    "@hh/ui": "workspace:*",
     "@preact/signals": "^2.0.0",
     "preact": "^10.0.0"
   }

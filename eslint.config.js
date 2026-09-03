@@ -9,7 +9,18 @@ export default defineConfig([
   // rather than the index, and a JupyterLab extension bundled with `plotly` ships
   // minified `.js` that no tsconfig covers -- so without this the lint run fails on
   // files that are not ours and are not committed.
-  globalIgnores(['**/node_modules/**', '**/dist/**', '**/coverage/**', 'tools/reference/.venv/**']),
+  globalIgnores([
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/coverage/**',
+    'tools/reference/.venv/**',
+    // Generated from `packages/game/src/scenario/scenario-1.schema.json` by
+    // `pnpm schema:write`, and gated by `pnpm schema:check`. Ajv's standalone output
+    // is machine-written JavaScript that no tsconfig covers, so type-aware linting
+    // cannot place it in a project at all; and linting a generated file asks the
+    // author to satisfy a style guide they never read.
+    'packages/game/src/scenario/*.generated.*',
+  ]),
 
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
