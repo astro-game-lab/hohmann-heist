@@ -190,22 +190,41 @@ Circular and equatorial orbits are the **common case** in this game, not an edge
 
 **Every place the game knowingly departs from the physics.** This is the honesty rule: simplifications are allowed, hiding them is not. No row that is a *simplification for fun* may live in `@hh/math`, `@hh/astro`, `@hh/propagation`, or `@hh/sim` — each of those names a module in `@hh/game` or above, and the import direction is enforced in CI by `dependency-cruiser` (see `.dependency-cruiser.cjs`).
 
-Two rows sit in the core and are marked accordingly, because they are not simplifications for fun and the table would be misleading if it implied they were. DEP-09 is a determinism mechanism (§11.4 lists it as one), and DEP-11 is a modelling assumption with a magnitude attached. They are listed here because they are still departures a player is entitled to know about, not because they are cheats.
+Three rows sit in the core and are marked accordingly, because they are not simplifications for fun and the table would be misleading if it implied they were. DEP-01 is the dynamical model itself — FR-102 defines a timeline as alternating Keplerian arcs and impulses, so there is no finite-burn integrator for it to be a simplification of. DEP-09 is a determinism mechanism (§11.4 lists it as one), and DEP-11 is a modelling assumption with a magnitude attached. They are listed here because they are still departures a player is entitled to know about, not because they are cheats.
+
+**This table is the authority for this repository, and it currently differs from `docs/PRODUCT.md` §7.5 in two places.** That document is maintained outside this repo and synced in, so the corrections are recorded here and flagged for the next sync rather than edited into a file that would revert.
+
+- **DEP-01's home.** §7.5 places impulsive burns in `@hh/game/maneuver`. They are in `packages/sim/src/maneuver.ts`, and they cannot move: FR-102 defines a timeline as alternating Keplerian arcs and impulses, and `@hh/sim` may not import the layer above it to ask what a burn means. Marked a core row here, with the reason.
+- **DEP-13.** §6.4 requires `reach_orbit` to match the goal "within tolerance" without saying which elements or how much, and §7.5 has no row for the answer. The row below is that answer.
+
+The registry in `@hh/game/departures` carries the same reconciliation as data, and `tools/guardrails/departures.test.ts` fails if the registry and this table disagree.
 
 | ID | Departure | Lives in | Why | Player-visible? |
 | --- | --- | --- | --- | --- |
-| DEP-01 | **Impulsive burns** — zero duration, no gravity losses | `@hh/game` | Finite burns make planning about throttle timing rather than trajectory. Costs roughly 1% of Δv for large burns. | Yes — Codex, "Why burns are instant" |
+| DEP-01 | **Impulsive burns** — zero duration, no gravity losses | `@hh/sim` *(dynamical model, not a cheat)* | Finite burns make planning about throttle timing rather than trajectory. Costs roughly 1% of Δv for large burns. FR-102 defines the timeline as alternating arcs and impulses, so this is how the product specifies the dynamics rather than a simplification laid over them. | Yes — Codex, "Why burns are instant" |
 | DEP-02 | **Δv as a scalar tank**; no mass, Isp or rocket equation | `@hh/game` | Propellant bookkeeping is a second learning curve. | Yes — the budget is labelled "Δv", not "fuel" |
-| DEP-03 | **Rendezvous tolerance** 100 m and 0.5 m/s | `@hh/game` | Real proximity operations run to ~0.1 m/s over hours. Ours ends where the interesting part ends. | Yes — briefing and HUD |
+| DEP-03 | **Rendezvous tolerance** 100 m and 0.5 m/s, tightened to 0.1 m/s for `soft_rendezvous` | `@hh/game` | Real proximity operations run to ~0.1 m/s over hours. Ours ends where the interesting part ends. | Yes — briefing and HUD |
 | DEP-04 | **Intercept tolerance** 1 000 m | `@hh/game` | As above, for grab-and-go objectives. | Yes |
 | DEP-05 | **Time acceleration** during execution, up to 100 000× | `@hh/game` | Nobody watches a 17-day transfer. | Yes — the rate is in the HUD |
 | DEP-06 | **Fixed Sun direction** for the duration of a contract | `@hh/game` | Avoids an ephemeris dependency. The Sun moves 0.041°/h, so over a 12 h contract that is 0.5° of umbra rotation, well inside the eclipse-window tolerance. Contracts longer than 3 days do not use eclipse constraints. | Yes — Codex, and the briefing says "sun-fixed approximation" |
-| DEP-07 | **Node snapping** to apsis or node crossing within 30 s | `@hh/game` | Hitting periapsis to the millisecond is not the fun part. Can be disabled. | Listed in the assist tray |
+| DEP-07 | **Node snapping** to apsis or node crossing within 30 s | `@hh/game` | Hitting periapsis to the millisecond is not the fun part. Can be disabled. | No — but the assist tray lists it |
 | DEP-08 | **Altitude floor** at 100 km is an instant fail | `@hh/game` | Stands in for drag and reentry, which are not modelled. | Yes — drawn as a hazard shell |
 | DEP-09 | **Node epochs quantised** to 1/1024 s; Δv components to 1e-4 m/s | `@hh/sim` *(determinism mechanism, not a cheat)* | Exact, identical input for replay codes and cross-platform verification (§11.4). What is exactly representable is the **integer count**, not the SI quantity: 1/1024 is a binary fraction and an epoch tick really is exact, but 1e-4 is not, so a quantised Δv is the correctly-rounded product and not the decimal it prints as. Both quanta are far below any perceptible or scoring-relevant threshold. | No |
 | DEP-10 | The transverse axis is **labelled "prograde"** | `@hh/game` | Player vocabulary. The two coincide for circular orbits and differ by the flight-path angle otherwise. | Yes — Codex, "Prograde vs transverse" |
 | DEP-11 | **Targets are massless** and do not perturb the ship | `@hh/sim` *(assumption, not a cheat)* | A 5 t satellite's gravity at 100 m is about 3 × 10⁻⁹ m s⁻². Standard practice. | Yes — Codex |
 | DEP-12 | **Par values are the best known**, not the proven optimum | `@hh/game` | For Lambert contracts the true optimum is a continuous search; ours is a fine grid refined by local optimisation. | Yes — the debrief invites a bug report if a player beats par |
+| DEP-13 | **`reach_orbit` tolerance** — 10 km on periapsis and apoapsis radius, 0.1° on inclination, RAAN and argument of periapsis | `@hh/game` | §6.4 requires the osculating elements to match "within tolerance" and does not say which elements or how much. All five are set to about 10 km of position error at a LEO radius, which is two orders of magnitude above what a node drag resolves and two below the size of the orbits being flown. | Yes — briefing and HUD |
+
+**The table is checked against the code, not merely written beside it.**
+`packages/game/src/departures.ts` carries the same thirteen rows as data — identifier,
+module, layer, and whether the player is told — so the briefing and the Codex can render
+them, and so a machine can compare the two lists.
+`tools/guardrails/departures.test.ts` fails when they disagree about which departures
+exist, which package each lives in, or which are player-visible, and
+`packages/game/src/departures.test.ts` asserts §7.5's own rule: nothing in the table may
+sit in the core without a stated reason. The *reasons* are not compared — no script can
+check an argument — and neither list can see a departure that was implemented and
+written down nowhere, which is the gap NFR-005 names and nothing mechanical closes.
 
 ## Validation
 
@@ -307,6 +326,9 @@ Closed-form tests share the code's assumptions and cannot catch a wrong constant
 | --- | --- |
 | Golden trajectories: ~30 plans with states at fixed epochs, 1e-9 relative | ✅ `tools/goldens/` — 31 committed cases and 326 sampled states, regenerated only by `pnpm goldens:write` so a change lands as a reviewable diff rather than as a silent re-baseline. The set covers every conic class (circular, e = 0.001 through 0.95, near-parabolic from both sides, **exactly parabolic**, and hyperbolas at e = 1.4 and 3.0), the degenerate geometries (e = 0, i = 0, both together, i = π, polar), the degenerate plan structures (the empty plan, a node exactly on the start epoch, a node exactly on the horizon, FR-101's minimum spacing, a zero-Δv node, §13.3's twelve-node maximum), and two plans that change conic class mid-timeline. **A golden asserts that a number has not moved, never that it is right** — everything above this row is what says it is right |
 | Contract solvability: every shipped contract's reference solution still meets its objective at par ± 0.5% | ⏳ #87 |
+| The gameplay-departures table above matches the registry in `@hh/game` | ✅ `tools/guardrails/departures.test.ts` — identifier set, package, core-exception marking and player visibility, compared row by row in both directions. Adding a row to one list and not the other fails CI |
+| Objective evaluation is monotone in tolerance (§13.3) | ✅ `reach-orbit.test.ts` and `proximity.test.ts` — `fast-check` over goals, achieved orbits and tolerance pairs; loosening a tolerance never turns a pass into a fail. Structural rather than tuned: the achieved values are computed without reference to the tolerance |
+| A proximity encounter narrower than the search grid is still found | ✅ `proximity.test.ts` — two orbits crossing at 1° inclination close at 134 m/s, so the 1 km intercept window is ~15 s against a ~172 s sample spacing. Asserted on a sub-metre separation, which no grid of that spacing could have found. The epoch comes from the closest-approach finder (#61), never from sampling |
 
 ## Numerical notes
 

@@ -277,3 +277,80 @@ describe('shell tooling is executable', () => {
     expect(notExecutable).toEqual([]);
   });
 });
+
+describe('no literal user-facing text in JSX (NFR-028)', () => {
+  // #88 asks that the rule be "demonstrated to fire before it lands". These cases lint
+  // *text* against a real path inside `apps/web`, so they exercise the actual
+  // `eslint.config.js` glob and its three selectors rather than a reconstruction.
+  //
+  // The silent cases matter as much as the loud ones: a rule that also fired on
+  // `{' '}` or on `id="route-heading"` would be turned off within a week, and a rule
+  // that is off enforces nothing.
+  // Real paths: `lintText` places the text in a tsconfig project by its path, and a
+  // file that does not exist cannot be placed -- the lint then comes back as one fatal
+  // parse error, which a `not.toContain` assertion would quietly accept. The core
+  // guardrail cases above use existing paths for the same reason.
+  const APP_FILE = 'apps/web/src/app.tsx';
+  const SPIKE_FILE = 'apps/web/src/spike/SpikePage.tsx';
+
+  // The first lint of a `.tsx` builds the whole `apps/web` program, which takes tens
+  // of seconds. Pay it once here, for both paths, rather than charging it to whichever
+  // case runs first -- `apps/web/src/spike/` is inside the same project but is a
+  // separate `ignores` decision, and warming only one left the other at a timeout.
+  beforeAll(async () => {
+    await ruleIdsFor('export const warmup = 1;\n', APP_FILE);
+    await ruleIdsFor('export const warmup = 1;\n', SPIKE_FILE);
+  }, 180_000);
+
+  const fires: readonly (readonly [label: string, code: string])[] = [
+    ['literal text in an element', 'export const a = <p>Hello</p>;\n'],
+    ['a string literal in a container', "export const b = <p>{'Hello'}</p>;\n"],
+    ['an aria-label', 'export const c = <nav aria-label="Routes" />;\n'],
+    ['an image alt', 'export const d = <img alt="Earth" />;\n'],
+    ['a placeholder', 'export const e = <input placeholder="Search" />;\n'],
+  ];
+
+  it.each(fires)(
+    'fires on %s',
+    async (_label, code) => {
+      expect(await ruleIdsFor(code, APP_FILE)).toContain('no-restricted-syntax');
+    },
+    30_000,
+  );
+
+  const silent: readonly (readonly [label: string, code: string])[] = [
+    ['a resolved key', 'export const f = (label: string) => <p>{label}</p>;\n'],
+    ['JSX indentation', 'export const g = <p>\n  <i />\n</p>;\n'],
+    ['an explicit space', "export const h = <p><i />{' '}<i /></p>;\n"],
+    ['a non-visible attribute', 'export const i = <h2 id="route-heading" />;\n'],
+    ['a class name', 'export const j = <p class="hud" />;\n'],
+  ];
+
+  it.each(silent)(
+    'stays silent on %s',
+    async (_label, code) => {
+      expect(await ruleIdsFor(code, APP_FILE)).not.toContain('no-restricted-syntax');
+    },
+    30_000,
+  );
+
+  // The M1 spike is exempt and is deleted whole in PR 5 of M2. The exemption is
+  // asserted so that removing the directory and its `ignores` entry together is a
+  // visible change rather than a silent one.
+  it('exempts the M1 spike, which is throwaway', async () => {
+    expect(await ruleIdsFor('export const k = <p>Hello</p>;\n', SPIKE_FILE)).not.toContain(
+      'no-restricted-syntax',
+    );
+  }, 30_000);
+
+  // The rule is only worth having if the codebase satisfies it on the day it lands.
+  it('passes on the application as it stands', async () => {
+    const results = await eslint.lintFiles(['apps/web/src/**/*.tsx']);
+    const offences = results.flatMap((result) =>
+      result.messages
+        .filter((message) => message.ruleId === 'no-restricted-syntax')
+        .map((message) => `${result.filePath}:${String(message.line)}`),
+    );
+    expect(offences).toEqual([]);
+  }, 120_000);
+});

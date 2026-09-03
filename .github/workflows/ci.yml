@@ -63,6 +63,14 @@ jobs:
       - name: Format
         run: pnpm format:check
 
+      # The scenario validator and its TypeScript types are generated from
+      # packages/game/src/scenario/scenario-1.schema.json and committed. This fails
+      # when what is committed is not what the schema implies -- the same arrangement
+      # the golden fixtures have, and for the same reason: a generated artefact nobody
+      # can prove is current is worse than one that is regenerated on every build.
+      - name: Generated scenario artefacts (FR-201)
+        run: pnpm schema:check
+
       # test:all, not test — the guardrail suite is excluded from the inner-loop
       # `test` script for speed, and CI is where it has to run.
       - name: Test

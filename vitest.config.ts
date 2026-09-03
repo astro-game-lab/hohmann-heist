@@ -104,7 +104,11 @@ export default defineConfig({
       // browser-environment testing story — see docs/PRODUCT.md NFR-022. `apps/web`
       // is a composition layer and is covered by its own tests, not by this gate.
       include: ['packages/{math,astro,propagation,sim,game}/src/**/*.ts'],
-      exclude: ['**/*.test.ts'],
+      // `test-support.ts` is a fixture module for this package's tests: not exported
+      // from any barrel and not reachable from source. Counting it would inflate the
+      // number the NFR-022 gate exists to keep honest, for the same reason the tests
+      // themselves are excluded.
+      exclude: ['**/*.test.ts', '**/test-support.ts'],
       thresholds: {
         // NFR-022: >=90% statements in the core packages.
         statements: 90,

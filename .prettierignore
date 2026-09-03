@@ -25,3 +25,9 @@ tools/reference/.venv/
 # Same reasoning as the goldens above: a fixture whose diff can be read is the
 # point of committing it.
 tools/reference/fixtures.json
+
+# Generated from packages/game/src/scenario/scenario-1.schema.json by
+# `pnpm schema:write`, and gated by `pnpm schema:check`. The types are formatted by
+# the generator; Ajv's standalone validator is machine-written and reformatting it
+# would only make `schema:check` compare Prettier's output to Ajv's.
+packages/game/src/scenario/*.generated.*

@@ -9,7 +9,18 @@ export default defineConfig([
   // rather than the index, and a JupyterLab extension bundled with `plotly` ships
   // minified `.js` that no tsconfig covers -- so without this the lint run fails on
   // files that are not ours and are not committed.
-  globalIgnores(['**/node_modules/**', '**/dist/**', '**/coverage/**', 'tools/reference/.venv/**']),
+  globalIgnores([
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/coverage/**',
+    'tools/reference/.venv/**',
+    // Generated from `packages/game/src/scenario/scenario-1.schema.json` by
+    // `pnpm schema:write`, and gated by `pnpm schema:check`. Ajv's standalone output
+    // is machine-written JavaScript that no tsconfig covers, so type-aware linting
+    // cannot place it in a project at all; and linting a generated file asks the
+    // author to satisfy a style guide they never read.
+    'packages/game/src/scenario/*.generated.*',
+  ]),
 
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
@@ -89,6 +100,69 @@ export default defineConfig([
         URLSearchParams: 'readonly',
         console: 'readonly',
       },
+    },
+  },
+
+  // ── No literal user-facing text in JSX (NFR-028) ───────────────────────────
+  //
+  // FR-910: every user-facing string comes from the message catalogue in `@hh/ui`;
+  // none is built by concatenation. NFR-028 names the enforcement: "ESLint rule
+  // against literal JSX text". This is it.
+  //
+  // ## Why `no-restricted-syntax` and not `eslint-plugin-react`
+  //
+  // `react/jsx-no-literals` does this job, and pulling in a React plugin to lint a
+  // Preact application means a dependency whose rule set is mostly about a framework
+  // this repo does not use. Two esquery selectors cover it, using the same mechanism
+  // the `acos` ban already runs on -- and `tools/guardrails/guardrails.test.ts`
+  // demonstrates each of them firing, and each of the legitimate constructs below
+  // staying silent, which is what #88 asks for before the rule lands.
+  //
+  // ## What is caught, and what is deliberately not
+  //
+  //   <p>Hello</p>            caught -- JSXText with a non-space character
+  //   <p>{'Hello'}</p>        caught -- a string literal is text wherever it is written
+  //   <nav aria-label="x" />  caught -- read aloud by a screen reader, so it is a string
+  //   <img alt="Earth" />     caught -- likewise
+  //
+  //   <p>{label}</p>          silent -- an expression is where a resolved key arrives
+  //   {' '}                   silent -- JSX spacing, not a word
+  //   <h2 id="route-heading"> silent -- an identifier, never rendered
+  //   <a href={hrefFor(p)}>   silent -- likewise
+  //
+  // Whitespace-only `JSXText` is silent because it is how JSX is indented. The
+  // attribute list is the set of attributes that reach a person: everything else --
+  // `id`, `href`, `class`, `data-*`, `type` -- is machinery.
+  {
+    files: ['apps/web/**/*.tsx', 'packages/ui/**/*.tsx'],
+    // The M1 spike is throwaway and is deleted whole when the planner replaces it
+    // (#238, PR 5 of M2). Its readout is a measurement instrument rather than a
+    // screen, and translating a number that exists to be read off a stopwatch would
+    // be ceremony with no reader. Deleting the directory deletes this line with it.
+    ignores: ['apps/web/src/spike/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXText[value=/[^\\s]/]',
+          message:
+            'User-facing text belongs in the message catalogue in @hh/ui, not in JSX. ' +
+            "Resolve a key instead: {t('app.title')}. See docs/PRODUCT.md FR-910 (NFR-028).",
+        },
+        {
+          selector: 'JSXExpressionContainer > Literal[value=/[^\\s]/]',
+          message:
+            'A string literal in JSX is still literal text. Resolve a catalogue key ' +
+            'instead. See docs/PRODUCT.md FR-910 (NFR-028).',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(aria-label|aria-description|aria-placeholder|aria-roledescription|aria-valuetext|alt|title|placeholder)$/] > Literal',
+          message:
+            'This attribute is read out to the player, so it is a user-facing string. ' +
+            'Resolve a catalogue key instead. See docs/PRODUCT.md FR-910 (NFR-028).',
+        },
+      ],
     },
   },
 

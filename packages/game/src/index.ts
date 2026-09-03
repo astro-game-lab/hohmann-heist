@@ -6,7 +6,61 @@
  *
  * See `docs/PRODUCT.md` §11.1 (architecture and the layering rule) and §11.2
  * (package responsibilities).
+ *
+ * ## What is here
+ *
+ * The evaluation surface: given a timeline and a contract, what did the player achieve,
+ * what rules did they break, and may they commit. Everything in it is a pure function —
+ * no DOM, no clock, no randomness — so the whole package runs under Node in tests and
+ * would run unchanged in a Worker.
+ *
+ * It also holds the **message keys** every rule emits. This package never builds a
+ * sentence: it returns a catalogue key and its parameters, and `@hh/ui` turns that into
+ * text (FR-910). That is why nothing here imports `@hh/ui`, and why the two key sets
+ * are cross-checked by the compiler rather than by hope.
  */
 
-/** Package identity. Placeholder until this package holds real code. */
+/** Package identity. */
 export const PACKAGE = '@hh/game' as const;
+
+export type {
+  AboveCoreDeparture,
+  CoreDeparture,
+  Departure,
+  DepartureId,
+  DepartureStatus,
+  DepartureVisibility,
+} from './departures.js';
+export {
+  ABOVE_CORE_PREFIXES,
+  CORE_PREFIXES,
+  DEPARTURES,
+  departureById,
+  isAboveCore,
+  isCore,
+  playerVisibleDepartures,
+} from './departures.js';
+
+export type {
+  GameMessage,
+  GameMessageKey,
+  GameMessageOf,
+  GameMessageParams,
+  MessageParams,
+  MessageParamValue,
+} from './messages.js';
+export { NO_PARAMS, gameMessage } from './messages.js';
+
+export * from './objectives/index.js';
+export * from './constraints/index.js';
+
+export type {
+  Legality,
+  LegalityCode,
+  LegalityConstraints,
+  LegalityReason,
+  LegalityRules,
+} from './legality.js';
+export { evaluateLegality } from './legality.js';
+
+export * from './scenario/index.js';
