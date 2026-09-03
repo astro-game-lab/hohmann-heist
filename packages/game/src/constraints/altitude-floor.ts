@@ -72,8 +72,12 @@ export const evaluateAltitudeFloor = (
 
   const found: ConstraintViolation[] = [];
   for (const arc of timeline.arcs) {
-    // A zero-length arc — two nodes a tick apart — has no span to search and the
-    // finder refuses a malformed interval rather than returning nothing.
+    // A zero-length arc has no span to be below the floor for. The finder accepts
+    // `end === start` and answers for that instant, so this is a short-circuit rather
+    // than a guard — but the instant it would answer for is the *next* arc's start
+    // epoch too, and reporting it twice would defeat the merge below. Reachable from a
+    // legal plan: a node sitting exactly on the timeline's start epoch gives arc 0 no
+    // duration.
     if (arc.endEpoch <= arc.startEpoch) continue;
     for (const interval of findShellIntervals(arc, radius, arc.startEpoch, arc.endEpoch)) {
       found.push({ kind: 'altitude_floor', ...interval });
