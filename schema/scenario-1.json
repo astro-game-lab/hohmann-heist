@@ -1,0 +1,426 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json",
+  "title": "Scenario",
+  "description": "A Hohmann Heist contract, version 1. Declarative data only: the loader interprets this and nothing else (FR-201). All quantities are SI and carry their unit in the field name.",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "act",
+    "index",
+    "title",
+    "briefKey",
+    "epoch",
+    "horizonSeconds",
+    "ship",
+    "objective",
+    "par"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional pointer back to this schema, so an editor can validate on save."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable identifier, kebab-case. Appears in URLs and save data, so it never changes once shipped."
+    },
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Required so that a future v2 is distinguishable from v1 rather than inferred from which fields happen to be present."
+    },
+    "act": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "briefKey": {
+      "$ref": "#/$defs/catalogueKey",
+      "description": "Message-catalogue key for the briefing text (D14, FR-910). Never literal prose: contract text is translated and reviewed separately from contract logic."
+    },
+    "epoch": {
+      "type": "object",
+      "required": ["scale", "j2000Seconds"],
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "type": "string",
+          "const": "TAI",
+          "description": "Time scale. TAI only: UTC is not uniform and leap seconds make it wrong for propagation (\u00a77.2)."
+        },
+        "j2000Seconds": {
+          "type": "number",
+          "description": "Start epoch, TAI seconds past J2000."
+        }
+      }
+    },
+    "horizonSeconds": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Planning horizon: the deadline plus a margin (\u00a76.3). Prediction is not drawn past it."
+    },
+    "ship": {
+      "type": "object",
+      "required": ["state", "dvBudget_mps"],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/stateSpec"
+        },
+        "dvBudget_mps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Cap on the sum of burn magnitudes. A scalar tank, not propellant (DEP-02)."
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/target"
+      },
+      "description": "Objects the ship can be asked to reach. Massless and non-maneuvering (DEP-11)."
+    },
+    "objective": {
+      "$ref": "#/$defs/objective"
+    },
+    "constraints": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/constraint"
+      }
+    },
+    "par": {
+      "$ref": "#/$defs/par"
+    },
+    "unlocks": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      }
+    },
+    "assistsAllowed": {
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/assist"
+      }
+    },
+    "coachMarks": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/catalogueKey"
+      },
+      "description": "Catalogue keys for contextual hints. At most three, and only in C01\u2013C04 (FR-902)."
+    }
+  },
+  "$defs": {
+    "catalogueKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$",
+      "description": "A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."
+    },
+    "stateSpec": {
+      "type": "object",
+      "required": ["kind", "a_m", "e", "i_rad", "raan_rad", "argp_rad", "nu_rad"],
+      "additionalProperties": false,
+      "description": "An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "elements"
+        },
+        "a_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Semi-major axis, metres."
+        },
+        "e": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."
+        },
+        "i_rad": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.141592653589794
+        },
+        "raan_rad": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 6.283185307179587
+        },
+        "argp_rad": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 6.283185307179587
+        },
+        "nu_rad": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 6.283185307179587
+        }
+      }
+    },
+    "orbitGoal": {
+      "type": "object",
+      "required": ["a_m", "e", "i_rad", "raan_rad", "argp_rad"],
+      "additionalProperties": false,
+      "description": "The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.",
+      "properties": {
+        "a_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "e": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "i_rad": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.141592653589794
+        },
+        "raan_rad": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 6.283185307179587
+        },
+        "argp_rad": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 6.283185307179587
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["id", "label", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Display name. A call sign rather than translated prose \u2014 it is the object's name, not a sentence about it."
+        },
+        "state": {
+          "$ref": "#/$defs/stateSpec"
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "goal"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "reach_orbit"
+            },
+            "goal": {
+              "$ref": "#/$defs/orbitGoal"
+            },
+            "tolerance": {
+              "type": "object",
+              "required": ["radius_m", "angle_rad"],
+              "additionalProperties": false,
+              "description": "Optional override of DEP-13's default. May tighten it, never loosen it \u2014 the table states the loosest tolerance the game will ever apply.",
+              "properties": {
+                "radius_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "angle_rad": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "targetId"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "intercept"
+            },
+            "targetId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxRange_m": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "targetId"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rendezvous"
+            },
+            "targetId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxRange_m": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Optional override of DEP-03's 100 m. May tighten it, never loosen it."
+            },
+            "maxRelSpeed_mps": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "targetId"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "soft_rendezvous"
+            },
+            "targetId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxRange_m": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Optional override of DEP-03's 100 m. May tighten it, never loosen it."
+            },
+            "maxRelSpeed_mps": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."
+            }
+          }
+        }
+      ]
+    },
+    "constraint": {
+      "type": "object",
+      "discriminator": {
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "min_m"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "altitude_floor"
+            },
+            "min_m": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "seconds"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "deadline"
+            },
+            "seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Cap on mission elapsed time."
+            }
+          }
+        }
+      ]
+    },
+    "par": {
+      "type": "object",
+      "required": ["dv_mps", "time_s", "burns", "derivation", "referenceReplay"],
+      "additionalProperties": false,
+      "description": "The best known solution, not a proven optimum (DEP-12). \u00a711.5: a par without a reproducible derivation is not mergeable.",
+      "properties": {
+        "dv_mps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "time_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "burns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "derivation": {
+          "type": "string",
+          "minLength": 20,
+          "description": "How this par was found, in prose, naming the solver script. Reviewed by a human; the length floor only stops it being empty."
+        },
+        "referenceReplay": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A replay code that achieves the objective at this cost. Replayed and asserted by the content tests (\u00a77.6 Tier 4, \u00a713.4)."
+        }
+      }
+    },
+    "assist": {
+      "type": "string",
+      "enum": [
+        "closest_approach",
+        "elements",
+        "snapping",
+        "constraints",
+        "targeting_computer",
+        "porkchop",
+        "coach_marks"
+      ]
+    }
+  }
+}
