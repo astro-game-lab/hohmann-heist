@@ -36,3 +36,7 @@ dist/
 coverage/
 .vite/
 *.tsbuildinfo
+
+# Benchmark results, written by `pnpm bench` and read by `pnpm bench:check`.
+# The committed baseline is tools/bench/baseline.json; these are one run of it.
+tools/bench/.results/

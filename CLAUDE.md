@@ -105,9 +105,12 @@ Do not loosen a tolerance to make a failing test pass without understanding why 
 | Layering rule | `pnpm layering` |
 | Format | `pnpm format:check` — `pnpm format` to apply |
 | Test | `pnpm test` — the packages, and fast |
-| Test everything | `pnpm test:all` — adds the app and the guardrail suite |
+| Test everything | `pnpm test:all` — adds the app, the guardrail suite, the golden trajectories, the determinism fuzz, and the benchmarks |
 | Coverage | `pnpm coverage` — gated at 90% statements in the core |
 | Bundle size | `pnpm size` |
+| Benchmarks | `pnpm bench` — §11.9's budgets; writes `tools/bench/.results/` |
+| Benchmark gate | `pnpm bench:check` — the last run against the committed baseline. The committed baseline is recorded **from CI**, not locally: dispatch `ci.yml` a few times, download the `bench-results-*` artefacts, and run `node tools/bench/compare.mjs --write <dirs>`. `tools/bench/compare.mjs` says why |
+| Golden fixtures | `pnpm goldens:write` — regenerate `tools/goldens/fixtures.json`. A change there needs a `docs/PHYSICS.md` update in the same PR, and `pnpm goldens:doc-gate` is what enforces it |
 
 CI runs all of these on every pull request. Run them before proposing changes; `pnpm test:all` is the one that matches CI.
 

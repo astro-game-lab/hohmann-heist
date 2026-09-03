@@ -48,6 +48,12 @@ import {
 import { V, metres, radians } from '@hh/math';
 import { describe, expect, it } from 'vitest';
 
+import type { Statistic } from './record.js';
+import { createRecorder } from './record.js';
+
+/** Results for the gate in `compare.mjs`; see `record.ts` for what a ratio is. */
+const record = createRecorder('events');
+
 /** §11.9's full-timeline row, which #61 says this must be compatible with. */
 const TARGET_MS = 2;
 const HARD_LIMIT_MS = 8;
@@ -80,7 +86,10 @@ const arcOf = (state: State) =>
  * number. The result is accumulated into a sink and read afterwards so the
  * optimiser cannot delete the work being measured.
  */
-const measure = (call: () => number, iterations: number): { median: number; sink: number } => {
+const measure = (
+  call: () => number,
+  iterations: number,
+): { median: number; min: number; sink: number } => {
   let sink = 0;
   for (let i = 0; i < iterations; i++) sink += call();
 
@@ -91,7 +100,11 @@ const measure = (call: () => number, iterations: number): { median: number; sink
     timings.push((performance.now() - start) / iterations);
   }
   timings.sort((a, b) => a - b);
-  return { median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY, sink };
+  return {
+    median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY,
+    min: timings[0] ?? Number.POSITIVE_INFINITY,
+    sink,
+  };
 };
 
 /**
@@ -103,12 +116,22 @@ const measure = (call: () => number, iterations: number): { median: number; sink
  * target they were never given would either flatter them or condemn them for no
  * reason. All five are still held to the hard limit.
  */
-const report = (label: string, median: number, budgeted: boolean): void => {
+const report = (key: string, label: string, stat: Statistic, budgeted: boolean): void => {
+  const { median } = stat;
   const verdict = budgeted
     ? `(target ${String(TARGET_MS)}, hard limit ${String(HARD_LIMIT_MS)}) — ` +
       (median <= TARGET_MS ? 'within target' : 'OVER TARGET')
     : `(no §11.9 row; hard limit ${String(HARD_LIMIT_MS)})`;
   stdout.write(`  §11.9 ${label}: ${median.toFixed(3)} ms ${verdict}\n`);
+  record({
+    key: `propagation/events/${key}`,
+    label,
+    unit: 'ms',
+    stat,
+    target: budgeted ? TARGET_MS : null,
+    hardLimit: HARD_LIMIT_MS,
+    note: budgeted ? null : 'no §11.9 row of its own; held to the full-timeline hard limit',
+  });
 };
 
 describe('closest approach over a contract horizon', () => {
@@ -119,16 +142,19 @@ describe('closest approach over a contract horizon', () => {
   const target = arcOf(orbit(6_878_137, 0.01, 2.4));
 
   it('meets the hard limit for a 14 h horizon', () => {
-    const { median, sink } = measure(() => {
+    const { median, min, sink } = measure(() => {
       const best = findClosestApproach(chaser, target, epoch(0), epoch(HORIZON_SECONDS));
       return best?.separation ?? 0;
     }, 20);
 
     expect(Number.isFinite(sink)).toBe(true);
-    report('closest approach, 14 h horizon', median, true);
+    report('closest-approach-14h', 'closest approach, 14 h horizon', { median, min }, true);
     expect(median).toBeLessThan(HARD_LIMIT_MS);
   });
 
+  // Not recorded for the gate. This is a statement about the *shape* of the cost
+  // curve, and the 14 h number it starts from is already recorded above; committing
+  // a baseline for the doubled horizon too would gate the same code twice.
   it('scales linearly with the horizon rather than worse', () => {
     // The search is one pass over a grid whose density is set per revolution, so
     // doubling the horizon should roughly double the cost. A superlinear result
@@ -160,18 +186,21 @@ describe('the other four finders, for comparison', () => {
   };
 
   it('stays inside the hard limit, and is reported', () => {
-    const cases: readonly [string, () => number, number][] = [
+    const cases: readonly [string, string, () => number, number][] = [
       [
+        'apsis-14h',
         'apsis crossings, 14 h',
         () => findApsisCrossings(arc, epoch(0), epoch(HORIZON_SECONDS)).length,
         200,
       ],
       [
+        'shell-14h',
         'shell intervals, 14 h',
         () => findShellIntervals(arc, 6_800_000, epoch(0), epoch(HORIZON_SECONDS)).length,
         200,
       ],
       [
+        'umbra-14h',
         'umbra intervals, 14 h',
         () =>
           findUmbraIntervals(
@@ -188,16 +217,17 @@ describe('the other four finders, for comparison', () => {
       // grid would trade a real capability for a benchmark. It is a per-contract
       // call, not a per-frame one.
       [
+        'station-14h',
         'station visibility, 14 h',
         () => findVisibilityIntervals(arc, station, 0.087, epoch(0), epoch(HORIZON_SECONDS)).length,
         20,
       ],
     ];
 
-    for (const [label, call, iterations] of cases) {
-      const { median, sink } = measure(call, iterations);
+    for (const [key, label, call, iterations] of cases) {
+      const { median, min, sink } = measure(call, iterations);
       expect(Number.isFinite(sink)).toBe(true);
-      report(label, median, false);
+      report(key, label, { median, min }, false);
       expect(median).toBeLessThan(HARD_LIMIT_MS);
     }
   });

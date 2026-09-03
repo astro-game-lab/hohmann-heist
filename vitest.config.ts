@@ -40,6 +40,35 @@ export default defineConfig({
           name: 'bench',
           environment: 'node',
           include: ['tools/bench/**/*.test.ts'],
+          // One benchmark at a time. Vitest runs test files in parallel by default,
+          // which for these means four files competing for the same cores while each
+          // one tries to measure how long an operation takes — the numbers then
+          // describe the scheduler as much as the code. It matters more now than it
+          // did: `tools/bench/compare.mjs` gates on these numbers against a committed
+          // baseline, and a gate is only as good as the measurement under it.
+          fileParallelism: false,
+        },
+      },
+      {
+        // Golden trajectories (§7.6 Tier 4). Their own project so `pnpm goldens:write`
+        // can run exactly this file — regenerating the fixtures is a deliberate act and
+        // should not mean running the whole suite. They stay inside `pnpm coverage`,
+        // unlike `bench`: they exercise the real evaluation path and the lines they
+        // reach are genuinely tested rather than merely timed.
+        test: {
+          name: 'goldens',
+          environment: 'node',
+          include: ['tools/goldens/**/*.test.ts'],
+        },
+      },
+      {
+        // The in-process determinism fuzz (FR-109). Its own project for the same
+        // reason, and because its iteration count is worth being able to raise on its
+        // own — see `tools/fuzz/determinism.fuzz.test.ts`.
+        test: {
+          name: 'fuzz',
+          environment: 'node',
+          include: ['tools/fuzz/**/*.test.ts'],
         },
       },
       {

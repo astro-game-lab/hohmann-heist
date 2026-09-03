@@ -33,6 +33,11 @@ import { createArc, stateAt } from '@hh/propagation';
 import { metres, radians } from '@hh/math';
 import { describe, expect, it } from 'vitest';
 
+import { createRecorder } from './record.js';
+
+/** Results for the gate in `compare.mjs`; see `record.ts` for what a ratio is. */
+const record = createRecorder('propagation');
+
 /** §11.9: target 5 us, hard limit 20 us. */
 const TARGET_MICROSECONDS = 5;
 const HARD_LIMIT_MICROSECONDS = 20;
@@ -48,7 +53,7 @@ const ITERATIONS = 20_000;
  * value from the call under test is accumulated into a sink and read afterwards, so
  * the optimiser cannot delete the work being measured.
  */
-const measure = (call: () => number): { median: number; sink: number } => {
+const measure = (call: () => number): { median: number; min: number; sink: number } => {
   let sink = 0;
 
   // Warm up: the first thousand calls are interpreted, then optimised, and neither
@@ -63,7 +68,11 @@ const measure = (call: () => number): { median: number; sink: number } => {
   }
 
   timings.sort((a, b) => a - b);
-  return { median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY, sink };
+  return {
+    median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY,
+    min: timings[0] ?? Number.POSITIVE_INFINITY,
+    sink,
+  };
 };
 
 describe('§11.9 — single stateAt() call', () => {
@@ -88,11 +97,11 @@ describe('§11.9 — single stateAt() call', () => {
   });
 
   it.each([
-    ['a fraction of an orbit', 1_200],
-    ['a whole day, many revolutions', 86_400],
-  ])('meets the hard limit for %s', (label, offset) => {
+    ['a fraction of an orbit', 1_200, 'partial-orbit'],
+    ['a whole day, many revolutions', 86_400, 'full-day'],
+  ])('meets the hard limit for %s', (label, offset, key) => {
     let index = 0;
-    const { median, sink } = measure(() => {
+    const { median, min, sink } = measure(() => {
       // Vary the epoch so the solver cannot be measured on one cached trajectory,
       // and so the iteration count varies the way it will in play.
       index = (index + 1) % 512;
@@ -106,6 +115,16 @@ describe('§11.9 — single stateAt() call', () => {
         `(target ${String(TARGET_MICROSECONDS)}, hard limit ${String(HARD_LIMIT_MICROSECONDS)}) ` +
         `— ${median <= TARGET_MICROSECONDS ? 'within target' : 'OVER TARGET'}\n`,
     );
+
+    record({
+      key: `propagation/state-at/${key}`,
+      label: `arc stateAt, ${label}`,
+      unit: 'us',
+      stat: { median, min },
+      target: TARGET_MICROSECONDS,
+      hardLimit: HARD_LIMIT_MICROSECONDS,
+      note: null,
+    });
 
     expect(median).toBeLessThan(HARD_LIMIT_MICROSECONDS);
   });

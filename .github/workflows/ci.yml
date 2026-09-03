@@ -4,6 +4,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  # On demand, so a benchmark baseline can be recorded without inventing a commit to
+  # hang a run on. Recording one takes several runs, on several hosts -- that is the
+  # whole point of recording it from CI at all, see `tools/bench/compare.mjs` -- and
+  # dispatching is how you get them.
+  workflow_dispatch:
 
 # Read-only by default. Nothing here needs to write to the repository.
 permissions:
@@ -25,6 +30,12 @@ jobs:
       # moved to point at different code; a SHA cannot.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, so the physics-document gate below can diff this branch
+          # against its base. The default shallow clone has no base to compare to,
+          # and that gate reports a missing base as a failure rather than passing
+          # quietly -- so a shallow checkout here would block every pull request.
+          fetch-depth: 0
 
       - name: Set up pnpm
         # Version comes from `packageManager` in package.json — one source of truth.
@@ -55,7 +66,77 @@ jobs:
       # test:all, not test — the guardrail suite is excluded from the inner-loop
       # `test` script for speed, and CI is where it has to run.
       - name: Test
+        id: test
         run: pnpm test:all
+
+      # A golden trajectory only moves when an evaluated result moved, which makes it
+      # a change to the physics model. docs/PRODUCT.md §11.13 requires docs/PHYSICS.md
+      # to be updated in the same pull request; this is that requirement, enforced.
+      #
+      # Pull requests only: a push to `main` has no base to diff against, and the
+      # check has already run on the pull request that produced the commit.
+      - name: Physics document gate (§11.13)
+        if: github.event_name == 'pull_request'
+        run: pnpm goldens:doc-gate
+
+      # `pnpm test:all` above ran the benchmark project, which wrote its measurements
+      # to tools/bench/.results/. This compares them against the committed baseline
+      # and fails on a regression, which is the half the in-test hard-limit assertions
+      # cannot cover -- a change that costs forty percent breaks no limit at all.
+      #
+      # NFR-021 asks for this "on every PR touching @hh/sim or @hh/render". It runs on
+      # every pull request instead, which is a superset: a path filter would let a
+      # change under tools/ or apps/ move these numbers without anyone hearing about
+      # it, and the whole suite costs about twenty seconds.
+      - name: Benchmark gate (NFR-011, NFR-021)
+        run: pnpm bench:check
+
+      # Always, so the run that busts a budget is also the run that shows by how much,
+      # and so the numbers are readable without opening the log. Reports; never gates
+      # -- the step above is the gate, and this one prints exactly the numbers that
+      # gate judged rather than re-measuring.
+      - name: Benchmark report
+        if: always()
+        run: pnpm bench:report >> "$GITHUB_STEP_SUMMARY"
+
+      # The measurements themselves, so a baseline can be recorded from a runner
+      # rather than from a developer's machine.
+      #
+      # That distinction turned out to matter more than expected. The gate's numbers
+      # do not travel between machines: a GitHub runner is 1.16x slower than this
+      # repository's development machine on the real workloads, and the yardstick that
+      # was supposed to cancel the difference is 1.45x slower, so a locally recorded
+      # baseline left every metric reading about 22% under it and handed the gate a
+      # fifth of a tolerance in unearned slack. Baseline and run have to come from the
+      # same population; this artefact is how they do.
+      #
+      # Named per run and attempt, so several runs of one commit are a usable sample
+      # of runner-to-runner spread -- which is what the committed baseline is built
+      # from, and what its tolerance is measured against.
+      #
+      # Conditioned on the test step having *run* rather than on `always()`: the
+      # benchmarks are part of `test:all`, so if that step never started there is
+      # nothing to upload and failing for its absence would put a second red cross on
+      # a job whose real failure is somewhere above. If it did run, missing results
+      # mean something went wrong that is worth hearing about, which is what
+      # `if-no-files-found: error` below is for.
+      - name: Upload benchmark measurements
+        if: always() && steps.test.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tools/bench/.results/
+          retention-days: 14
+          # The results directory is dot-prefixed, and upload-artifact has excluded
+          # hidden files by default since v4. Without this the step *succeeds* and
+          # uploads nothing, leaving a warning in a log nobody reads -- which is how
+          # the first version of this step shipped, and why the flag is spelled out
+          # here rather than left to a default that reads as harmless.
+          include-hidden-files: true
+          # An empty upload means the benchmarks did not run, which is worth failing
+          # for rather than warning about: this step exists to make the numbers
+          # recoverable, and one that quietly recovers nothing is worse than absent.
+          if-no-files-found: error
 
       - name: Coverage
         run: pnpm coverage
