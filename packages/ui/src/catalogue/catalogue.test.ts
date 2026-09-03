@@ -1,0 +1,236 @@
+/**
+ * The message catalogue — #88, FR-910, NFR-028.
+ *
+ * ## Where the coverage guarantee actually lives
+ *
+ * `Messages` is a mapped type over every key `@hh/game` declares plus every key this
+ * package declares, so **a missing message does not compile and neither does a spare
+ * one**. That is stronger than any test, and it is why the cases below spend their
+ * effort elsewhere: on the sample table, which forces someone adding a key to say what
+ * its parameters look like, and on the behaviours a type cannot state — that no message
+ * resolves to nothing, and that formatting follows the locale rather than English.
+ *
+ * The one rot the compiler cannot see is a key nobody uses. That needs a source scan,
+ * which needs a filesystem, so it lives in `tools/guardrails/catalogue.test.ts`.
+ */
+import { gameMessage } from '@hh/game';
+import { describe, expect, it } from 'vitest';
+
+import { en } from './en.js';
+import { MissingMessageKeyError, createCatalogue, missingKeyFallback } from './resolve.js';
+import type { AllMessageParams } from './types.js';
+
+/**
+ * One plausible set of parameters per key.
+ *
+ * Typed as `AllMessageParams`, so the compiler requires an entry for every key and
+ * refuses one for a key that does not exist. Adding a message means adding a row here,
+ * which is the point: a message nobody could produce a parameter set for is a message
+ * whose parameters are wrong.
+ */
+const samples: AllMessageParams = {
+  'legality.l1.overBudget': { usedMps: 274.4, budgetMps: 250, excessMps: 24.4 },
+  'legality.l2.belowAltitudeFloor': { floorAltitudeM: 100_000, metSeconds: 8054, intervalCount: 1 },
+  'legality.l3.pastDeadline': { metSeconds: 50_000, deadlineSeconds: 43_200, overSeconds: 6800 },
+  'legality.l4.escapes': { arcIndex: 2, eccentricity: 1.4, metSeconds: 1200 },
+  'legality.l5.nodesTooClose': {
+    firstIndex: 0,
+    secondIndex: 1,
+    gapSeconds: 0.5,
+    minimumSeconds: 1,
+  },
+  'legality.l6.objectiveNotMet': {},
+  'legality.plan.rectilinear': { nodeIndex: 0 },
+  'legality.plan.nonConvergent': { nodeIndex: 3 },
+  'scenario.error.malformedJson': { detail: 'Unexpected end of JSON input' },
+  'scenario.error.unsupportedVersion': { version: 2, supported: 1 },
+  'scenario.error.required': { path: '/', property: 'briefKey' },
+  'scenario.error.unknownProperty': { path: '/ship', property: 'fuel_kg' },
+  'scenario.error.type': { path: '/horizonSeconds', expected: 'number' },
+  'scenario.error.range': { path: '/act', limit: 6 },
+  'scenario.error.notAllowed': { path: '/objective/kind', allowed: ['intercept', 'rendezvous'] },
+  'scenario.error.pattern': { path: '/id', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+  'scenario.error.itemCount': { path: '/coachMarks', limit: 3 },
+  'scenario.error.stringLength': { path: '/par/derivation', limit: 20 },
+  'scenario.error.duplicate': { path: '/assistsAllowed' },
+  'scenario.error.invalidField': { path: '/par/dv_mps', keyword: 'multipleOf' },
+  'scenario.error.unknownTarget': { path: '/objective/targetId', targetId: 'GHOST-1' },
+  'scenario.error.duplicateTargetId': { path: '/targets/1/id', targetId: 'CTX-4' },
+  'scenario.error.deadlineBeyondHorizon': { deadlineSeconds: 90_000, horizonSeconds: 50_400 },
+  'scenario.error.startsBelowFloor': { startAltitudeM: 50_000, floorAltitudeM: 100_000 },
+  'scenario.error.duplicateConstraint': { path: '/constraints/1', kind: 'deadline' },
+  'scenario.error.toleranceTooLoose': {
+    path: '/objective/maxRange_m',
+    requested: 5000,
+    limit: 1000,
+  },
+  'app.title': {},
+  'app.skeletonNotice': {},
+  'app.routesLabel': {},
+  'app.currentRouteHeading': {},
+  'app.routeName': {},
+  'app.routePath': {},
+  'app.routeParams': {},
+  'app.simulationHeading': {},
+  'app.geoSpeedLabel': {},
+  'app.geoSpeedValue': { speedMps: 3074.66 },
+  'app.missionClockLabel': {},
+  'nav.title': {},
+  'nav.board': {},
+  'nav.contract': { index: 5 },
+  'nav.daily': {},
+  'nav.codex': {},
+  'nav.settings': {},
+  'nav.spike': {},
+};
+
+const catalogue = createCatalogue();
+
+describe('coverage', () => {
+  it('answers every key it declares, and nothing resolves to nothing', () => {
+    expect(catalogue.keys.length).toBeGreaterThan(40);
+    for (const key of catalogue.keys) {
+      const text = catalogue.resolveDynamic(key, samples[key]);
+      expect(text.trim(), key).not.toBe('');
+    }
+  });
+
+  it('has a sample for exactly the keys it answers', () => {
+    expect(Object.keys(samples).sort()).toStrictEqual([...catalogue.keys]);
+  });
+
+  it('lists its keys in a stable order', () => {
+    expect([...catalogue.keys]).toStrictEqual([...catalogue.keys].sort());
+    expect(createCatalogue().keys).toStrictEqual(catalogue.keys);
+  });
+});
+
+describe('resolving what the rules emit', () => {
+  it('takes a GameMessage straight from an evaluator', () => {
+    const message = gameMessage('legality.l1.overBudget', {
+      usedMps: 274,
+      budgetMps: 250,
+      excessMps: 24,
+    });
+    expect(catalogue.resolveMessage(message)).toBe('Over budget by 24.0 m/s');
+  });
+
+  // §6.4's own example of the message, which is the point of the exercise: the rule
+  // produced a number and the catalogue produced the sentence.
+  it('renders §6.4’s L2 message with the epoch', () => {
+    const message = gameMessage('legality.l2.belowAltitudeFloor', {
+      floorAltitudeM: 100_000,
+      metSeconds: 2 * 3600 + 14 * 60,
+      intervalCount: 1,
+    });
+    expect(catalogue.resolveMessage(message)).toBe(
+      'Trajectory intersects the atmosphere at T+02:14:00',
+    );
+  });
+
+  it('branches on a value rather than concatenating a variant', () => {
+    const once = catalogue.resolve('legality.l2.belowAltitudeFloor', {
+      floorAltitudeM: 100_000,
+      metSeconds: 100,
+      intervalCount: 1,
+    });
+    const thrice = catalogue.resolve('legality.l2.belowAltitudeFloor', {
+      floorAltitudeM: 100_000,
+      metSeconds: 100,
+      intervalCount: 3,
+    });
+    expect(once).not.toBe(thrice);
+    expect(thrice).toContain('3 times');
+  });
+
+  it('can be pulled off the catalogue and used on its own', () => {
+    const t = catalogue.resolve;
+    expect(t('app.title', {})).toBe('Hohmann Heist');
+  });
+});
+
+describe('a missing key', () => {
+  // Only reachable for a key that came from data — a scenario's briefKey or a coach
+  // mark (D14). Every statically-known key is checked by the compiler.
+  it('throws under the development policy, naming the key', () => {
+    const dev = createCatalogue({ onMissingKey: 'throw' });
+    expect(() => dev.resolveDynamic('brief.c05')).toThrow(MissingMessageKeyError);
+    expect(() => dev.resolveDynamic('brief.c05')).toThrow(/brief\.c05/);
+  });
+
+  it('renders a visible marker under the production policy, never a blank', () => {
+    const prod = createCatalogue({ onMissingKey: 'fallback' });
+    const rendered = prod.resolveDynamic('brief.c05');
+    expect(rendered).toBe(missingKeyFallback('brief.c05'));
+    expect(rendered.trim()).not.toBe('');
+    expect(rendered).toContain('brief.c05');
+  });
+
+  it('is stable across calls, so it does not flicker between renders', () => {
+    const prod = createCatalogue({ onMissingKey: 'fallback' });
+    expect(prod.resolveDynamic('brief.c05')).toBe(prod.resolveDynamic('brief.c05'));
+  });
+
+  it('throws by default, because the safe default is the loud one', () => {
+    expect(() => createCatalogue().resolveDynamic('nope.at.all')).toThrow(MissingMessageKeyError);
+  });
+
+  it('reports which keys it has', () => {
+    expect(catalogue.has('app.title')).toBe(true);
+    expect(catalogue.has('brief.c05')).toBe(false);
+  });
+
+  it('resolves a key that is present, when handed dynamically', () => {
+    expect(catalogue.resolveDynamic('app.title')).toBe('Hohmann Heist');
+  });
+});
+
+describe('formatting follows the locale, not English', () => {
+  it('uses the locale’s decimal separator', () => {
+    const de = createCatalogue({ locale: 'de-DE' });
+    const message = gameMessage('legality.l1.overBudget', {
+      usedMps: 274.4,
+      budgetMps: 250,
+      excessMps: 24.4,
+    });
+    expect(de.resolveMessage(message)).toContain('24,4');
+    expect(catalogue.resolveMessage(message)).toContain('24.4');
+  });
+
+  it('uses the locale’s plural categories rather than a two-way English rule', () => {
+    // Polish has four; English has two. The formatter reports the category, so a
+    // translated message can branch on it correctly.
+    const pl = createCatalogue({ locale: 'pl-PL' });
+    expect(pl.formatters.plural(1)).toBe('one');
+    expect(pl.formatters.plural(3)).toBe('few');
+    expect(pl.formatters.plural(5)).toBe('many');
+    expect(catalogue.formatters.plural(3)).toBe('other');
+  });
+
+  it('joins lists the way the locale joins them', () => {
+    expect(catalogue.formatters.list(['a', 'b', 'c'], 'disjunction')).toBe('a, b, or c');
+    const de = createCatalogue({ locale: 'de-DE' });
+    expect(de.formatters.list(['a', 'b'], 'conjunction')).toBe('a und b');
+  });
+
+  it('formats a unit rather than appending one', () => {
+    // The abbreviation and its position are both locale-dependent, so appending "m/s"
+    // in the message would decide both for every language at once.
+    expect(catalogue.resolve('app.geoSpeedValue', { speedMps: 3074.66 })).toBe('3074.66 m/s');
+  });
+
+  it('formats mission elapsed time through @hh/astro', () => {
+    expect(catalogue.formatters.met(43_784)).toBe('T+12:09:44');
+  });
+});
+
+describe('a caller can supply its own messages', () => {
+  it('takes a replacement set, which is what a second locale will be', () => {
+    const shouty = createCatalogue({ messages: { ...en, 'app.title': () => 'HOHMANN HEIST' } });
+    expect(shouty.resolve('app.title', {})).toBe('HOHMANN HEIST');
+    // And everything else still resolves.
+    for (const key of shouty.keys) {
+      expect(shouty.resolveDynamic(key, samples[key]).trim()).not.toBe('');
+    }
+  });
+});

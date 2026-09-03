@@ -4,21 +4,52 @@
  * A skeleton: it proves routing works and that the simulation packages import and
  * run in a browser. It is not the game. The real screens are #101 through #109 and
  * arrive in M3; every route below renders a placeholder until then.
+ *
+ * ## Every string here comes from the catalogue
+ *
+ * NFR-028's ESLint rule refuses literal text in JSX, and this file is the first thing
+ * it was pointed at. What was placeholder prose is now catalogue keys resolved through
+ * `@hh/ui` — not because a skeleton needs translating, but because the rule has to be
+ * true of the codebase on the day it lands, and a rule with an exemption for "the parts
+ * that were already here" is a rule nobody trusts.
+ *
+ * The one place this shows in the markup is the split between a label and its value:
+ * `app.geoSpeedLabel` is a sentence and `app.geoSpeedValue` is a quantity formatted with
+ * its unit by `Intl`. They are two elements — a label and an `<output>` — rather than
+ * one string with a hole in it, because that is what they are in the DOM.
  */
 import { R_GEO, formatMet, met, MU_EARTH } from '@hh/astro';
+import { createCatalogue } from '@hh/ui';
 import { useEffect, useState } from 'preact/hooks';
 
 import { hrefFor, onRouteChange, parseHash, type Route } from './router.js';
 import { SpikePage } from './spike/SpikePage.js';
 
+/**
+ * The catalogue, and the one place the missing-key policy is decided.
+ *
+ * `@hh/ui` takes the policy as a parameter rather than reading a bundler global, so the
+ * package stays plain TypeScript that runs under Node. Reading `import.meta.env.DEV` is
+ * this layer's job: `apps/web` is the composition point (§11.2), and it is the only
+ * thing here that knows it was built by Vite.
+ *
+ * A missing key therefore throws in `pnpm dev` and renders `⟦some.key⟧` in production —
+ * loud where someone is watching, visible and stable where they are not, and never a
+ * blank space.
+ */
+const catalogue = createCatalogue({
+  onMissingKey: import.meta.env.DEV ? 'throw' : 'fallback',
+});
+const t = catalogue.resolve;
+
 const NAV: readonly (readonly [path: string, label: string])[] = [
-  ['/', 'Title'],
-  ['/board', 'Contract board'],
-  ['/contract/5', 'Contract 05'],
-  ['/daily', 'Daily'],
-  ['/codex/phasing', 'Codex'],
-  ['/settings', 'Settings'],
-  ['/spike', 'M1 spike'],
+  ['/', t('nav.title', {})],
+  ['/board', t('nav.board', {})],
+  ['/contract/5', t('nav.contract', { index: 5 })],
+  ['/daily', t('nav.daily', {})],
+  ['/codex/phasing', t('nav.codex', {})],
+  ['/settings', t('nav.settings', {})],
+  ['/spike', t('nav.spike', {})],
 ];
 
 /**
@@ -44,13 +75,10 @@ export const App = (): preact.JSX.Element => {
 
   return (
     <main>
-      <h1>Hohmann Heist</h1>
-      <p>
-        Skeleton build. Routing and the simulation packages are wired; the screens are not built
-        yet.
-      </p>
+      <h1>{t('app.title', {})}</h1>
+      <p>{t('app.skeletonNotice', {})}</p>
 
-      <nav aria-label="Routes">
+      <nav aria-label={t('app.routesLabel', {})}>
         <ul>
           {NAV.map(([path, label]) => (
             <li key={path}>
@@ -61,25 +89,28 @@ export const App = (): preact.JSX.Element => {
       </nav>
 
       <section aria-labelledby="route-heading">
-        <h2 id="route-heading">Current route</h2>
+        <h2 id="route-heading">{t('app.currentRouteHeading', {})}</h2>
         <dl>
-          <dt>name</dt>
+          <dt>{t('app.routeName', {})}</dt>
           <dd data-testid="route-name">{route.name}</dd>
-          <dt>path</dt>
+          <dt>{t('app.routePath', {})}</dt>
           <dd data-testid="route-path">{route.path}</dd>
-          <dt>params</dt>
+          <dt>{t('app.routeParams', {})}</dt>
           <dd data-testid="route-params">{JSON.stringify(route.params)}</dd>
         </dl>
       </section>
 
       <section aria-labelledby="sim-heading">
-        <h2 id="sim-heading">Simulation packages</h2>
+        <h2 id="sim-heading">{t('app.simulationHeading', {})}</h2>
         <p>
-          Circular speed at geostationary radius:{' '}
-          <output data-testid="geo-speed">{geoSpeed().toFixed(2)} m/s</output>
+          {t('app.geoSpeedLabel', {})}{' '}
+          <output data-testid="geo-speed">
+            {t('app.geoSpeedValue', { speedMps: geoSpeed() })}
+          </output>
         </p>
         <p>
-          Mission clock formatting: <output data-testid="met">{formatMet(met(43784))}</output>
+          {t('app.missionClockLabel', {})}{' '}
+          <output data-testid="met">{formatMet(met(43784))}</output>
         </p>
       </section>
     </main>
