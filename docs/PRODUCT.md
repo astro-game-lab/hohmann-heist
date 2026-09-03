@@ -1834,14 +1834,16 @@ ReplayV1 = {
   v: 1,                       // replay schema version
   s: "c05-tailgate" | "d:2026-09-01",   // scenario id or daily key
   e: 1,                       // engine major version (§14.4)
-  n: [[epochQ, prQ, raQ, noQ], …],      // quantised nodes, integers
+  n: [[epochQ, prQ, raQ, noQ], …],      // quantised nodes, integers; epochQ is
+                                        // mission-elapsed ticks of 1/1024 s from
+                                        // the scenario start, not absolute
   a: 0b0011011,               // assist bitmask at time of run
   c: { dv: 724, t: 43784 }    // claimed result, quantised (0.1 m/s, 1 s)
 }
 ```
 
 - **Canonical JSON**: keys sorted, no whitespace, integers only — so the same run always produces the same bytes, which makes the code a stable identity for deduplication and caching.
-- **Size**: an 8-node plan is ~120 bytes of JSON, ~90 deflated, ~120 base64url. Comfortably inside FR-607's 512-character URL budget.
+- **Size**: **measured at 306 bytes of JSON for an 8-node plan** — a realistic one, with epochs 90 minutes apart and burns of 100–400 m/s. That is ~408 characters of base64url *with no compression at all*, which is what `replay.test.ts` asserts against FR-607's 512-character budget: a budget that holds only because deflate happened to do well is a budget that fails on the first incompressible plan, so deflate is treated as headroom rather than as a load-bearing assumption. The earlier "~120 bytes" estimate was optimistic by a factor of about 2.5 and has been replaced by the measurement — a 123.75 m/s burn is 1 237 500 quantised counts, seven digits, and every node carries three of those plus an epoch.
 - **Verification**: the server decodes, regenerates the scenario from `s`, re-evaluates the plan, and compares to `c` (§11.11).
 - **Versioning**: `e` records the engine major version. A replay from an older engine is played by a *pinned evaluation path* where feasible; where it is not, the replay viewer says so explicitly rather than silently producing a different result. Engine major bumps are rare and require a `docs/PHYSICS.md` change (§14.4).
 
