@@ -36,6 +36,12 @@ import { metres, radians } from '@hh/math';
 import { createTessellationCache, tessellate } from '@hh/render';
 import { describe, expect, it } from 'vitest';
 
+import type { Statistic } from './record.js';
+import { createRecorder } from './record.js';
+
+/** Results for the gate in `compare.mjs`; see `record.ts` for what a ratio is. */
+const record = createRecorder('tessellation');
+
 /** §11.9: target 0.5 ms, hard limit 2 ms, for one orbit. */
 const TARGET_MILLISECONDS = 0.5;
 const HARD_LIMIT_MILLISECONDS = 2;
@@ -69,7 +75,7 @@ const orbit = (semiLatusRectum: number, eccentricity: number): OrbitShape => ({
  * garbage collection inside one batch should not decide the number. The call's result is
  * accumulated into a sink and read afterwards so the optimiser cannot delete the work.
  */
-const measure = (call: () => number): { median: number; sink: number } => {
+const measure = (call: () => number): { median: number; min: number; sink: number } => {
   let sink = 0;
 
   for (let i = 0; i < ITERATIONS; i++) sink += call();
@@ -82,15 +88,29 @@ const measure = (call: () => number): { median: number; sink: number } => {
   }
 
   timings.sort((a, b) => a - b);
-  return { median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY, sink };
+  return {
+    median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY,
+    min: timings[0] ?? Number.POSITIVE_INFINITY,
+    sink,
+  };
 };
 
-const report = (label: string, median: number): void => {
+const report = (key: string, label: string, stat: Statistic): void => {
+  const { median } = stat;
   stdout.write(
     `  §11.9 tessellate(${label}): ${median.toFixed(4)} ms/orbit ` +
       `(target ${String(TARGET_MILLISECONDS)}, hard limit ${String(HARD_LIMIT_MILLISECONDS)}) ` +
       `— ${median <= TARGET_MILLISECONDS ? 'within target' : 'OVER TARGET'}\n`,
   );
+  record({
+    key: `render/tessellate/${key}`,
+    label: `tessellate, ${label}`,
+    unit: 'ms',
+    stat,
+    target: TARGET_MILLISECONDS,
+    hardLimit: HARD_LIMIT_MILLISECONDS,
+    note: null,
+  });
 };
 
 describe('§11.9 — orbit tessellation, one orbit', () => {
@@ -98,14 +118,14 @@ describe('§11.9 — orbit tessellation, one orbit', () => {
     // A parking orbit and a GEO orbit are what most of a contract's frames actually
     // draw; the high-eccentricity transfer is the one that refines hardest, because
     // periapsis curvature is where the subdivision spends its vertices.
-    ['a near-circular LEO', orbit(6_778_137, 0.001)],
-    ['a GTO-like transfer, e = 0.73', orbit(1.5e7, 0.73)],
-    ['a hyperbolic escape arc', orbit(8.0e6, 1.4)],
+    ['a near-circular LEO', orbit(6_778_137, 0.001), 'leo-circular'],
+    ['a GTO-like transfer, e = 0.73', orbit(1.5e7, 0.73), 'gto-e073'],
+    ['a hyperbolic escape arc', orbit(8.0e6, 1.4), 'hyperbolic-e14'],
   ])(
     'meets the hard limit for %s',
-    (label, elements) => {
+    (label, elements, key) => {
       let index = 0;
-      const { median, sink } = measure(() => {
+      const { median, min, sink } = measure(() => {
         // Vary the orbit slightly so the measurement cannot collapse onto one cached
         // branch prediction, and so the vertex count varies the way it does under a drag.
         index = (index + 1) % 128;
@@ -117,7 +137,7 @@ describe('§11.9 — orbit tessellation, one orbit', () => {
       });
 
       expect(Number.isFinite(sink)).toBe(true);
-      report(label, median);
+      report(key, label, { median, min });
       expect(median).toBeLessThan(HARD_LIMIT_MILLISECONDS);
       // Generous, because `pnpm coverage` runs this under V8 instrumentation, which costs
       // several times the uninstrumented rate. The budget is the assertion; this is only
@@ -131,10 +151,10 @@ describe('§11.9 — orbit tessellation, one orbit', () => {
     const elements = orbit(1.5e7, 0.73);
     const request = { elements, scale: SCALE, maxRadius: MAX_RADIUS };
 
-    const { median, sink } = measure(() => cache.get(request).points.length);
+    const { median, min, sink } = measure(() => cache.get(request).points.length);
 
     expect(Number.isFinite(sink)).toBe(true);
-    report('cached, unchanged orbit', median);
+    report('cache-hit', 'cached, unchanged orbit', { median, min });
 
     // A drag frame re-tessellates one orbit and reads the rest from the cache, so the
     // nine unchanged conics have to be effectively free against §11.9's 8 ms frame.

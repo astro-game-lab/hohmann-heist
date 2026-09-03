@@ -43,6 +43,12 @@ import {
 } from '@hh/sim';
 import { describe, expect, it } from 'vitest';
 
+import type { Statistic } from './record.js';
+import { createRecorder } from './record.js';
+
+/** Results for the gate in `compare.mjs`; see `record.ts` for what a ratio is. */
+const record = createRecorder('timeline');
+
 /** §11.9: a single `stateAt()` is targeted at 5 us with a hard limit of 20. */
 const STATE_AT_TARGET_US = 5;
 const STATE_AT_HARD_LIMIT_US = 20;
@@ -64,7 +70,10 @@ const BATCHES = 7;
  * call under test is accumulated into a sink and read afterwards, so the optimiser
  * cannot delete the work being measured.
  */
-const measure = (call: () => number, iterations: number): { median: number; sink: number } => {
+const measure = (
+  call: () => number,
+  iterations: number,
+): { median: number; min: number; sink: number } => {
   let sink = 0;
 
   // Warm up: the first pass is interpreted, then optimised, and neither rate is the
@@ -79,21 +88,28 @@ const measure = (call: () => number, iterations: number): { median: number; sink
   }
 
   timings.sort((a, b) => a - b);
-  return { median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY, sink };
+  return {
+    median: timings[(BATCHES - 1) / 2] ?? Number.POSITIVE_INFINITY,
+    min: timings[0] ?? Number.POSITIVE_INFINITY,
+    sink,
+  };
 };
 
 const report = (
+  key: string,
   label: string,
-  value: number,
-  unit: string,
+  stat: Statistic,
+  unit: 'us' | 'ms',
   target: number,
   limit: number,
 ): void => {
+  const value = stat.median;
   stdout.write(
     `  §11.9 ${label}: ${value.toFixed(3)} ${unit}/call ` +
       `(target ${String(target)}, hard limit ${String(limit)}) ` +
       `— ${value <= target ? 'within target' : 'OVER TARGET'}\n`,
   );
+  record({ key, label, unit, stat, target, hardLimit: limit, note: null });
 };
 
 /** A 400 km circular orbit at ISS inclination — the shape a contract actually starts on. */
@@ -138,7 +154,7 @@ const EIGHT_NODE_PLAN = planOf(8, 1800);
 
 describe('§11.9 — full timeline re-evaluation, 8 nodes', () => {
   it('meets the hard limit', () => {
-    const { median, sink } = measure(() => {
+    const { median, min, sink } = measure(() => {
       const result = buildTimeline({
         startEpoch: START,
         initialState: INITIAL,
@@ -152,8 +168,9 @@ describe('§11.9 — full timeline re-evaluation, 8 nodes', () => {
     const milliseconds = median / 1000;
     expect(Number.isFinite(sink)).toBe(true);
     report(
+      'sim/timeline/rebuild-8-nodes',
       'full re-evaluation (8 nodes)',
-      milliseconds,
+      { median: milliseconds, min: min / 1000 },
       'ms',
       REBUILD_TARGET_MS,
       REBUILD_HARD_LIMIT_MS,
@@ -167,11 +184,11 @@ describe('§11.9 — single timeline stateAt() call', () => {
   const timeline = timelineOf(EIGHT_NODE_PLAN);
 
   it.each([
-    ['early in the plan', 600],
-    ['after the last node', 12 * 3600],
-  ])('meets the hard limit %s', (label, offset) => {
+    ['early in the plan', 600, 'early'],
+    ['after the last node', 12 * 3600, 'after-last-node'],
+  ])('meets the hard limit %s', (label, offset, key) => {
     let index = 0;
-    const { median, sink } = measure(() => {
+    const { median, min, sink } = measure(() => {
       // Vary the epoch so the solver is not measured on one cached trajectory, and so
       // the iteration count varies the way it will in play.
       index = (index + 1) % 512;
@@ -180,7 +197,14 @@ describe('§11.9 — single timeline stateAt() call', () => {
     }, 20_000);
 
     expect(Number.isFinite(sink)).toBe(true);
-    report(`timeline stateAt (${label})`, median, 'us', STATE_AT_TARGET_US, STATE_AT_HARD_LIMIT_US);
+    report(
+      `sim/timeline/state-at-${key}`,
+      `timeline stateAt (${label})`,
+      { median, min },
+      'us',
+      STATE_AT_TARGET_US,
+      STATE_AT_HARD_LIMIT_US,
+    );
 
     expect(median).toBeLessThan(STATE_AT_HARD_LIMIT_US);
   });
@@ -203,7 +227,7 @@ describe('NFR-011 — a node drag re-evaluates within one frame', () => {
 
   it('re-evaluates an 8-node plan in well under a 60 Hz frame', () => {
     let index = 0;
-    const { median, sink } = measure(() => {
+    const { median, min, sink } = measure(() => {
       index = (index + 1) % dragged.length;
       const result = withPlan(timeline, dragged[index] ?? EIGHT_NODE_PLAN);
       return result.ok ? result.timeline.arcs.length : 0;
@@ -215,6 +239,17 @@ describe('NFR-011 — a node drag re-evaluates within one frame', () => {
       `  NFR-011 drag re-evaluation (8 nodes, last node): ${milliseconds.toFixed(4)} ms/edit ` +
         `(frame budget ${FRAME_BUDGET_MS.toFixed(2)} ms)\n`,
     );
+    record({
+      key: 'sim/timeline/drag-reevaluate-8-nodes',
+      label: 'drag re-evaluation (8 nodes, last node)',
+      unit: 'ms',
+      stat: { median: milliseconds, min: min / 1000 },
+      // NFR-011's budget is the whole frame, of which this is one part; §11.9 gives
+      // re-evaluation its own 2 ms target, which is the one this row is measured against.
+      target: REBUILD_TARGET_MS,
+      hardLimit: FRAME_BUDGET_MS,
+      note: 'NFR-011: re-evaluation alone, not the whole frame',
+    });
 
     expect(milliseconds).toBeLessThan(FRAME_BUDGET_MS);
   });
@@ -269,7 +304,7 @@ describe('FR-103 — arc lookup scales logarithmically, not linearly', () => {
       const timeline = timelineOf(planOf(count, 2, 100), epoch(horizonSeconds));
       let index = 0;
 
-      const { median, sink } = measure(() => {
+      const { median, min, sink } = measure(() => {
         // Sweep the whole horizon so the search is not measured on one branch of the
         // tree, and use a stride coprime with the arc count so successive lookups do
         // not walk neighbouring arcs.
@@ -278,6 +313,15 @@ describe('FR-103 — arc lookup scales logarithmically, not linearly', () => {
       }, 200_000);
 
       expect(Number.isFinite(sink)).toBe(true);
+      record({
+        key: `sim/timeline/arc-index-at-${String(count)}-nodes`,
+        label: `arcIndexAt over ${String(count + 1)} arcs`,
+        unit: 'ns',
+        stat: { median: median * 1000, min: min * 1000 },
+        target: null,
+        hardLimit: null,
+        note: 'FR-103: no §11.9 row; the gate watches it for a change of algorithm',
+      });
       return { count, nanoseconds: median * 1000 };
     });
 
