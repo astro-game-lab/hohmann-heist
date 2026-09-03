@@ -42,6 +42,8 @@ T̂ = N̂ × R̂                      transverse, completing the right-handed se
 
 `T̂` is *transverse*, not along-velocity: the two coincide only for circular orbits, and differ by the flight-path angle otherwise. The UI labels the transverse axis **"prograde"** because that is the word players know. That is a naming departure, not a physics one, and it is recorded as DEP-10 below.
 
+**Impulses do not add in RTN components.** The basis is attached to the state, and an impulse changes that state: `r` survives it, so `R̂` does, but `v` changes, so `r × v` moves and `N̂` and `T̂` rotate with it. Applying `a` then `b` is therefore *not* applying `a + b` — the two delta-vs were read in different bases. §13.3's "two impulses at the same epoch equal their vector sum" is true in the **inertial** frame, which is where the addition actually happens, and `maneuver.test.ts` asserts it in that form and measures the gap left by the naive reading. A plan cannot reach the ambiguous case in any event: FR-101 keeps consecutive nodes at least a second apart.
+
 ## Constants
 
 Every constant, its value, and its source. Kept in sync with `ATTRIBUTIONS.md`. Defined once, in `packages/astro/src/constants.ts`.
@@ -146,7 +148,9 @@ Circular and equatorial orbits are the **common case** in this game, not an edge
 
 ## Gameplay departures
 
-**Every place the game knowingly departs from the physics.** This is the honesty rule: simplifications are allowed, hiding them is not. Nothing in this table may live in `@hh/math`, `@hh/astro`, `@hh/propagation`, or `@hh/sim` — every row names a module in `@hh/game` or above, and the import direction is enforced in CI by `dependency-cruiser` (see `.dependency-cruiser.cjs`).
+**Every place the game knowingly departs from the physics.** This is the honesty rule: simplifications are allowed, hiding them is not. No row that is a *simplification for fun* may live in `@hh/math`, `@hh/astro`, `@hh/propagation`, or `@hh/sim` — each of those names a module in `@hh/game` or above, and the import direction is enforced in CI by `dependency-cruiser` (see `.dependency-cruiser.cjs`).
+
+Two rows sit in the core and are marked accordingly, because they are not simplifications for fun and the table would be misleading if it implied they were. DEP-09 is a determinism mechanism (§11.4 lists it as one), and DEP-11 is a modelling assumption with a magnitude attached. They are listed here because they are still departures a player is entitled to know about, not because they are cheats.
 
 | ID | Departure | Lives in | Why | Player-visible? |
 | --- | --- | --- | --- | --- |
@@ -158,7 +162,7 @@ Circular and equatorial orbits are the **common case** in this game, not an edge
 | DEP-06 | **Fixed Sun direction** for the duration of a contract | `@hh/game` | Avoids an ephemeris dependency. The Sun moves 0.041°/h, so over a 12 h contract that is 0.5° of umbra rotation, well inside the eclipse-window tolerance. Contracts longer than 3 days do not use eclipse constraints. | Yes — Codex, and the briefing says "sun-fixed approximation" |
 | DEP-07 | **Node snapping** to apsis or node crossing within 30 s | `@hh/game` | Hitting periapsis to the millisecond is not the fun part. Can be disabled. | Listed in the assist tray |
 | DEP-08 | **Altitude floor** at 100 km is an instant fail | `@hh/game` | Stands in for drag and reentry, which are not modelled. | Yes — drawn as a hazard shell |
-| DEP-09 | **Node epochs quantised** to 1/1024 s; Δv components to 1e-4 m/s | `@hh/game` | Exact representability for replay codes and cross-platform verification. Both quanta are far below any perceptible or scoring-relevant threshold. | No |
+| DEP-09 | **Node epochs quantised** to 1/1024 s; Δv components to 1e-4 m/s | `@hh/sim` *(determinism mechanism, not a cheat)* | Exact, identical input for replay codes and cross-platform verification (§11.4). What is exactly representable is the **integer count**, not the SI quantity: 1/1024 is a binary fraction and an epoch tick really is exact, but 1e-4 is not, so a quantised Δv is the correctly-rounded product and not the decimal it prints as. Both quanta are far below any perceptible or scoring-relevant threshold. | No |
 | DEP-10 | The transverse axis is **labelled "prograde"** | `@hh/game` | Player vocabulary. The two coincide for circular orbits and differ by the flight-path angle otherwise. | Yes — Codex, "Prograde vs transverse" |
 | DEP-11 | **Targets are massless** and do not perturb the ship | `@hh/sim` *(assumption, not a cheat)* | A 5 t satellite's gravity at 100 m is about 3 × 10⁻⁹ m s⁻². Standard practice. | Yes — Codex |
 | DEP-12 | **Par values are the best known**, not the proven optimum | `@hh/game` | For Lambert contracts the true optimum is a continuous search; ours is a fine grid refined by local optimisation. | Yes — the debrief invites a bug report if a player beats par |
@@ -188,6 +192,10 @@ Catches unit, frame and algebra errors. Cheap and fast.
 | Converted state satisfies `ε = −μ/2a` | Energy integral; and `ε = 0` for the parabolic case | ✅ `elements.test.ts` |
 | Specific energy sign per orbit class | `ε = v²/2 − μ/r`, negative / zero / positive | ✅ `twobody.test.ts`, one case per class, plus constancy over an orbit |
 | Equinoctial ↔ Cartesian, both directions | Non-singular at `e = 0`, `sin i = 0`, and both | ✅ `equinoctial.test.ts` |
+| Impulsive Δv leaves the position untouched | FR-006 | ✅ `maneuver.test.ts` — by object identity, so there is no tolerance to argue about |
+| Transverse Δv on a circular orbit adds to the speed | Flight-path angle is zero there, so the answer is closed-form | ✅ `maneuver.test.ts`, to 1e-9 m/s; radial Δv checked to add in quadrature |
+| RTN axes lie where this document says | R along `r`, N along `r × v`, T completing the set | ✅ `maneuver.test.ts` — asserted per axis, because every Δv in the game points somewhere else if one moved |
+| Epoch tick is exactly representable | 1/1024 is a binary fraction | ✅ `quantise.test.ts` — `toBe`, not `toBeCloseTo`, in both directions and at a realistic 2026 epoch |
 
 **On the bi-elliptic thresholds.** 11.94 and 15.58 are not the two ends of one comparison, and a test that treats them that way gets the second one wrong — a sweep that picks the best intermediate radius reproduces 11.94 and never sees 15.58. Below **11.94** Hohmann wins for *every* intermediate radius, because that is where the bi-elliptic with `r_b → ∞` — the best it can ever do — ties Hohmann. Above **15.58** bi-elliptic wins for *every* `r_b > r₂`, because that is where `∂Δv_bi/∂r_b` turns negative at `r_b = r₂`, so leaving the Hohmann geometry at all immediately pays. Between them it depends on `r_b`, which is the regime the bi-elliptic contract sits in. Both are dimensionless and independent of μ and of r₁, which is asserted rather than assumed.
 
@@ -213,6 +221,10 @@ Catches unit, frame and algebra errors. Cheap and fast.
 | DOP853 tableau satisfies the order conditions | ✅ `oracle/dop853.test.ts` — row sums to sub-ulp, quadrature exact to k = 8 and failing at k = 9 |
 | Oracle converges at 8th order | ✅ `oracle/dop853.test.ts` — measured 7.88–7.96 per halving on a circular orbit |
 | Arc elements cached once and never stale | ✅ `arc.test.ts` — by identity, not by tolerance |
+| Applying zero Δv changes nothing | ✅ `maneuver.test.ts` — an exact equality, not a closeness: rotating the zero vector is exact and adding zero to a float is exact |
+| Two impulses at the same epoch equal their vector sum | ✅ `maneuver.test.ts` — **in the inertial frame**, which is the form that is true; see [The RTN frame, stated precisely](#the-rtn-frame-stated-precisely). The naive RTN-component reading is asserted to *fail*, by a margin two orders of magnitude above float64 noise, so it cannot be quietly reintroduced |
+| Quantisation is idempotent, and its counts round-trip exactly | ✅ `quantise.test.ts` — randomised over the epoch and Δv domains, plus a JSON round-trip on the integer counts, which is the thing §11.4 actually claims survives one |
+| Canonical JSON is a stable identity | ✅ `replay.test.ts` — byte-identical through serialise → parse → serialise and through a full plan → replay → JSON → plan cycle, and identical for an object whose keys were built in a different order |
 | Determinism across runtimes | ⏳ #73 |
 
 ### Tier 3 — independent references

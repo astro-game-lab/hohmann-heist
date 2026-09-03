@@ -84,7 +84,7 @@ belongs in `test:all`.
 packages/math          vectors, matrices, angles, root finders, seeded PRNG
 packages/astro         constants, time, frames, elements, Kepler, Lambert
 packages/propagation   universal-variable propagation, arcs, oracle
-packages/sim           plan, timeline, world state            (empty)
+packages/sim           plan, nodes, impulses, replay codes
 packages/game          rules, scenarios, and every departure  (empty)
 packages/render        renderer, camera, orbit tessellation
 packages/ui            components, palettes, accessibility    (empty)

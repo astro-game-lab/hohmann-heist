@@ -12,6 +12,21 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- `@hh/sim` opens with the **plan side of the simulation**: `Plan` and `ManeuverNode` with
+  quantisation at entry (FR-101, FR-105, DEP-09), impulsive Δv applied in RTN (FR-006), and
+  canonical JSON serialisation of a plan (§11.6). A node's canonical identity is its **integer
+  count** — ticks of 1/1024 s and counts of 1e-4 m/s — and its SI values are derived from those
+  counts rather than from the caller's arguments, which is what makes quantisation idempotent by
+  construction rather than by discipline. FR-101's "≥ 1 s apart" is an integer comparison, because
+  differencing two 2026 epochs as floats loses about 1e-7 s to cancellation and a plan that
+  validates on one runtime should not fail on another.
+- `@hh/sim` gains **canonical JSON replay codes**: keys sorted by an explicit writer rather than
+  inherited from a literal's insertion order, no whitespace, integers only, and strict parsing that
+  rejects an unknown schema version, an unrecognised key or a non-integer instead of dropping it.
+  Node epochs are written as mission-elapsed ticks — §11.6's own claim field is plainly MET — so the
+  origin cancels exactly on the way back. A share code for an 8-node plan measures 306 bytes, or 408
+  base64url characters **with no compression at all**, which is how FR-607's 512-character budget is
+  asserted: deflate is headroom, not an assumption the budget rests on.
 - `@hh/render` gains the **`Renderer` seam and a Canvas 2-D implementation**. The interface takes a
   whole `Scene` bucketed by layer rather than a stream of drawing calls, so §11.8's draw order lives
   in the package as a constant instead of emerging from the order a caller happens to make its
@@ -68,7 +83,26 @@ they relied on has moved.
   the `@hh/render/canvas2d` subpath so the package's barrel — and the camera and tessellator behind
   it — stays runnable under Node.
 
+### Fixed
+- `docs/PRODUCT.md` §11.6's "an 8-node plan is ~120 bytes of JSON" was optimistic by a factor of
+  about 2.5 and is replaced by the measurement: 306 bytes, 408 base64url characters. A 123.75 m/s
+  burn is 1 237 500 quantised counts, and every node carries three of those plus an epoch.
+- `docs/PHYSICS.md` recorded DEP-09 as living in `@hh/game` and described quantised values as
+  "exactly representable". Quantisation is a determinism mechanism (§11.4) and now lives in
+  `@hh/sim`, and what is exactly representable is the integer count: 1/1024 is a binary fraction,
+  1e-4 is not, so a quantised Δv is the correctly-rounded product rather than the decimal it prints
+  as. The departures table's preamble now accounts for its two core-resident rows instead of
+  forbidding them.
+
 ### Physics
+- **Impulsive Δv, with no model change.** FR-006 is applied through the existing `fromRtn`,
+  unchanged: instantaneous, same position, no mass. **No published number has moved.** What is new
+  is a frame property that was implicit and easy to get wrong — **impulses do not add in RTN
+  components.** An impulse changes `v`, so `r × v` moves and the `T̂`/`N̂` axes rotate under the
+  second delta-v. §13.3's "two impulses at the same epoch equal their vector sum" holds in the
+  *inertial* frame; the RTN-component reading is now asserted to *fail*, by a margin two orders of
+  magnitude above float64 noise, so it cannot be reintroduced quietly. `docs/PHYSICS.md` states it
+  under the RTN frame.
 - **Propagation exists, and is checked against an independent numerical method.** The analytic
   propagator and the DOP853-tableau oracle share no code, and agree to between 4e-14 and 7e-12
   relative across elliptic, near-parabolic and hyperbolic cases — inside the oracle's own

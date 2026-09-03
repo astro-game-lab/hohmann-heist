@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An [astro-game-lab](https://github.com/astro-game-lab) game. The org builds games where orbits are propagated rather than animated, and where the simulation is expected to agree with a textbook.
 
-**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math`, `@hh/astro`, `@hh/propagation` and `@hh/render` hold real code; `sim`, `game` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
+**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math`, `@hh/astro`, `@hh/propagation` and `@hh/render` hold real code, and `@hh/sim` holds the plan side of it — nodes, quantisation, impulsive Δv and replay codes, but no timeline yet; `game` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
 
 ## The three documents
 
