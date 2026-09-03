@@ -12,6 +12,43 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **Golden trajectories (§7.6 Tier 4).** 31 committed plans with their evaluated states at fixed
+  epochs — 326 sampled states in all — covering every conic class including exactly parabolic, the
+  degenerate geometries (e = 0, i = 0, both, i = π, polar), the degenerate plan structures (empty,
+  a node on the start epoch, a node on the horizon, the minimum legal spacing, a zero-Δv node,
+  twelve nodes), and two plans that change conic class mid-timeline. CI fails when a value moves by
+  more than 1e-9 relative. **A golden asserts that a number has not changed, never that it is
+  right**; the tests it sits behind are what say it is right.
+- **A golden that moves takes `docs/PHYSICS.md` with it.** §11.13 has promised this check since M0
+  and nothing enforced it. `tools/goldens/physics-doc-gate.mjs` now does, on every pull request: a
+  fixture file only moves when an evaluated trajectory moved, which makes it a change to the
+  physics model rather than to a test fixture. The check is deliberately shallow — it asks whether
+  the document is in the same diff, not whether what was written there is any good, because no
+  script can check the second and pretending to would be worse than not trying.
+- **In-process determinism fuzz (FR-109).** 10 000 seeded random plans per CI run, each evaluated
+  twice, compared on every float a timeline holds — arc boundaries, arc states, cached elements,
+  both sides of every impulse, the inertial Δv, and five `stateAt` lookups — with `Object.is`, so
+  `-0` and `+0` are distinguished and the comparison is bit-level rather than numeric. §11.4
+  requires same-runtime determinism to be *exact*, and a tolerance would mask exactly the bugs this
+  exists to catch. A 200 000-plan soak found no difference. Cross-runtime agreement is out of scope
+  and remains #73.
+- **Benchmark regression gate (NFR-011, NFR-021).** The benchmarks asserted §11.9's hard limits and
+  nothing else, which catches a catastrophe and misses a forty-percent regression entirely. They
+  now record their measurements and `pnpm bench:check` compares them against a committed baseline.
+  Two design choices were measured rather than assumed: the gate compares the **minimum** over the
+  batches, because timing noise is one-sided and the minimum's worst-case run-to-run spread is
+  19.7% against the median's 31.5%; and every measurement is normalised by a frozen arithmetic
+  yardstick, which slightly *worsens* the spread on one machine (21.2%) and is what makes a
+  baseline recorded on one machine comparable to a run on another. The tolerance is 50%, and the
+  measurements behind it are written next to it so it cannot be widened without an argument.
+- **The two §11.9 frame-time budgets are measured** for the first time — idle 0.008–0.010 ms,
+  dragging a node 0.041–0.048 ms, against 4 ms and 8 ms targets. What is measured is the geometry
+  pipeline owned by `@hh/sim` and `@hh/render`; rasterisation is the browser's and cannot be
+  measured from Node, so **passing does not mean §11.9's frame rows are met** — that is a
+  real-device pass, #188 and #189. The benchmark says so, and so does `docs/PHYSICS.md`.
+- **Benchmark files no longer run in parallel.** Four benchmarks competing for the same cores while
+  each tries to measure elapsed time were partly measuring the scheduler. It matters more now that
+  a gate reads those numbers.
 - `@hh/sim` gains the **timeline**: applying a plan to an initial state over a horizon produces
   the alternating sequence of Keplerian arcs and instantaneous impulses FR-102 describes, with
   `stateAt` evaluating it anywhere inside the horizon and `withPlan` re-evaluating it from an

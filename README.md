@@ -20,7 +20,7 @@ the sections below describe what actually exists rather than what is planned.
 | **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, universal-variable propagation with the arc abstraction over it, `@hh/sim` — nodes, quantisation, impulsive Δv, replay codes, and the **timeline**: a plan applied to a state becomes alternating Keplerian arcs and impulses over a horizon, evaluable at any epoch by binary search and re-evaluable from an edited node onward. Plus the five event finders: apsis crossings, closest approach, altitude-shell crossings, ground-station visibility and umbra intervals. |
 | **Rendering** | The `Renderer` seam with a Canvas 2-D implementation behind it, an orthographic camera with pan, zoom and auto-framing, and adaptive orbit tessellation with its cache. Geometry only — no Earth, no markers, no labels yet. |
 | **Application** | A skeleton: routing works and imports the simulation packages. No screens. |
-| **Quality** | 816 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. |
+| **Quality** | 921 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. Plus three regression layers over plan evaluation: 31 committed golden trajectories gated at 1e-9 relative, a 10 000-plan in-process determinism fuzz asserting bit-identity, and a benchmark suite gated against a committed baseline rather than only against an absolute limit. |
 | **Milestone** | M0 of eight. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
 
 [`docs/PHYSICS.md`](docs/PHYSICS.md) is the honest account of what the simulation
@@ -71,12 +71,22 @@ pnpm dev
 | Format | `pnpm format:check` — `pnpm format` to apply |
 | Layering rule | `pnpm layering` |
 | Test | `pnpm test` — the packages, and fast |
-| Test everything | `pnpm test:all` — adds the app and the guardrail suite |
+| Test everything | `pnpm test:all` — adds the app, the guardrails, the goldens, the fuzz and the benchmarks |
 | Coverage | `pnpm coverage` |
+| Benchmarks | `pnpm bench`, then `pnpm bench:check` against the committed baseline |
+| Golden fixtures | `pnpm goldens:write` — regenerate them, deliberately |
 
 CI runs all of these on every pull request. `pnpm test` is deliberately the fast
 subset for the inner loop; the guardrail suite builds a full type-aware program and
 belongs in `test:all`.
+
+Two of those gates are worth knowing about before you hit them. **A change to
+`tools/goldens/fixtures.json` requires a change to `docs/PHYSICS.md` in the same pull
+request** — a golden only moves when an evaluated trajectory moved, which makes it a
+change to the physics model rather than to a test fixture. And the benchmark gate
+fails on a *regression against the baseline*, not only on an absolute budget, so a
+change that costs 50% has to be explained or re-recorded even though nothing is
+running slowly yet.
 
 ### Layout
 

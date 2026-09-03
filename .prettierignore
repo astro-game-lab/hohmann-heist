@@ -8,3 +8,10 @@ coverage/
 # readability gain, and docs/PRODUCT.md is a copy of a file maintained outside this
 # repo, so reformatting it would make every future sync a spurious diff.
 *.md
+
+# Generated, and deliberately formatted for review rather than by Prettier.
+# `pnpm goldens:write` writes each three-component vector on one line; Prettier
+# explodes an array whose contents do not fit the print width, which would turn a
+# 111 kB fixture file into something no one can read a diff of — and a diff that can
+# be read is the entire point of committing the goldens rather than snapshotting them.
+tools/goldens/fixtures.json

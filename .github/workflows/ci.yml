@@ -25,6 +25,12 @@ jobs:
       # moved to point at different code; a SHA cannot.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history, so the physics-document gate below can diff this branch
+          # against its base. The default shallow clone has no base to compare to,
+          # and that gate reports a missing base as a failure rather than passing
+          # quietly -- so a shallow checkout here would block every pull request.
+          fetch-depth: 0
 
       - name: Set up pnpm
         # Version comes from `packageManager` in package.json — one source of truth.
@@ -56,6 +62,36 @@ jobs:
       # `test` script for speed, and CI is where it has to run.
       - name: Test
         run: pnpm test:all
+
+      # A golden trajectory only moves when an evaluated result moved, which makes it
+      # a change to the physics model. docs/PRODUCT.md §11.13 requires docs/PHYSICS.md
+      # to be updated in the same pull request; this is that requirement, enforced.
+      #
+      # Pull requests only: a push to `main` has no base to diff against, and the
+      # check has already run on the pull request that produced the commit.
+      - name: Physics document gate (§11.13)
+        if: github.event_name == 'pull_request'
+        run: pnpm goldens:doc-gate
+
+      # `pnpm test:all` above ran the benchmark project, which wrote its measurements
+      # to tools/bench/.results/. This compares them against the committed baseline
+      # and fails on a regression, which is the half the in-test hard-limit assertions
+      # cannot cover -- a change that costs forty percent breaks no limit at all.
+      #
+      # NFR-021 asks for this "on every PR touching @hh/sim or @hh/render". It runs on
+      # every pull request instead, which is a superset: a path filter would let a
+      # change under tools/ or apps/ move these numbers without anyone hearing about
+      # it, and the whole suite costs about twenty seconds.
+      - name: Benchmark gate (NFR-011, NFR-021)
+        run: pnpm bench:check
+
+      # Always, so the run that busts a budget is also the run that shows by how much,
+      # and so the numbers are readable without opening the log. Reports; never gates
+      # -- the step above is the gate, and this one prints exactly the numbers that
+      # gate judged rather than re-measuring.
+      - name: Benchmark report
+        if: always()
+        run: pnpm bench:report >> "$GITHUB_STEP_SUMMARY"
 
       - name: Coverage
         run: pnpm coverage
