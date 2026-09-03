@@ -33,3 +33,29 @@ export {
   withStartEpoch,
   withState,
 } from './arc.js';
+
+export type { ConicClock, ConicGeometry, EpochInterval, EventOptions } from './events.js';
+export { DEFAULT_MAX_ITERATIONS, DEFAULT_TOLERANCE_SECONDS } from './events.js';
+
+export type { ApsisEvent, ApsisKind } from './apsis.js';
+export { APSIS_ECCENTRICITY_FLOOR, findApsisCrossings } from './apsis.js';
+
+export type { ShellCrossing, ShellCrossingDirection } from './shell.js';
+export { SHELL_CIRCULAR_FLOOR, findShellCrossings, findShellIntervals } from './shell.js';
+
+export type { ApproachBoundary, CloseApproach } from './approach.js';
+export {
+  DEFAULT_APPROACH_SAMPLES_PER_REVOLUTION,
+  findCloseApproaches,
+  findClosestApproach,
+} from './approach.js';
+
+export type { GroundStation } from './station.js';
+export {
+  DEFAULT_STATION_SAMPLES_PER_REVOLUTION,
+  elevationOf,
+  findVisibilityIntervals,
+  stationPositionAt,
+} from './station.js';
+
+export { DEFAULT_UMBRA_SAMPLES_PER_REVOLUTION, findUmbraIntervals } from './umbra.js';
