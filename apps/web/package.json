@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Hohmann Heist — the browser application.",
+  "description": "Hohmann Heist \u2014 the browser application.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,8 @@
   "dependencies": {
     "@hh/astro": "workspace:*",
     "@hh/math": "workspace:*",
+    "@hh/render": "workspace:*",
+    "@hh/sim": "workspace:*",
     "@preact/signals": "^2.0.0",
     "preact": "^10.0.0"
   }
