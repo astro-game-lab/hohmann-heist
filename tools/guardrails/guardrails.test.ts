@@ -211,6 +211,54 @@ describe('the core compiles without the DOM library (NFR-005)', () => {
   }, 120_000);
 });
 
+describe('a golden that moves takes docs/PHYSICS.md with it (§11.13)', () => {
+  // §11.13 has promised since M0 that "any PR that changes a physics result must update
+  // `docs/PHYSICS.md` in the same PR (CI check on the golden fixtures enforces this by
+  // failing loudly)". #71 supplies the check; this is the check on the check.
+  //
+  // It is invoked the way CI invokes it, through `--files`, rather than by importing
+  // the rule: the gate is a program, its exit code is what CI reads, and a test that
+  // imported the predicate would pass while the program exited zero on everything.
+  // That is the failure mode the whole guardrail suite exists to catch.
+  const GATE = path.join('tools', 'goldens', 'physics-doc-gate.mjs');
+  const FIXTURES = 'tools/goldens/fixtures.json';
+  const PHYSICS = 'docs/PHYSICS.md';
+
+  const run = (files: readonly string[]): Promise<{ stdout: string }> =>
+    execFileAsync('node', [GATE, '--files', ...files]);
+
+  it('passes when the fixtures did not move', async () => {
+    const { stdout } = await run(['packages/sim/src/timeline.ts', 'README.md']);
+    expect(stdout).toContain('nothing to enforce');
+  });
+
+  it('passes when the fixtures moved and the document moved with them', async () => {
+    const { stdout } = await run([FIXTURES, PHYSICS, 'packages/propagation/src/universal.ts']);
+    expect(stdout).toContain('changed with it');
+  });
+
+  it('fails when the fixtures moved and the document did not', async () => {
+    await expect(run([FIXTURES, 'packages/propagation/src/universal.ts'])).rejects.toMatchObject({
+      code: 1,
+      stdout: expect.stringContaining(
+        `${FIXTURES} changed but ${PHYSICS} did not`,
+      ) as unknown as string,
+    });
+  });
+
+  it('fails on the fixtures alone, with no other file to explain them', async () => {
+    await expect(run([FIXTURES])).rejects.toMatchObject({ code: 1 });
+  });
+
+  it('reports a base it cannot diff against rather than passing quietly', async () => {
+    // A misconfigured CI step -- a shallow checkout, a renamed default branch -- must
+    // not look like a clean run. Exit 2, distinct from both pass and fail.
+    await expect(
+      execFileAsync('node', [GATE, '--base', 'refs/heads/no-such-branch-for-the-guardrail-suite']),
+    ).rejects.toMatchObject({ code: 2 });
+  }, 30_000);
+});
+
 describe('shell tooling is executable', () => {
   // CI invokes these scripts by path, so a mode of 100644 fails the job with
   // "Permission denied" rather than anything about the script. The bit is easy to
