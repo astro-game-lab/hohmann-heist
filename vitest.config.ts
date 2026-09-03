@@ -27,6 +27,15 @@ export default defineConfig({
         // and `performance` is banned in `packages/**` by the core guardrail block —
         // correctly, since the simulation must never read one. The benchmark is not
         // the simulation.
+        //
+        // **Excluded from `pnpm coverage`** (`vitest run --project !bench`), for two
+        // reasons that point the same way. V8 coverage instruments every function,
+        // which slows the code under measurement by roughly a factor of four — so a
+        // budget asserted under coverage is measuring the profiler, and the
+        // ground-station search's 3.3 ms becomes 13.9 ms and trips an 8 ms limit that
+        // nothing about the code has broken. And a line reached only by a benchmark
+        // is *timed*, not tested; counting it as covered would overstate the number
+        // the NFR-022 gate exists to keep honest.
         test: {
           name: 'bench',
           environment: 'node',
