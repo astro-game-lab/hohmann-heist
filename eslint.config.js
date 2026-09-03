@@ -4,7 +4,12 @@ import prettier from 'eslint-config-prettier/flat';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['**/node_modules/**', '**/dist/**', '**/coverage/**']),
+  // `tools/reference/.venv/` is the Python environment for the offline
+  // reference-fixture generator. It is gitignored, but ESLint walks the working tree
+  // rather than the index, and a JupyterLab extension bundled with `plotly` ships
+  // minified `.js` that no tsconfig covers -- so without this the lint run fails on
+  // files that are not ours and are not committed.
+  globalIgnores(['**/node_modules/**', '**/dist/**', '**/coverage/**', 'tools/reference/.venv/**']),
 
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

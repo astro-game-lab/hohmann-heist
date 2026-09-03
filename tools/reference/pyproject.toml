@@ -1,0 +1,26 @@
+# Offline generator for the Tier 3 external-library fixtures (#55).
+#
+# This project is NEVER installed or run by CI. It exists so that
+# `tools/reference/fixtures.json` can be regenerated deliberately, by a person, with
+# the versions pinned below. The committed fixture is what the test suite reads.
+[project]
+name = "hh-reference-fixtures"
+version = "0.0.0"
+description = "Generates docs-grade reference fixtures for @hh/propagation and @hh/astro"
+requires-python = "==3.13.*"
+dependencies = [
+  # The maintained fork of the archived poliastro. Supplies Izzo's Lambert solver
+  # and the Farnocchia propagator.
+  "hapsira==0.18.0",
+  # PINNED BELOW 8 ON PURPOSE. hapsira 0.18.0 imports
+  # `astropy.coordinates.matrix_utilities.matrix_product`, removed in astropy 8;
+  # with astropy 8 installed the generator fails at import. Raising this pin
+  # requires checking that hapsira has caught up, not just that the install works.
+  "astropy>=6,<7",
+  # Brandon Rhodes' SGP4, the reference implementation of the model the TLE format
+  # is defined against. Used only for the ISS case.
+  "sgp4>=2.23,<3",
+]
+
+[tool.uv]
+package = false

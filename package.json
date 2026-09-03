@@ -32,6 +32,7 @@
     "bench:report": "node tools/bench/compare.mjs --report",
     "bench:baseline": "node tools/bench/compare.mjs --write",
     "goldens:write": "node tools/goldens/generate.mjs",
+    "reference:write": "uv run --project tools/reference tools/reference/generate.py",
     "goldens:doc-gate": "node tools/goldens/physics-doc-gate.mjs",
     "test:all": "vitest run",
     "coverage": "vitest run --project !bench --coverage",

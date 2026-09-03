@@ -1336,3 +1336,109 @@ describe('Curtis 4th ed., Example 5.3 (section 5.3, pp. 248-249) — hyperbolic 
     expectRelative((result.transferAngle * 180) / Math.PI, 5, 1e-9, 'transfer angle');
   });
 });
+
+/*
+ * ---------------------------------------------------------------------------
+ * Tier 3 — independent reference (#54)
+ *
+ * Vallado, D. A., "Fundamentals of Astrodynamics and Applications", 4th edition,
+ * Microcosm Press / Springer, 2013. ISBN 978-1-881883-18-0. Example 7-5,
+ * section 7.6 "Two Position Vectors and Time -- Lambert's Problem", p. 497.
+ *
+ * Read from that edition per the process rule in docs/PRODUCT.md section 7.6, and
+ * -- as with the Curtis cases above -- **from an image of the printed page rather
+ * than from the PDF's text layer**, because that layer is not to be trusted with
+ * a minus sign. The arrival velocity's x component is negative and that was
+ * confirmed visually, not inferred.
+ *
+ * ## What this closes that Curtis could not
+ *
+ * Curtis 5.2 and 5.3 are three-dimensional transfers on inclined orbits. This one
+ * is **planar and equatorial** -- both positions have zero z, so the angular
+ * momentum lies along +K and the transfer runs through the geometry where an
+ * inclination-based branch would be degenerate. It also uses a different solver
+ * family as its reference: Vallado's is the universal-variable formulation with a
+ * bisection outer loop, not Curtis's Algorithm 5.2.
+ *
+ * ## mu
+ *
+ * Vallado's 398,600.4418 km^3/s^2 is `MU_EARTH` exactly, so this case uses ours
+ * rather than a book-specific constant. That is a statement about the book, not a
+ * shortcut: `MU_CURTIS` above exists precisely because Curtis's 398,600 is not.
+ * ---------------------------------------------------------------------------
+ */
+
+describe("Vallado 4th ed., Example 7-5 (section 7.6, p. 497) — Lambert's problem", () => {
+  // GIVEN r0 = 15,945.34 I km; r = 12,214.838 99 I + 10,249.467 31 J km;
+  //       dt = 76.0 min; tm = short way.
+  const r1 = position(15_945.34 * KM, 0, 0);
+  const r2 = position(12_214.83899 * KM, 10_249.46731 * KM, 0);
+  const dt = seconds(76 * 60);
+
+  // "Short way" is tm = +1, meaning a transfer angle below 180 degrees. Both
+  // positions lie in the equatorial plane and r1 x r2 points along +K, so the
+  // short way is the prograde one and the two conventions agree here. Stated
+  // rather than assumed, because they do not agree in general.
+  const result = solveLambert(r1, r2, dt, 'prograde', MU_EARTH);
+
+  it('takes the short way the book specifies', () => {
+    expect(result.converged).toBe(true);
+    if (!result.converged) return;
+    // The book: "Dnu = 40 deg".
+    expectRelative((result.transferAngle * 180) / Math.PI, 40, 1e-6, 'transfer angle');
+    expect(result.revolutions).toBe(0);
+    expect(result.branch).toBe('single');
+  });
+
+  it('reproduces the departure and arrival velocities the book prints', () => {
+    if (!result.converged) throw new Error('expected convergence');
+
+    /*
+     * v0 = 2.058 913 I + 2.915 965 J km/s
+     * v  = -3.451 565 I + 0.910 315 J km/s
+     *
+     * TOLERANCE. 1e-5 relative -- the book's printed precision, not a tuned
+     * number. Vallado prints seven significant figures, so a half-ulp of the last
+     * digit is 5e-7 / 0.91 = 5.5e-7 relative on the smallest component, and his
+     * own iteration table stops at a time of flight of 76.00 min against the
+     * requested 76.0 -- a solve that in his words "converges slowly at the end".
+     *
+     * Observed worst deviation 8.3e-7, which is just above that half-ulp and is
+     * the residual of his stopping point rather than of our solve: our transfer
+     * angle comes out at 40.000 001 15 degrees against his printed 40. 1e-5 is
+     * where the book's own convergence puts the answer, with a margin.
+     */
+    const TOL = 1e-5;
+    expectRelative(result.departureVelocity.x / KM, 2.058913, TOL, 'v0 x');
+    expectRelative(result.departureVelocity.y / KM, 2.915965, TOL, 'v0 y');
+    expect(Math.abs(result.departureVelocity.z)).toBeLessThan(1e-9);
+
+    expectRelative(result.arrivalVelocity.x / KM, -3.451565, TOL, 'v x');
+    expectRelative(result.arrivalVelocity.y / KM, 0.910315, TOL, 'v y');
+    expect(Math.abs(result.arrivalVelocity.z)).toBeLessThan(1e-9);
+  });
+
+  it('lands the transfer back on r2, independently of the book', () => {
+    // The book's numbers check our conventions; this checks our arithmetic, and
+    // the two failing together would mean something very different from either
+    // failing alone.
+    if (!result.converged) throw new Error('expected convergence');
+    const elements = elementsFromState(r1, result.departureVelocity, MU_EARTH);
+    expect(elements.eccentricity).toBeLessThan(1);
+    expectClose(
+      propagate({ position: r1, velocity: result.departureVelocity }, dt).position,
+      r2,
+      1e-9,
+      'arrival',
+    );
+  });
+
+  it('is the equatorial geometry the example was chosen for', () => {
+    // Both positions have zero z, so this is the i = 0 degenerate case for the
+    // classical element set -- the one Curtis 5.2 and 5.3 never reach.
+    if (!result.converged) throw new Error('expected convergence');
+    const elements = elementsFromState(r1, result.departureVelocity, MU_EARTH);
+    expect(elements.degeneracy).toBe('equatorial');
+    expect(elements.inclination).toBeCloseTo(0, 12);
+  });
+});
