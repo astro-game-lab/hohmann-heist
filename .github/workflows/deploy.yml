@@ -14,13 +14,12 @@ on:
 permissions:
   contents: read
 
-# Production deploys are serialised against each other, and nothing else. It is
-# tempting to put every `gh-pages` writer in one group, but GitHub keeps only one
-# *pending* run per group and cancels the rest: two pull requests queued behind a
-# deploy would lose a preview outright. Cross-writer safety is publish.sh's push
-# retry instead, which rebuilds on the new tip and pushes again. Never cancel a
-# deploy in flight — a superseded one is about to be replaced anyway, but a
-# half-applied one is a broken site.
+# Production deploys are serialised against each other, and against nothing else:
+# this workflow is the only writer to `gh-pages` now that pull requests publish no
+# previews. Never cancel a deploy in flight — a superseded one is about to be
+# replaced anyway, but a half-applied one is a broken site. A writer from outside
+# this workflow is covered by publish.sh's push retry, which rebuilds on the new
+# tip and pushes again, rather than by widening this group.
 concurrency:
   group: gh-pages-production
   cancel-in-progress: false
@@ -123,7 +122,7 @@ jobs:
         env:
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          tools/pages/publish.sh publish site . "deploy: ${SHA}"
+          tools/pages/publish.sh site "deploy: ${SHA}"
 
       # A deploy that reports success and serves a blank page is the failure mode
       # worth automating against, so the run is not green until the live URL is.

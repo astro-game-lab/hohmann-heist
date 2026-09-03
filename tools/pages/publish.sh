@@ -1,34 +1,29 @@
 #!/usr/bin/env bash
 #
-# Publish a directory to, or remove one from, the `gh-pages` branch.
+# Publish a directory to the `gh-pages` branch.
 #
-#   tools/pages/publish.sh publish dist .                 "deploy: ..."
-#   tools/pages/publish.sh publish dist pr-preview/pr-30  "preview: ..."
-#   tools/pages/publish.sh remove       pr-preview/pr-30  "preview: ..."
+#   tools/pages/publish.sh dist "deploy: ..."
 #
-# GitHub Pages serves one site per repository, so production and every pull-request
-# preview have to coexist inside a single published tree. They are kept apart by
-# path: production owns the root, previews own `pr-preview/pr-<n>/`, and neither
-# writes into the other's territory. A root publish deletes everything it is
-# replacing *except* `pr-preview/`, which is the single line that stops a merge to
-# main from wiping every open PR's preview.
+# The published tree is the site, whole: a publish replaces everything on the
+# branch with the build it was handed. It used to preserve `pr-preview/` and to
+# offer a `remove` mode, because pull requests published previews into that path
+# and a deploy to the root had to leave them standing. Both went when the previews
+# did, and the first publish after that removal carries the stale preview
+# directories away with it.
 #
 # Hand-rolled git rather than a publishing action, for the same reason
 # tools/smoke/smoke.sh is hand-rolled curl: it is a dozen lines of git, it adds
 # nothing to the supply chain, and it can be run locally against a scratch remote
 # to see what it does before it is trusted with the real one.
 #
-# Concurrent writers are handled here rather than by queueing them in the
-# workflows: a production deploy and any number of preview publishes can run at
-# once, and a push rejected because another landed first is retried from the new
-# tip. Because each writer only ever rewrites its own path, replaying on top of a
-# newer tree converges rather than clobbering -- which is what makes it safe to
-# give previews a concurrency group each instead of one shared queue.
+# A push rejected because another landed first is retried from the new tip rather
+# than failing the deploy. The deploy workflow serialises its own runs, so what
+# this covers is a writer that workflow does not know about -- a build published
+# by hand, an edit made on the branch directly.
 
 set -euo pipefail
 
 readonly BRANCH='gh-pages'
-readonly PRESERVE='pr-preview'
 readonly PUSH_ATTEMPTS=5
 
 die() {
@@ -38,40 +33,19 @@ die() {
 
 usage() {
   cat >&2 <<'USAGE'
-usage: publish.sh publish <source-dir> <target-path> <message>
-       publish.sh remove <target-path> <message>
+usage: publish.sh <source-dir> <message>
 
-  <target-path>  '.' for the site root, or a relative path such as
-                 'pr-preview/pr-30'. May not be absolute or contain '..'.
+  <source-dir>  the built site; its contents become the root of gh-pages
+  <message>     the commit message for the publishing commit
 USAGE
   exit 2
 }
 
-mode=${1:-}
-case "$mode" in
-  publish)
-    source_dir=${2:-}
-    target=${3:-}
-    message=${4:-}
-    [ -n "$source_dir" ] && [ -n "$target" ] && [ -n "$message" ] || usage
-    [ -d "$source_dir" ] || die "source directory '$source_dir' does not exist"
-    source_dir=$(cd "$source_dir" && pwd)
-    ;;
-  remove)
-    target=${2:-}
-    message=${3:-}
-    [ -n "$target" ] && [ -n "$message" ] || usage
-    source_dir=''
-    ;;
-  *) usage ;;
-esac
-
-# A target that escapes the tree would let a preview overwrite production, which is
-# the one thing the path split exists to prevent.
-case "$target" in
-  /* | *..*) die "target path '$target' must be relative and free of '..'" ;;
-esac
-[ "$mode" = 'remove' ] && [ "$target" = '.' ] && die 'refusing to remove the site root'
+source_dir=${1:-}
+message=${2:-}
+[ -n "$source_dir" ] && [ -n "$message" ] || usage
+[ -d "$source_dir" ] || die "source directory '$source_dir' does not exist"
+source_dir=$(cd "$source_dir" && pwd)
 
 repo_root=$(git rev-parse --show-toplevel)
 worktree=$(mktemp -d)
@@ -103,21 +77,11 @@ prepare() {
 }
 
 apply() {
-  if [ "$mode" = 'remove' ]; then
-    rm -rf "${worktree:?}/${target}"
-    return
-  fi
-
-  if [ "$target" = '.' ]; then
-    # Replace the root wholesale, but never the previews living under it.
-    find "$worktree" -mindepth 1 -maxdepth 1 \
-      ! -name '.git' ! -name "$PRESERVE" -exec rm -rf {} +
-    cp -R "$source_dir"/. "$worktree"/
-  else
-    rm -rf "${worktree:?}/${target}"
-    mkdir -p "${worktree}/${target}"
-    cp -R "$source_dir"/. "${worktree}/${target}"/
-  fi
+  # Replace the tree wholesale. Anything the new build does not carry is not part
+  # of the site, and leaving it would make the branch an archive of every build
+  # that has ever shipped rather than a copy of the current one.
+  find "$worktree" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+  cp -R "$source_dir"/. "$worktree"/
 
   # Without this, Pages runs the tree through Jekyll, which costs build time and
   # drops files whose names begin with an underscore.
@@ -130,7 +94,7 @@ for attempt in $(seq "$PUSH_ATTEMPTS"); do
 
   git -C "$worktree" add --all
   if git -C "$worktree" diff --cached --quiet; then
-    printf 'publish: %s is already up to date; nothing to push\n' "$target"
+    printf 'publish: %s is already serving this build; nothing to push\n' "$BRANCH"
     exit 0
   fi
 
@@ -139,8 +103,7 @@ for attempt in $(seq "$PUSH_ATTEMPTS"); do
     commit --quiet --message "$message"
 
   if git -C "$worktree" push origin "HEAD:refs/heads/$BRANCH"; then
-    printf 'publish: %s %s on %s\n' \
-      "$([ "$mode" = 'remove' ] && echo 'removed' || echo 'published')" "$target" "$BRANCH"
+    printf 'publish: published to %s\n' "$BRANCH"
     exit 0
   fi
 
