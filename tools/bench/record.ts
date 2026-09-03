@@ -7,32 +7,32 @@
  * #74 asks for the missing half — a gate against a **committed baseline**, so that a
  * slow creep across many pull requests is caught while it is still a creep.
  *
- * ## Why a baseline in milliseconds cannot work, and what is stored instead
+ * ## Why a baseline in milliseconds is hard, and what came of the attempt
  *
- * A baseline is committed once and compared against on whatever machine happens to
- * run the pull request. GitHub-hosted runners are not one machine: a job lands on
- * whichever host is free, and the spread between the fastest and slowest allocation
- * is worth more than any regression worth catching. Comparing a committed
- * millisecond figure against that is not a gate, it is a coin toss, and a gate that
- * flakes gets silenced — which is the failure mode #74 names explicitly.
+ * A baseline is committed once and compared against on whatever machine runs the pull
+ * request. GitHub-hosted runners are not one machine: six runs of one commit executed
+ * this suite at anywhere from 0.52x to 1.02x of each other's pace. A committed
+ * millisecond figure is not comparable to that.
  *
- * So every measurement is recorded next to a **yardstick**: {@link yardstick}, a
- * frozen scalar floating-point loop measured in the same process, on the same run,
- * with the same median-of-batches harness. What the baseline stores is the
- * dimensionless ratio
+ * The answer tried first was a **yardstick**: {@link yardstick}, a frozen scalar
+ * floating-point loop measured in the same process, on the same run, with the same
+ * harness, so every measurement could also be recorded as the dimensionless ratio
+ * `measurement / yardstick`. A host half the speed would make both numbers twice as
+ * large and leave the ratio where it was.
  *
- * ```
- *   ratio = measurement / yardstick
- * ```
+ * **It does not hold, and `tools/bench/compare.mjs` carries the measurements.** In
+ * short: across machine families it over-corrects, within the fleet it under-corrects,
+ * and it adds noise of its own. The clearest single line is that two runs with
+ * yardsticks of 364 ns and 365 ns executed the suite at 0.96x and 0.79x — the loop is
+ * a serial dependency chain measuring scalar floating-point latency, and the code it
+ * was meant to normalise is branch-bound, memory-bound and full of transcendentals.
  *
- * which is "how much of this machine's arithmetic this operation costs". A runner
- * half the speed makes both numbers twice as large and leaves the ratio where it
- * was; a change that does more work moves the ratio and nothing else does. The
- * absolute figure is recorded too, because it is what §11.9's hard limits are
- * written in and what a human reading the report actually wants to see.
- *
- * `tools/bench/compare.mjs` is the gate over these files, and its header carries the
- * measured run-to-run spread that the tolerance is set from.
+ * The gate instead divides each metric by the median across all of them, which uses
+ * the suite as its own yardstick and removes the host exactly. The ratio recorded here
+ * is therefore **not used by the gate**. It stays for two reasons: it is the evidence
+ * for a decision that would otherwise be one comment's assertion, so the next person
+ * to have this idea can check it; and a run whose yardstick moves while its floors do
+ * not is a run that landed on a different host, which is worth seeing.
  *
  * ## Two statistics, because there are two questions
  *
@@ -45,25 +45,27 @@
  * of what the operation actually costs, and comparing two minima compares two costs
  * rather than two noise levels.
  *
- * Measured over seven consecutive runs of the whole suite on one quiet machine, that
- * choice is worth roughly a factor of three in run-to-run spread, which is the
- * difference between a gate that can be set tightly enough to catch a real regression
- * and one that has to be set so wide it catches nothing. Both numbers are recorded:
- * `value` is the median and is what the report shows against §11.9, `floor` is the
- * minimum and is what the gate compares.
+ * Measured over seven consecutive runs of the whole suite on one quiet machine: the
+ * typical spread is the same either way, 12.2% against 11.8%, but the worst row is
+ * 19.7% against 31.5% — and a threshold is set by the worst row. Both numbers are
+ * recorded: `value` is the median and is what the report shows against §11.9, `floor`
+ * is the minimum and is what the gate compares.
  *
- * ## The yardstick may never change
+ * ## The yardstick is still frozen, even though nothing gates on it
  *
  * It is arithmetic and nothing else — multiply, add, and `Math.sqrt`, all of which
  * IEEE 754 requires to be correctly rounded and every current CPU implements in
  * hardware. Deliberately **no transcendentals**: `Math.sin` and friends are library
- * code whose cost varies between platforms and libm versions by more than the
- * regressions this gate exists to catch, which would put that variation straight
- * into the denominator of every ratio.
+ * code whose cost varies between platforms and libm versions by more than the effects
+ * being measured.
  *
- * If this function is ever edited, every ratio in `baseline.json` silently changes
- * meaning and the whole baseline has to be regenerated. It is frozen for that
- * reason, and `compare.mjs` records its identity so a change is at least visible.
+ * Editing it would make every recorded ratio incomparable with every earlier one,
+ * which would cost exactly the diagnostic value the column is kept for. So it carries
+ * a version, and `compare.mjs` reports a mismatch rather than failing on one — a
+ * column nothing gates on is not a reason to refuse a comparison.
+ *
+ * If a future change makes the column useless as well as unused, delete it. Keeping a
+ * measurement nobody reads is worse than keeping none.
  *
  * ## One result file per benchmark file
  *

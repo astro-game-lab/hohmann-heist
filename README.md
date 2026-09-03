@@ -85,8 +85,10 @@ Two of those gates are worth knowing about before you hit them. **A change to
 request** — a golden only moves when an evaluated trajectory moved, which makes it a
 change to the physics model rather than to a test fixture. And the benchmark gate
 fails on a *regression against the baseline*, not only on an absolute budget, so a
-change that costs 50% has to be explained or re-recorded even though nothing is
-running slowly yet.
+change that costs 30% *relative to the rest of the suite* has to be explained or
+re-recorded even though nothing is running slowly yet. Runner speed varies about
+two-fold, so the comparison is relative by necessity; `tools/bench/compare.mjs`
+explains that, its one blind spot, and how to record a new baseline from CI.
 
 ### Layout
 

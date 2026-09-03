@@ -33,14 +33,29 @@ they relied on has moved.
   exists to catch. A 200 000-plan soak found no difference. Cross-runtime agreement is out of scope
   and remains #73.
 - **Benchmark regression gate (NFR-011, NFR-021).** The benchmarks asserted §11.9's hard limits and
-  nothing else, which catches a catastrophe and misses a forty-percent regression entirely. They
-  now record their measurements and `pnpm bench:check` compares them against a committed baseline.
-  Two design choices were measured rather than assumed: the gate compares the **minimum** over the
-  batches, because timing noise is one-sided and the minimum's worst-case run-to-run spread is
-  19.7% against the median's 31.5%; and every measurement is normalised by a frozen arithmetic
-  yardstick, which slightly *worsens* the spread on one machine (21.2%) and is what makes a
-  baseline recorded on one machine comparable to a run on another. The tolerance is 50%, and the
-  measurements behind it are written next to it so it cannot be widened without an argument.
+  nothing else, which catches a catastrophe and misses a forty-percent regression entirely. They now
+  record their measurements and `pnpm bench:check` compares them against a committed baseline. Three
+  choices in the comparison were measured rather than assumed: the **minimum** over each benchmark's
+  batches rather than the median (worst-case run-to-run spread 19.7% against 31.5%); a baseline
+  recorded **from CI** as the per-metric median of five runs; and each metric divided by the
+  **median across all twenty in the same run**, so the gate asks whether an operation got slower
+  than its neighbours did. The tolerance is 30%.
+- **The relative comparison exists because the runner fleet spans a factor of two.** Six CI runs of
+  one identical commit executed the suite at 0.52× to 1.02× of each other's pace. Absolute
+  comparison across that cannot work — the fastest host reads 48% under a baseline recorded on the
+  mid-range ones — while dividing by the run's own median removes the host exactly and leaves a
+  per-metric scatter that is flat across the whole range (worst upward deviation 9.7% to 14.4%).
+  The known blind spot is a uniform slowdown, which divides out; §11.9's absolute hard limits still
+  backstop it and the host offset is printed on every run.
+- **A synthetic normalisation was tried and rejected on measurement.** Every benchmark also times a
+  frozen scalar arithmetic loop and records `measurement / yardstick`, on the theory that a
+  dimensionless ratio makes a baseline portable. It over-corrects across machine families (a runner
+  is 1.16× slower than the development machine on real workloads but 1.45× slower on the yardstick,
+  putting every normalised row a systematic 22% under its baseline) and under-corrects within the
+  fleet, while adding noise of its own. Two runs with yardsticks of 364 ns and 365 ns executed the
+  suite at 0.96× and 0.79×. The ratio stays in the recorded results as the evidence for the
+  decision, and is not used by the gate.
+
 - **The two §11.9 frame-time budgets are measured** for the first time — idle 0.008–0.010 ms,
   dragging a node 0.041–0.048 ms, against 4 ms and 8 ms targets. What is measured is the geometry
   pipeline owned by `@hh/sim` and `@hh/render`; rasterisation is the browser's and cannot be
