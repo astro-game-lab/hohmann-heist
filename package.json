@@ -29,7 +29,7 @@
     "test:guardrails": "vitest run --project guardrails",
     "bench": "vitest run --project bench",
     "test:all": "vitest run",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --project !bench --coverage",
     "size": "size-limit",
     "size:report": "node tools/size/report.mjs"
   },

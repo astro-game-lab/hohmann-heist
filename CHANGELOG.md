@@ -12,6 +12,34 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- `@hh/propagation` gains the **five FR-008 event finders**: apsis crossings, closest approach
+  between two independently propagated bodies, altitude-shell crossings, ground-station conical
+  visibility, and cylindrical umbra intervals. They ship together because the interesting part of
+  each is the same three decisions — what an interval endpoint means, what tolerance a returned
+  epoch carries, and what happens to a feature the search cannot resolve — and five finders written
+  apart would have answered them five ways.
+- **The endpoint rule is half-open, `[start, end)`.** An event exactly at the start is reported and
+  one exactly at the end is not, so searching two abutting arcs and concatenating reports every
+  event exactly once instead of leaving a caller to de-duplicate on a float comparison. An interval
+  already in progress at a bound is returned **clipped**, flagged as such, rather than dropped —
+  a pass that begins at `start` because the search began there is a different fact from one that
+  begins there because the spacecraft rose.
+- **Apsis and shell crossings are closed-form, not root-found.** Both issues asked for root-finding
+  to a stated tolerance; on an unperturbed conic both are algebraic — periapsis *is* true anomaly
+  zero, and `r = p/(1 + e cos ν) = R` solves for `ν` directly — so they are exact to round-off,
+  have no convergence tolerance, and have **no floor on the shortest feature they can find**. The
+  shell's inverse cosine is written as a half-angle `atan2`, which `acos` is banned for (NFR-006)
+  and which stays well conditioned at both ends besides.
+- **Umbra samples in true anomaly rather than in time.** The shadow condition depends only on where
+  the spacecraft is, so the grid is uniform in position around the orbit; that is what makes a
+  short eclipse near periapsis no harder to find than a long one near apoapsis. Refinement still
+  runs in epoch, so the stated tolerance means what it says.
+- `@hh/astro` gains the **ECEF frame**: `EcefVector`, `ecef`, and the body-fixed ↔ inertial
+  rotation. A ground station is the one thing in this simulation that is constant in the rotating
+  frame and not in the inertial one, so it is stated in the rotating one and the compiler refuses
+  to let it be passed where an inertial vector belongs. The rotation takes an **angle**, not an
+  epoch — converting an epoch needs a sidereal-time model, which is data with a source and an
+  expiry, and a scenario states its own station angle.
 - `@hh/sim` opens with the **plan side of the simulation**: `Plan` and `ManeuverNode` with
   quantisation at entry (FR-101, FR-105, DEP-09), impulsive Δv applied in RTN (FR-006), and
   canonical JSON serialisation of a plan (§11.6). A node's canonical identity is its **integer
@@ -75,6 +103,13 @@ they relied on has moved.
 - Initial project scaffold from `astro-game-lab/.repo-template`.
 
 ### Changed
+- `pnpm coverage` no longer runs the benchmark project (`vitest run --project !bench`). V8 coverage
+  instruments every function and slows the code under measurement by roughly a factor of four, so a
+  §11.9 budget asserted under it measures the profiler rather than the simulation — the
+  ground-station search's 3.3 ms reads as 13.9 ms and trips an 8 ms limit nothing has broken. The
+  second reason points the same way: a line reached only by a benchmark is *timed*, not tested, and
+  counting it as covered overstates the number NFR-022's gate exists to keep honest. `pnpm bench`
+  and `pnpm test:all` are unaffected.
 - `@hh/render` compiles against its own TypeScript project. It draws on a canvas, so it needs the
   DOM library, and the root project deliberately has none so that a browser type in the simulation
   core is a compile error rather than something only the lint rule's list of global names catches.
@@ -84,6 +119,12 @@ they relied on has moved.
   it — stays runnable under Node.
 
 ### Fixed
+- `docs/PHYSICS.md` said angles normalise to `[0, 2π)` "everywhere, without exception". Two of them
+  do not, and one of the two was already shipping: hyperbolic anomaly, which is not periodic, and
+  now topocentric elevation, which is a latitude-like coordinate on `[-π/2, π/2]` whose sign is its
+  entire content — wrapping −10° to 350° would make `elevation ≥ mask` true for every spacecraft on
+  the far side of the planet. The convention now says it governs *circular* angles and names both
+  exceptions, rather than being a rule the code has to quietly break.
 - `docs/PRODUCT.md` §11.6's "an 8-node plan is ~120 bytes of JSON" was optimistic by a factor of
   about 2.5 and is replaced by the measurement: 306 bytes, 408 base64url characters. A 123.75 m/s
   burn is 1 237 500 quantised counts, and every node carries three of those plus an epoch.
@@ -95,6 +136,29 @@ they relied on has moved.
   forbidding them.
 
 ### Physics
+- **The umbra is a cylinder, and that costs something measurable.** The real umbra is a cone — the
+  Sun is a disc, so the shadow closes about 1 384 000 km behind Earth — and there is a penumbra
+  outside it. This model has neither, which makes its shadow wider than the real one, increasingly
+  so with altitude. Measured for a circular orbit with the Sun in plane: at 400 km the eclipse is
+  **36.11 min against a true-cone 35.71 min, 1.1% long**; at geostationary altitude **69.41 min
+  against 67.28 min, 3.2% long**. The penumbra, reported here as full sunlight, is a further
+  0.8 min at 400 km and 4.3 min at GEO. **No previously published number has moved** — the shadow
+  model is new — but the closed form behind it lands on the widely quoted ~36 min ISS eclipse and
+  ~70 min maximum geostationary eclipse, and `docs/PHYSICS.md` records that those are quoted
+  figures rather than a citable worked example.
+- **Near-tangential shell crossings are ill-conditioned in epoch, and the closed form does not fix
+  it.** Where a trajectory grazes a shell `dr/dt → 0`, so a fixed radius error becomes an unbounded
+  epoch error. Measured on a 400 × 800 km orbit: the radius residual stays on the float64 floor at
+  every separation, while the implied epoch error grows from 2.0e-11 s at 100 km below apoapsis to
+  2.8e-8 s at 1 cm below it. A root-finder would inherit exactly the same conditioning; this is the
+  geometry, not the method.
+- **A circular orbit cannot be asked where it crosses a shell.** `cos ν* = (p/R − 1)/e` divides one
+  small number by another, and a state built from `e = 0` returns with `e ≈ 1e-16`, so a circular
+  orbit sitting exactly on a shell satisfies `r_p < R < r_a` in float64 — and a naive search
+  reports being inside for half of every revolution, over a radius excursion of a nanometre. The
+  finder now treats `e ≤ 5e-16`, the measured cancellation floor on the eccentricity magnitude, as
+  circular and answers *entirely inside* or *entirely outside*. Circular orbits are the common case
+  here, so this is the ordinary path rather than an edge case.
 - **Impulsive Δv, with no model change.** FR-006 is applied through the existing `fromRtn`,
   unchanged: instantaneous, same position, no mass. **No published number has moved.** What is new
   is a frame property that was implicit and easy to get wrong — **impulses do not add in RTN

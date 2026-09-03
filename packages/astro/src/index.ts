@@ -35,12 +35,17 @@ export {
   TT_MINUS_TAI,
 } from './time.js';
 
-export type { EciVector, Framed, PqwVector, RtnVector } from './frames.js';
+export type { EcefVector, EciVector, Framed, PqwVector, RtnVector } from './frames.js';
 export {
+  bodyFixedToInertialMatrix,
+  ecef,
+  ecefToEci,
   eci,
+  eciToEcef,
   eciToPqw,
   eciToRtnMatrix,
   fromRtn,
+  inertialToBodyFixedMatrix,
   inertialToPerifocalMatrix,
   perifocalToInertialMatrix,
   pqw,
