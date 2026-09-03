@@ -12,6 +12,32 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- `@hh/sim` gains the **timeline**: applying a plan to an initial state over a horizon produces
+  the alternating sequence of Keplerian arcs and instantaneous impulses FR-102 describes, with
+  `stateAt` evaluating it anywhere inside the horizon and `withPlan` re-evaluating it from an
+  edited node onward. This is what turns a plan into a trajectory; until now `@hh/sim` held the
+  plan and nothing that ran it.
+- **The empty plan is not a special case.** It produces one coasting arc from the start epoch to
+  the horizon because the fold never enters its loop, not because a branch checks for it. A
+  structure whose degenerate case is written separately is a structure with two behaviours to
+  keep in step.
+- **A node epoch belongs to the arc that starts there.** Timeline arcs inherit the half-open
+  `[start, end)` rule the event finders already run on, so `stateAt` at a node returns the
+  **post-impulse** state and the pre-impulse one is on the impulse record. The last arc is closed
+  at the horizon so the deadline itself is evaluable, and an epoch outside the horizon is rejected
+  with a typed `EpochOutOfHorizonError` carrying the bounds, rather than extrapolated into a plan
+  that says nothing about that time.
+- **Incremental re-evaluation is the same fold entered later, not a second implementation.**
+  Arc *j*'s state depends on the initial state and nodes 0 … *j*−1, so an edit at node *k* cannot
+  reach anything before *k*; `withPlan` diffs on the integer counts, reuses the earlier arcs **by
+  reference** — element caches and all — and restarts the same loop at *k*. Moving, inserting and
+  deleting a node are therefore one path rather than three. Measured: an 8-node plan re-evaluates
+  fully in 0.03–0.05 ms against §11.9's 2 ms target, a last-node drag in 0.007–0.009 ms against
+  NFR-011's 16.7 ms frame, and a timeline `stateAt` in 0.8–1.4 µs against a 5 µs target.
+- **The arc lookup is measured as a binary search, not asserted as one.** Timing `stateAt` would
+  prove nothing — the Kepler solve costs microseconds and the search nanoseconds — so the
+  benchmark times the search alone: 228× more arcs costs 4.0× more, against 3.5× for a binary
+  search and 228× for a linear scan.
 - `@hh/propagation` gains the **five FR-008 event finders**: apsis crossings, closest approach
   between two independently propagated bodies, altitude-shell crossings, ground-station conical
   visibility, and cylindrical umbra intervals. They ship together because the interesting part of

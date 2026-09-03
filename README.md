@@ -17,7 +17,7 @@ the sections below describe what actually exists rather than what is planned.
 
 | | |
 | --- | --- |
-| **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, universal-variable propagation with the arc abstraction over it, the plan side of `@hh/sim` — nodes, quantisation, impulsive Δv and replay codes — and the five event finders: apsis crossings, closest approach, altitude-shell crossings, ground-station visibility and umbra intervals. No timeline yet. |
+| **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, universal-variable propagation with the arc abstraction over it, `@hh/sim` — nodes, quantisation, impulsive Δv, replay codes, and the **timeline**: a plan applied to a state becomes alternating Keplerian arcs and impulses over a horizon, evaluable at any epoch by binary search and re-evaluable from an edited node onward. Plus the five event finders: apsis crossings, closest approach, altitude-shell crossings, ground-station visibility and umbra intervals. |
 | **Rendering** | The `Renderer` seam with a Canvas 2-D implementation behind it, an orthographic camera with pan, zoom and auto-framing, and adaptive orbit tessellation with its cache. Geometry only — no Earth, no markers, no labels yet. |
 | **Application** | A skeleton: routing works and imports the simulation packages. No screens. |
 | **Quality** | 816 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. |
@@ -84,7 +84,7 @@ belongs in `test:all`.
 packages/math          vectors, matrices, angles, root finders, seeded PRNG
 packages/astro         constants, time, frames, elements, Kepler, Lambert
 packages/propagation   universal-variable propagation, arcs, event finders, oracle
-packages/sim           plan, nodes, impulses, replay codes
+packages/sim           plan, nodes, impulses, timeline, replay codes
 packages/game          rules, scenarios, and every departure  (empty)
 packages/render        renderer, camera, orbit tessellation
 packages/ui            components, palettes, accessibility    (empty)

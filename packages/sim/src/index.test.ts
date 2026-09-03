@@ -28,6 +28,13 @@ describe('@hh/sim', () => {
     }
   });
 
+  it('exports the timeline through the barrel', () => {
+    for (const name of ['buildTimeline', 'withPlan', 'stateAt', 'arcAt', 'arcIndexAt'] as const) {
+      expect(typeof sim[name]).toBe('function');
+    }
+    expect(typeof sim.EpochOutOfHorizonError).toBe('function');
+  });
+
   it('exports the quanta and the plan constants', () => {
     expect(sim.EPOCH_QUANTUM_S).toBe(1 / 1024);
     expect(sim.DELTA_V_QUANTUM_MPS).toBe(1e-4);

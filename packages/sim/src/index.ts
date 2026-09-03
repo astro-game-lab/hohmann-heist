@@ -44,3 +44,19 @@ export {
   replayFromPlan,
   REPLAY_SCHEMA_VERSION,
 } from './replay.js';
+
+export type {
+  Impulse,
+  Timeline,
+  TimelineFailure,
+  TimelineResult,
+  TimelineSpec,
+} from './timeline.js';
+export {
+  arcAt,
+  arcIndexAt,
+  buildTimeline,
+  EpochOutOfHorizonError,
+  stateAt,
+  withPlan,
+} from './timeline.js';

@@ -39,6 +39,7 @@
     "@hh/math": "workspace:*",
     "@hh/propagation": "workspace:*",
     "@hh/render": "workspace:*",
+    "@hh/sim": "workspace:*",
     "@size-limit/file": "^13.0.3",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.11",

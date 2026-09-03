@@ -23,6 +23,9 @@ importers:
       '@hh/render':
         specifier: workspace:*
         version: link:packages/render
+      '@hh/sim':
+        specifier: workspace:*
+        version: link:packages/sim
       '@size-limit/file':
         specifier: ^13.0.3
         version: 13.0.3(size-limit@13.0.3)
