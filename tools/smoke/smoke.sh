@@ -5,10 +5,10 @@
 # Takes the URL of a deployment and asserts that a browser opening it would get a
 # working game rather than a blank page. Deliberately dependency-free — curl and a
 # shell, nothing to install — so it runs identically in CI and against a local
-# `pnpm preview`.
+# `pnpm --filter @hh/web preview`.
 #
 #   tools/smoke/smoke.sh https://astro-game-lab.github.io/hohmann-heist/
-#   tools/smoke/smoke.sh .../hohmann-heist/pr-preview/pr-30/ assets/index-BUeQDV-6.js
+#   tools/smoke/smoke.sh .../hohmann-heist/ assets/index-BUeQDV-6.js
 #   tools/smoke/smoke.sh http://localhost:4173/hohmann-heist/
 #
 # The optional second argument pins the entry script the deployment is expected to
@@ -22,16 +22,16 @@
 #
 # The expected base path is taken from the URL rather than hardcoded, because the
 # whole assertion is that the build's `base` agrees with where it is being served
-# from -- and a pull-request preview is served from a different path than
-# production. Hardcoding production's path would make this pass a preview built
-# with the wrong base, which is precisely the failure previews exist to surface.
+# from -- and the same script is pointed at more than one: the deployed site under
+# the repository's Pages URL, and a local `vite preview` on localhost. Hardcoding
+# production's path would leave nothing here to fail.
 #
 # SMOKE_TIMEOUT and SMOKE_RETRY_DELAY widen the poll. A Pages branch build is
-# slower to go live than an artifact deployment, so the workflows ask for longer
-# than the default. The budget is wall-clock rather than a number of attempts,
-# because an attempt can cost anything up to curl's --max-time: counting attempts
-# gives a bound that looks like a minute and can take twenty, which is long enough
-# for a CI job to cancel the step before it can report what went wrong.
+# slower to go live than an artifact deployment, so the deploy workflow asks for
+# longer than the default. The budget is wall-clock rather than a number of
+# attempts, because an attempt can cost anything up to curl's --max-time: counting
+# attempts gives a bound that looks like a minute and can take twenty, which is
+# long enough for a CI job to cancel the step before it can report what went wrong.
 
 set -euo pipefail
 

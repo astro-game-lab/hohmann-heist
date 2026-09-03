@@ -144,6 +144,17 @@ they relied on has moved.
   the `@hh/render/canvas2d` subpath so the package's barrel — and the camera and tessellator behind
   it — stays runnable under Node.
 
+### Removed
+- **Pull-request preview deployments.** Every pull request published its build to
+  `pr-preview/pr-<n>/` on `gh-pages` and commented the link; the whole facility is gone — both
+  workflows, `tools/pages/pr-comment.sh`, and `publish.sh`'s second mode. A branch is verified
+  locally instead: `pnpm build`, `pnpm --filter @hh/web preview`, and a real browser pointed at it.
+  Two things follow from previews being the only other writer to the branch. `publish.sh` no longer
+  preserves a path it does not own and no longer has a `remove` mode, so its usage is now
+  `publish.sh <source-dir> <message>` and a publish replaces the tree whole. And the first deploy to
+  `main` after this lands takes the stale preview directories with it, so no cleanup step has to be
+  written or run.
+
 ### Fixed
 - `docs/PHYSICS.md` said angles normalise to `[0, 2π)` "everywhere, without exception". Two of them
   do not, and one of the two was already shipping: hyperbolic anomaly, which is not periodic, and

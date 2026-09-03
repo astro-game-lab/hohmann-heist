@@ -111,6 +111,29 @@ Do not loosen a tolerance to make a failing test pass without understanding why 
 
 CI runs all of these on every pull request. Run them before proposing changes; `pnpm test:all` is the one that matches CI.
 
+## CI and deployment
+
+Two workflows, in `.github/workflows/`. Actions are pinned to commit SHAs, not tags — a tag can be moved to point at different code.
+
+| Workflow | Runs on | What it does |
+| --- | --- | --- |
+| `ci.yml` | every pull request, and every push to `main` | The Commands table above, as one job: install (`--frozen-lockfile`) → typecheck → lint → layering → format → `test:all` → coverage → build → bundle size |
+| `deploy.yml` | CI succeeding on a push to `main`, or a manual dispatch | Build → publish to the root of `gh-pages` → smoke-test the live URL, pinned to the entry script just built, so a site still serving the previous build cannot pass |
+
+**A pull request deploys nothing, and there is no hosted per-PR preview.** There was one — a build per PR under `pr-preview/pr-<n>/` with a link commented on the pull request — and it was removed on 2026-09-03 together with `tools/pages/pr-comment.sh` and `publish.sh`'s `remove` mode. A branch is verified locally instead:
+
+```bash
+pnpm build
+pnpm --filter @hh/web preview                          # the production build on :4173
+tools/smoke/smoke.sh http://localhost:4173/hohmann-heist/
+```
+
+Browser checking is the **Playwright MCP server**, driven against that preview server: `browser_navigate` to the URL above, `browser_snapshot` for the accessibility tree, `browser_console_messages` for whatever the page logged, `browser_resize` for the layout breakpoints. It is configured at user level (`~/.claude.json`) and runs headless, so it is not something the repo installs — a contributor without it opens the URL themselves and loses only the automation.
+
+There is no committed Playwright suite and no Playwright dependency in the workspace. §13's e2e journeys, the keyboard-only walkthrough (#174) and the cross-runtime determinism check are still to be built; when they land they are CI's job, and they do not replace looking at the branch before proposing it.
+
+Two things this leaves in place, both worth not undoing. `deploy.yml` is the only writer to `gh-pages`, which is why `tools/pages/publish.sh` replaces the published tree whole rather than preserving paths it does not own. And no workflow gives a pull request write access to anything — reintroducing a preview would mean either a writable token on a PR build or `pull_request_target` running branch code with one. `docs/PRODUCT.md` §11.13 carries the reasoning in full.
+
 ## Conventions
 
 - Commit subjects are `area: what changed`, imperative, under 72 characters — `astro:`, `math:`, `infra:`, `docs:`, `physics:`.
