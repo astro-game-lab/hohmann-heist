@@ -8,13 +8,17 @@
  * to the compiler, and handing a perifocal vector to something expecting an
  * inertial one stops compiling rather than producing a plausible wrong trajectory.
  *
- * Three frames, per `docs/PHYSICS.md`:
+ * Four frames, per `docs/PHYSICS.md`:
  *
  * - **ECI** — J2000-aligned inertial. The default; everything dynamical lives here.
  * - **PQW** — perifocal, x toward periapsis, z along angular momentum. Used only
  *   for element to Cartesian conversion.
  * - **RTN** — radial, transverse, normal; attached to the spacecraft's state. The
  *   only frame a player ever sees a vector in.
+ * - **ECEF** — body-fixed, rotating with the central body. Nothing dynamical uses
+ *   it: it exists so that a ground station's position can be stated in the frame it
+ *   is actually constant in, and converted at the point of use. See the note on
+ *   `bodyFixedToInertialMatrix` for why the rotation is a parameter.
  */
 import type { Mat3, Metres, MetresPerSec, Radians, Vec3 } from '@hh/math';
 import { M, V } from '@hh/math';
@@ -32,6 +36,13 @@ export type EciVector<T extends number = number> = Framed<'ECI', T>;
 export type PqwVector<T extends number = number> = Framed<'PQW', T>;
 /** A vector in the spacecraft's radial-transverse-normal frame. */
 export type RtnVector<T extends number = number> = Framed<'RTN', T>;
+/**
+ * A vector in the central body's rotating body-fixed frame.
+ *
+ * Named ECEF because Earth is the only central body in v1.0, but nothing here is
+ * Earth-specific — the rotation angle is supplied by the caller.
+ */
+export type EcefVector<T extends number = number> = Framed<'ECEF', T>;
 
 /** Tag a vector as inertial. Use only where the frame is genuinely known. */
 export const eci = <T extends number>(v: Vec3<T>): EciVector<T> => v as EciVector<T>;
@@ -39,6 +50,8 @@ export const eci = <T extends number>(v: Vec3<T>): EciVector<T> => v as EciVecto
 export const pqw = <T extends number>(v: Vec3<T>): PqwVector<T> => v as PqwVector<T>;
 /** Tag a vector as RTN. */
 export const rtn = <T extends number>(v: Vec3<T>): RtnVector<T> => v as RtnVector<T>;
+/** Tag a vector as body-fixed. */
+export const ecef = <T extends number>(v: Vec3<T>): EcefVector<T> => v as EcefVector<T>;
 
 /**
  * Rotation taking perifocal components to inertial ones.
@@ -131,3 +144,39 @@ export const fromRtn = <T extends number>(
   position: EciVector<Metres>,
   velocity: EciVector<MetresPerSec>,
 ): EciVector<T> => eci(M.apply(rtnToEciMatrix(position, velocity), value));
+
+/**
+ * Rotation taking body-fixed components to inertial ones, given the body's
+ * rotation angle at the instant of interest.
+ *
+ * A single rotation about z. That is the whole of the model: no precession, no
+ * nutation, no polar motion, and no pole offset — the body-fixed z axis and the
+ * inertial z axis are the same axis, and the two frames differ by one angle.
+ *
+ * **The angle is a parameter, and it is not an epoch.** Turning an epoch into a
+ * rotation angle needs a reference angle at a reference epoch — for Earth, a
+ * sidereal-time model — which is data with a source and an attribution row.
+ * Nothing in v1.0 needs one: the only consumer is ground-station visibility, and a
+ * scenario states the station's rotation angle at the scenario epoch because that
+ * is a *scenario* fact, not a physical constant. Taking the angle rather than the
+ * epoch keeps the choice of sidereal-time model out of the core, in the same way
+ * that `elementsFromState` takes `mu` rather than assuming Earth.
+ *
+ * **This rotation is kinematic only.** The body-fixed frame is not inertial and
+ * nothing is propagated in it: `docs/PHYSICS.md` is explicit that Earth's rotation
+ * affects nothing dynamical. It moves a station; it does not move a spacecraft.
+ */
+export const bodyFixedToInertialMatrix = (rotationAngle: Radians): Mat3 =>
+  M.rotationZ(rotationAngle);
+
+/** Rotation taking inertial components to body-fixed ones. The transpose. */
+export const inertialToBodyFixedMatrix = (rotationAngle: Radians): Mat3 =>
+  M.transpose(bodyFixedToInertialMatrix(rotationAngle));
+
+/** Apply a body-fixed-to-inertial rotation, carrying the frame tag with it. */
+export const ecefToEci = <T extends number>(m: Mat3, v: EcefVector<T>): EciVector<T> =>
+  eci(M.apply(m, v));
+
+/** Apply an inertial-to-body-fixed rotation. */
+export const eciToEcef = <T extends number>(m: Mat3, v: EciVector<T>): EcefVector<T> =>
+  ecef(M.apply(m, v));

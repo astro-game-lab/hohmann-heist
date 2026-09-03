@@ -3,10 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { M, metres, metresPerSec, radians, V } from '@hh/math';
 
 import {
+  bodyFixedToInertialMatrix,
+  ecef,
+  ecefToEci,
   eci,
+  eciToEcef,
   eciToPqw,
   eciToRtnMatrix,
   fromRtn,
+  inertialToBodyFixedMatrix,
   inertialToPerifocalMatrix,
   perifocalToInertialMatrix,
   pqw,
@@ -116,5 +121,56 @@ describe('RTN', () => {
     const radial = pos(7000e3, 0, 0);
     const parallel = vel(100, 0, 0);
     expect(() => eciToRtnMatrix(radial, parallel)).toThrow(RangeError);
+  });
+});
+
+describe('body-fixed to inertial', () => {
+  const site = (x: number, y: number, z: number) => ecef(V.vec3(metres(x), metres(y), metres(z)));
+
+  it('is the identity at a zero rotation angle', () => {
+    expect(M.approxEquals(bodyFixedToInertialMatrix(radians(0)), M.IDENTITY, TOL)).toBe(true);
+  });
+
+  it('is a rotation about z, leaving the pole alone', () => {
+    for (const angle of [0.3, 1.9, -2.4, 7.1]) {
+      const m = bodyFixedToInertialMatrix(radians(angle));
+      expect(M.determinant(m)).toBeCloseTo(1, 12);
+      expect(M.approxEquals(M.multiply(m, M.transpose(m)), M.IDENTITY, TOL)).toBe(true);
+
+      // A point on the rotation axis is unmoved: this is the whole content of "the
+      // body-fixed and inertial z axes are the same axis".
+      const pole = ecefToEci(m, site(0, 0, 6_356_752));
+      expect(pole.x).toBeCloseTo(0, 6);
+      expect(pole.y).toBeCloseTo(0, 6);
+      expect(pole.z).toBeCloseTo(6_356_752, 6);
+    }
+  });
+
+  it('carries a point on the equator through the angle it was given', () => {
+    const equator = site(6_378_137, 0, 0);
+    const turned = ecefToEci(bodyFixedToInertialMatrix(radians(Math.PI / 2)), equator);
+
+    expect(turned.x).toBeCloseTo(0, 6);
+    expect(turned.y).toBeCloseTo(6_378_137, 6);
+    expect(V.norm(turned)).toBeCloseTo(V.norm(equator), 6);
+  });
+
+  it('inverts exactly, so a station converted and converted back is where it started', () => {
+    const original = site(4_517_590, -4_487_348, 0);
+    for (const angle of [0.3, 1.9, -2.4]) {
+      const forward = bodyFixedToInertialMatrix(radians(angle));
+      const back = eciToEcef(
+        inertialToBodyFixedMatrix(radians(angle)),
+        ecefToEci(forward, original),
+      );
+      expect(V.approxEquals(back, original, 1e-6)).toBe(true);
+    }
+  });
+
+  it('is the transpose in the other direction', () => {
+    const m = bodyFixedToInertialMatrix(radians(1.23));
+    expect(M.approxEquals(inertialToBodyFixedMatrix(radians(1.23)), M.transpose(m), TOL)).toBe(
+      true,
+    );
   });
 });
