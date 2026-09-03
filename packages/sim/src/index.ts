@@ -33,3 +33,5 @@ export {
   MINIMUM_NODE_SPACING_S,
   MINIMUM_NODE_SPACING_TICKS,
 } from './plan.js';
+
+export { applyImpulse } from './maneuver.js';
