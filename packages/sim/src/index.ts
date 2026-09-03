@@ -35,3 +35,12 @@ export {
 } from './plan.js';
 
 export { applyImpulse } from './maneuver.js';
+
+export type { ReplayClaim, ReplayContext, ReplayNode, ReplayV1 } from './replay.js';
+export {
+  canonicalJson,
+  parseReplay,
+  planFromReplay,
+  replayFromPlan,
+  REPLAY_SCHEMA_VERSION,
+} from './replay.js';
