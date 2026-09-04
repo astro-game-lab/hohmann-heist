@@ -71,6 +71,24 @@ export {
 export type { Coastlines } from './coastlines.js';
 export { COASTLINES, decodeCoastlines } from './coastlines.js';
 
+export type {
+  Hit,
+  HitIndex,
+  HitKind,
+  HitTarget,
+  PathHitTarget,
+  PointHitTarget,
+} from './hit-test.js';
+export {
+  HIT_PRIORITY,
+  MIN_HIT_TARGET_PX,
+  buildHitIndex,
+  distanceToTarget,
+  hitRadius,
+  hitTest,
+  hitTestAll,
+} from './hit-test.js';
+
 export type { Camera, ViewBasis, ViewBounds } from './camera.js';
 export {
   AUTO_FRAME_MARGIN,
