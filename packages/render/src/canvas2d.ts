@@ -43,6 +43,7 @@ import type {
   Viewport,
 } from './renderer.js';
 import { DRAW_ORDER, backingStoreScale } from './renderer.js';
+import { backingStoreSize, sameViewport } from './viewport.js';
 
 /**
  * The part of `CanvasRenderingContext2D` this renderer uses.
@@ -186,10 +187,12 @@ export const createCanvas2DRenderer = (
   let scale = backingStoreScale(viewport.devicePixelRatio);
 
   const sizeBackingStore = (): void => {
-    // Round rather than truncate: a 1439.6 CSS-pixel viewport at 2x is 2879.2 device
-    // pixels, and flooring loses the last column to the page background.
-    target.width = Math.max(1, Math.round(current.width * scale));
-    target.height = Math.max(1, Math.round(current.height * scale));
+    // The CSS-to-device conversion is `viewport.ts`'s and only `viewport.ts`'s (#115),
+    // including the rounding rule and the floor at 1. Recomputing it here would make
+    // two places to be wrong, which is exactly what that issue asks to avoid.
+    const size = backingStoreSize(current);
+    target.width = size.width;
+    target.height = size.height;
   };
 
   sizeBackingStore();
@@ -204,15 +207,9 @@ export const createCanvas2DRenderer = (
     },
 
     resize(next: Viewport): void {
-      if (
-        next.width === current.width &&
-        next.height === current.height &&
-        next.devicePixelRatio === current.devicePixelRatio
-      ) {
-        // Assigning `canvas.width` clears the canvas even when the value is
-        // unchanged, so a no-op resize has to actually do nothing.
-        return;
-      }
+      // Assigning `canvas.width` clears the canvas even when the value is unchanged,
+      // so a no-op resize has to actually do nothing.
+      if (sameViewport(next, current)) return;
       current = next;
       scale = backingStoreScale(next.devicePixelRatio);
       sizeBackingStore();

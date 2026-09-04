@@ -31,6 +31,7 @@ export type RouteName =
   | 'replay'
   | 'settings'
   | 'spike'
+  | 'scene'
   | 'notFound';
 
 /**
@@ -52,6 +53,9 @@ const ROUTES: readonly (readonly [pattern: string, name: RouteName])[] = [
   ['/settings', 'settings'],
   // #238's throwaway spike page. Goes when the real planner lands.
   ['/spike', 'spike'],
+  // The orbit-scene harness (M2 PR 3). Also throwaway: it exists so §9.3 can be looked
+  // at before the planner screen exists, and goes the same way.
+  ['/scene', 'scene'],
 ];
 
 const segmentsOf = (path: string): string[] =>

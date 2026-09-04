@@ -66,6 +66,12 @@ export default defineConfig([
       globals: {
         process: 'readonly',
         console: 'readonly',
+        // `fetch` is a Node global with no importable form, and one tool genuinely
+        // needs it: tools/coastlines/process.mjs pulls the pinned Natural Earth
+        // release. Everything else Node-specific is imported by name -- `Buffer`
+        // from `node:buffer` in that same file -- so this is the only global the
+        // block has had to gain, and it is not reachable from packages/**.
+        fetch: 'readonly',
       },
     },
   },
@@ -135,11 +141,23 @@ export default defineConfig([
   // `id`, `href`, `class`, `data-*`, `type` -- is machinery.
   {
     files: ['apps/web/**/*.tsx', 'packages/ui/**/*.tsx'],
-    // The M1 spike is throwaway and is deleted whole when the planner replaces it
-    // (#238, PR 5 of M2). Its readout is a measurement instrument rather than a
+    // Two throwaway development instruments, each deleted whole when the planner
+    // screen replaces it, and each taking its line here with it.
+    //
+    // The M1 spike (#238): its readout is a measurement instrument rather than a
     // screen, and translating a number that exists to be read off a stopwatch would
-    // be ceremony with no reader. Deleting the directory deletes this line with it.
-    ignores: ['apps/web/src/spike/**'],
+    // be ceremony with no reader.
+    //
+    // The orbit-scene harness (M2 PR 3): the same argument, and one more. Its
+    // controls are named after the thing they vary — "device pixel ratio",
+    // "greyscale" — so that a developer checking #115's cap or §8.3.4's fifth
+    // principle can find the slider. They are not addressed to a player, they will
+    // never ship, and a catalogue key per slider would put throwaway strings in the
+    // file that FR-910 exists to keep permanent. **The labels the harness actually
+    // draws over the canvas are a different matter and do go through the
+    // catalogue** — that is the point of the harness, and `ScenePage.tsx` resolves
+    // every one of them through `@hh/ui`.
+    ignores: ['apps/web/src/spike/**', 'apps/web/src/scene-harness/**'],
     rules: {
       'no-restricted-syntax': [
         'error',

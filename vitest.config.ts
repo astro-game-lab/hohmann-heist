@@ -12,6 +12,28 @@ export default defineConfig({
           name: 'packages',
           environment: 'node',
           include: ['packages/*/src/**/*.test.ts'],
+          // `*.dom.test.ts` belongs to the `render-dom` project below. Excluded by
+          // name rather than by directory so that the DOM-needing tests sit beside
+          // the code they cover, and so that a file which acquires a DOM dependency
+          // has to be renamed — a visible act — rather than quietly moved.
+          exclude: ['packages/*/src/**/*.dom.test.ts'],
+        },
+      },
+      {
+        // The browser-environment testing story NFR-022 names as the condition for
+        // `@hh/render` joining the coverage gate.
+        //
+        // Only `@hh/render` gets this, and only for files named `*.dom.test.ts`. The
+        // simulation core is tested under Node precisely because it must not depend on
+        // a browser, and widening this glob to `packages/*` would quietly remove the
+        // thing that makes that guarantee checkable. Two modules need it: the DOM label
+        // layer (D8), which is DOM by definition, and nothing else — `canvas2d.ts` is
+        // tested with a recording double under Node, on purpose, because drawing to a
+        // jsdom canvas would test jsdom's canvas stub instead of the renderer.
+        test: {
+          name: 'render-dom',
+          environment: 'jsdom',
+          include: ['packages/render/src/**/*.dom.test.ts'],
         },
       },
       {
@@ -144,10 +166,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      // Gated packages only. `render` and `ui` join once they hold code and have a
-      // browser-environment testing story — see docs/PRODUCT.md NFR-022. `apps/web`
-      // is a composition layer and is covered by its own tests, not by this gate.
-      include: ['packages/{math,astro,propagation,sim,game}/src/**/*.ts'],
+      // NFR-022's condition for `render` was "once it holds code and has a
+      // browser-environment testing story". Both became true when the orbit scene and
+      // the `render-dom` project landed, so it joins the gate here. `ui` has not: it
+      // holds only the message catalogue and has no browser tests yet. `apps/web` is a
+      // composition layer and is covered by its own tests, not by this gate.
+      include: ['packages/{math,astro,propagation,sim,game,render}/src/**/*.ts'],
       // `test-support.ts` is a fixture module for this package's tests: not exported
       // from any barrel and not reachable from source. Counting it would inflate the
       // number the NFR-022 gate exists to keep honest, for the same reason the tests
@@ -165,6 +189,21 @@ export default defineConfig({
           branches: 60,
           functions: 70,
           lines: 70,
+        },
+        // NFR-022 sets no number for `render`, because it was written before the package
+        // held code. It gets the **core's** bar rather than the game layer's, and that is
+        // a correction rather than an ambition: the first draft of this block set 70 on
+        // the theory that browser wiring — a context that fails to acquire, a media query
+        // that re-arms, a `ResizeObserver` teardown — would have last-few-percent branches
+        // too expensive to fake. Measured, the package comes in at 96% statements and 87%
+        // branches, because those seams take structural types and a test can drive them
+        // with a plain object instead of a browser. A gate twenty-six points below the
+        // real number is not a gate; it would let a genuine regression through in silence.
+        'packages/render/src/**': {
+          statements: 90,
+          branches: 80,
+          functions: 90,
+          lines: 90,
         },
       },
     },
