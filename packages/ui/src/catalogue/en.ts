@@ -138,4 +138,26 @@ export const en: Messages = {
   'nav.codex': () => 'Codex',
   'nav.settings': () => 'Settings',
   'nav.spike': () => 'M1 spike',
+
+  // ── Screen headings and the not-found state (§8.2, §8.7) ───────────────────
+  //
+  // A heading names the screen, not the game: "Contract board", not "Hohmann Heist —
+  // Contract board". The document title carries the game's name once, in `index.html`.
+  'screen.board.heading': () => 'Contract board',
+  'screen.contract.heading': ({ id }) => `Contract ${id}`,
+  'screen.daily.heading': () => "Today's daily",
+  'screen.dailyDate.heading': ({ date }) => `Daily challenge — ${date}`,
+  'screen.leaderboard.heading': ({ date }) => `Leaderboard — ${date}`,
+  'screen.codex.heading': ({ slug }) => `Codex — ${slug}`,
+  'screen.replay.heading': () => 'Replay',
+  'screen.settings.heading': () => 'Settings',
+
+  // Not an error, and phrased so it does not read like one: a hash the router cannot
+  // match is usually an old shared link rather than anything the player did wrong.
+  'screen.notFound.heading': () => 'No such screen',
+  'screen.notFound.body': ({ path }) =>
+    `Nothing in this game answers to “${path}”. The link may be from an older build.`,
+  'screen.notFound.backToTitle': () => 'Back to the start',
+  'screen.notBuiltYet': () =>
+    'This screen is not built yet. The vertical slice runs as far as a contract briefing.',
 };

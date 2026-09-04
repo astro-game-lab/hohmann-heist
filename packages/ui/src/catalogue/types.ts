@@ -86,6 +86,30 @@ export interface UiMessageParams {
   readonly 'nav.settings': Record<string, never>;
   readonly 'nav.spike': Record<string, never>;
 
+  // ── Screen headings and the not-found state (§8.2, §8.7, #117) ─────────────
+  //
+  // One heading key per route in §8.2's table, rather than one key taking the screen's
+  // name as a parameter. A name is a fragment, and a message built from a fragment
+  // decides English's word order for every language at once — `types.ts` above says why
+  // that is the one thing this catalogue does not do. It also means each of #101–#109
+  // inherits a heading its screen already owns.
+  //
+  // The four that carry a captured segment carry it as a *value*: an id, a date, a slug.
+  // None of them is inflected, and quoting them is the message's decision.
+  readonly 'screen.board.heading': Record<string, never>;
+  readonly 'screen.contract.heading': { readonly id: string };
+  readonly 'screen.daily.heading': Record<string, never>;
+  readonly 'screen.dailyDate.heading': { readonly date: string };
+  readonly 'screen.leaderboard.heading': { readonly date: string };
+  readonly 'screen.codex.heading': { readonly slug: string };
+  readonly 'screen.replay.heading': Record<string, never>;
+  readonly 'screen.settings.heading': Record<string, never>;
+  readonly 'screen.notFound.heading': Record<string, never>;
+  readonly 'screen.notFound.body': { readonly path: string };
+  readonly 'screen.notFound.backToTitle': Record<string, never>;
+  /** What a route renders while the screen that owns it is still someone else's issue. */
+  readonly 'screen.notBuiltYet': Record<string, never>;
+
   // ── The orbit scene's labels (§9.3, D8, #113) ─────────────────────────────
   //
   // Every string the planner draws over the canvas resolves through here. `@hh/render`

@@ -1,0 +1,63 @@
+/*
+ * Structure and motion. Not the look.
+ *
+ * §9.2's colour and type, the five palettes, and the design tokens they are expressed in
+ * are #99, and none of it is here — a stylesheet that guessed at them now would have to
+ * be unpicked rather than extended. What is here is the part that is a *behaviour*
+ * rather than a style: how a screen enters, and how that collapses under
+ * `prefers-reduced-motion`.
+ *
+ * Loaded from `main.tsx` rather than linked from `index.html`, so Vite hashes and inlines
+ * it with the rest of the bundle and it counts against NFR-020's budget where it belongs.
+ */
+
+:root {
+  /*
+   * §9.4: a screen change takes 160 ms, ease-out.
+   *
+   * `Screen` sets this same property inline from `motion.ts`, which is what lets
+   * §8.3.12's "reduce motion" setting (#169) override the system preference in either
+   * direction once it exists. The declarations here are the value before any script has
+   * run, and the media query below is the system preference honoured without JavaScript
+   * at all — belt and braces, agreeing today, and the reason the duration is a custom
+   * property rather than a literal in the rule.
+   */
+  --hh-screen-in-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --hh-screen-in-duration: 0ms;
+  }
+}
+
+/*
+ * §9.4 calls this a cross-fade, and it is a fade-in: the outgoing screen is unmounted
+ * before the incoming one renders, so there is nothing to cross with. Holding both in
+ * the document to cross them properly would mean two live screens — two focus targets,
+ * two sets of headings in the accessibility tree, and a canvas being drawn to while it
+ * fades out. The difference is not visible at 160 ms; the cost would be.
+ */
+.hh-screen {
+  animation: hh-screen-in var(--hh-screen-in-duration) ease-out;
+}
+
+@keyframes hh-screen-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * §8.8: "Visible focus ring, never suppressed."
+ *
+ * `:focus` rather than `:focus-visible`, deliberately. The heading is focused
+ * programmatically on every route change, and browsers disagree about whether a
+ * programmatic focus on a non-input element counts as "visible" — Firefox and Safari
+ * have differed from Chromium here. A ring that appears on some browsers and not others
+ * is the same failure as no ring at all, for the user who needs it.
+ */
+.hh-screen__heading:focus {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
