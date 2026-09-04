@@ -178,12 +178,7 @@ export interface CommittedState {
 
 /** §8.5.1's six states. */
 export type Interaction =
-  | IdleState
-  | PlacingState
-  | SelectedState
-  | DraggingState
-  | EvaluatedState
-  | CommittedState;
+  IdleState | PlacingState | SelectedState | DraggingState | EvaluatedState | CommittedState;
 
 /**
  * A legality verdict that permits committing.

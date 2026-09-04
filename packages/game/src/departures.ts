@@ -175,10 +175,14 @@ export const DEPARTURES: readonly Departure[] = Object.freeze([
   },
   {
     id: 'DEP-07',
-    summary: 'Node snapping to apsis or node crossing within 30 s',
-    module: null,
+    // Narrowed to the apsis half, deliberately. Node-crossing snapping has no caller in
+    // v1.0 — every contract is equatorial-equivalent, so the line of nodes is undefined —
+    // and `status: 'active'` for a rule half of which does nothing would be exactly the
+    // "partially" this type refuses to have a value for. `snap.ts` says the same thing.
+    summary: 'Node snapping to the nearest apsis within 30 s',
+    module: '@hh/game/snap',
     layer: 'above-core',
-    status: 'planned',
+    status: 'active',
     visibility: 'internal',
   },
   {

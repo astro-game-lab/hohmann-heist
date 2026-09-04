@@ -43,7 +43,6 @@ import { Placeholder } from './screens/Placeholder.js';
 import { SaveNotice } from './screens/SaveNotice.js';
 import { Screen } from './screens/Screen.js';
 import { ScenePage } from './scene-harness/ScenePage.js';
-import { SpikePage } from './spike/SpikePage.js';
 
 /**
  * The catalogue, and the one place the missing-key policy is decided.
@@ -75,7 +74,6 @@ const NAV: readonly (readonly [path: string, label: string])[] = [
   ['/daily', t('nav.daily', {})],
   ['/codex/phasing', t('nav.codex', {})],
   ['/settings', t('nav.settings', {})],
-  ['/spike', t('nav.spike', {})],
 ];
 
 /** A captured route parameter. Absent is empty rather than `undefined` — it is text. */
@@ -220,10 +218,11 @@ export const App = (): JSX.Element => {
     rendered.current = true;
   });
 
-  // The two throwaway development instruments. Deleting `src/spike/` or
-  // `src/scene-harness/` and its line here removes it completely — neither renders
-  // inside the screen frame, because neither is a screen.
-  if (route.name === 'spike') return <SpikePage />;
+  // The orbit-scene harness, the one throwaway development instrument left. It does not
+  // render inside the screen frame, because it is not a screen. The M1 spike that sat
+  // beside it went with this PR: the planner is the thing it was measuring the
+  // feasibility of, so keeping a page that drags a node at 60 fps next to one that
+  // actually plans a mission would be keeping the prototype after the product.
   if (route.name === 'scene') return <ScenePage />;
 
   return (

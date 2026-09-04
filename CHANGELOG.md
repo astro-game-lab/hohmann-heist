@@ -12,6 +12,36 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **The planner (#103, #123, #127, #128, #130, #131, #132, #143).** §8.3.4's five regions — HUD
+  bar, timeline, plan panel, readouts and assist tray — around the orbit view, in one component
+  tree at every width. The wide arrangement is a grid and the narrow one a tab strip, but the
+  panels are the *same instances* at both, so rotating a phone cannot unmount them and take the
+  plan, the selection or the scrub position with it. The timeline sits outside the tab strip in
+  both, as §8.3.4 requires.
+- **§8.5.1's state machine, with illegal transitions that do not compile (#143).** One function
+  per edge, each taking the states that edge legally leaves, so `releaseDrag(IDLE)` is a type
+  error rather than a run-time no-op. COMMITTED is reachable only with a `Legality` the caller has
+  narrowed to `commitAllowed: true`, which makes §6.4's gate the reason the call compiles rather
+  than a condition inside it. SCRUBBING is orthogonal — a field, not a phase — and `scrubTo`
+  returns the same `plan` object it was handed, so FR-403's "never mutates the plan" is asserted
+  by reference identity.
+- **Auto-framing driven from application state (#103).** Manual pan or zoom suspends it until the
+  ⌖ recentre, the ease runs against the caller's clock over `REFRAME_DURATION_SECONDS` with a long
+  frame landing exactly on the target rather than overshooting, and `prefers-reduced-motion`
+  collapses it to one frame. The union is assembled per frame from the real content — every
+  tessellated arc, the target orbit and Earth's disc — rather than from a fixture.
+- **DEP-07 — node snapping to the nearest apsis within 30 s**, in `@hh/game/snap`, disableable
+  from the assist tray. Its `docs/PHYSICS.md` row moves from planned to implemented and records
+  that the node-crossing half is deliberately absent: every v1.0 contract is equatorial-equivalent,
+  so the line of nodes is undefined.
+
+### Removed
+- **The M1 spike page (`apps/web/src/spike/`, #238)** and its route, nav entry, catalogue key and
+  ESLint exemption. It existed to prove a node could be dragged at 60 fps before there was a
+  planner to drag one in; the planner is that, so keeping it would be keeping the prototype after
+  the product. Its measurement — a 45 m/s Δv edit moves the drawn trajectory 5.455 px at LEO —
+  is what the readouts and the node editor exist to carry, and it survives in `docs/SPIKE-M1.md`.
+
 - **The application shell, the contract briefing, and the save (#117, #120, #183).** Hash routing
   over §8.2's whole table, with a screen frame that moves focus to the new heading on every route
   change — a hash change replaces the document body and leaves focus on a link that no longer

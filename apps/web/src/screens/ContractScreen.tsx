@@ -8,10 +8,9 @@
  * ago is not a thing anyone wants a history entry for, and §8.3.3's "no loading screen"
  * only means anything if ACCEPT does not go through the router at all.
  *
- * The planner is #123 and the eleven issues around it, and it is PR 5 of this milestone.
- * Until it lands, accepting reaches a placeholder — which is still worth having, because
- * it is what makes the `Enter` binding, the attempt count and the save write observable
- * end to end.
+ * Accepting swaps the briefing for the planner in place. Nothing navigates, so there is
+ * no router round trip, no second parse of the contract and no frame in which the screen
+ * is empty — which is what makes §8.3.3's "no loading screen" true rather than asserted.
  */
 import type { LoadedScenario } from '@hh/game';
 import type { Catalogue } from '@hh/ui';
@@ -19,6 +18,7 @@ import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
 
 import type { ContractProgress } from '../save/index.js';
+import { PlannerScreen } from '../planner/PlannerScreen.js';
 import { Briefing } from './Briefing.js';
 
 export interface ContractScreenProps {
@@ -40,11 +40,7 @@ export const ContractScreen = ({
   const [accepted, setAccepted] = useState(false);
 
   if (accepted) {
-    return (
-      <p data-testid="planner-placeholder" class="hh-briefing__planner">
-        {t('screen.notBuiltYet', {})}
-      </p>
-    );
+    return <PlannerScreen t={t} resolveDynamic={resolveDynamic} scenario={scenario} />;
   }
 
   return (

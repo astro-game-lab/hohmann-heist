@@ -168,14 +168,11 @@ export default defineConfig([
   // `id`, `href`, `class`, `data-*`, `type` -- is machinery.
   {
     files: ['apps/web/**/*.tsx', 'packages/ui/**/*.tsx'],
-    // Two throwaway development instruments, each deleted whole when the planner
-    // screen replaces it, and each taking its line here with it.
+    // One throwaway development instrument, deleted whole when it has served its
+    // purpose and taking its line here with it. The M1 spike (#238) was the other, and
+    // it went with the planner that replaced it.
     //
-    // The M1 spike (#238): its readout is a measurement instrument rather than a
-    // screen, and translating a number that exists to be read off a stopwatch would
-    // be ceremony with no reader.
-    //
-    // The orbit-scene harness (M2 PR 3): the same argument, and one more. Its
+    // The orbit-scene harness (M2 PR 3): its
     // controls are named after the thing they vary — "device pixel ratio",
     // "greyscale" — so that a developer checking #115's cap or §8.3.4's fifth
     // principle can find the slider. They are not addressed to a player, they will
@@ -184,7 +181,7 @@ export default defineConfig([
     // draws over the canvas are a different matter and do go through the
     // catalogue** — that is the point of the harness, and `ScenePage.tsx` resolves
     // every one of them through `@hh/ui`.
-    ignores: ['apps/web/src/spike/**', 'apps/web/src/scene-harness/**'],
+    ignores: ['apps/web/src/scene-harness/**'],
     rules: {
       'no-restricted-syntax': [
         'error',

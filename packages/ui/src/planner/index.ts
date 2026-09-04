@@ -53,3 +53,6 @@ export {
   updateDeltaVDrag,
   updateEpochDrag,
 } from './machine.js';
+
+export type { ApproachReadout, OrbitReadout } from './readouts.js';
+export { approachReadout, orbitReadout } from './readouts.js';

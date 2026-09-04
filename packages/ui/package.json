@@ -12,6 +12,7 @@
     "@hh/astro": "workspace:*",
     "@hh/game": "workspace:*",
     "@hh/math": "workspace:*",
+    "@hh/propagation": "workspace:*",
     "@hh/sim": "workspace:*"
   }
 }

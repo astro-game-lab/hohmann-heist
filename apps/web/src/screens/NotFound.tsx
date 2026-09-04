@@ -8,7 +8,7 @@
  *
  * It is reachable in ordinary use, not only by typo. Hash routing means an old shared
  * link keeps its path after the route table changes, and every throwaway route in this
- * build (`/spike`, `/scene`) is a link that will one day stop resolving. A blank screen
+ * build (`/scene`) is a link that will one day stop resolving. A blank screen
  * on any of those reads as a broken game.
  *
  * The path is echoed back because the alternative is a screen that cannot be acted on:

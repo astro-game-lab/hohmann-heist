@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An [astro-game-lab](https://github.com/astro-game-lab) game. The org builds games where orbits are propagated rather than animated, and where the simulation is expected to agree with a textbook.
 
-**Status: M0 of eight — the foundations, not the game.** There is nothing playable. `@hh/math`, `@hh/astro`, `@hh/propagation` and `@hh/render` hold real code, and `@hh/sim` holds the plan and its evaluation — nodes, quantisation, impulsive Δv, replay codes, and the timeline that turns a plan into a trajectory; `game` and `ui` are empty placeholders; `apps/web` is a routing skeleton with no screens. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
+**Status: M2 of eight — the vertical slice, in progress.** Nothing can be played to a conclusion: there is no execution phase and no debrief. What exists is a planner. `@hh/math`, `@hh/astro`, `@hh/propagation` and `@hh/render` hold real code; `@hh/sim` holds the plan and its evaluation — nodes, quantisation, impulsive Δv, replay codes, and the timeline that turns a plan into a trajectory; `@hh/game` holds objectives, constraints, legality, the scenario format and every DEP-xx; `@hh/ui` holds the message catalogue and §8.5.1's state machine; `apps/web` holds the routing shell, the briefing, the save and the planner screen. `README.md` describes what exists at any given time and is kept honest — trust it over any assumption about what has landed.
 
 ## The three documents
 
@@ -34,8 +34,8 @@ A pnpm workspace: seven packages under one application.
 ```
 apps/web               Vite + Preact, hash routing, composition only
   ├── @hh/render       canvas 2-D, camera, orbit tessellation
-  ├── @hh/ui           Preact components, palettes, a11y       (empty)
-  └── @hh/game         rules, scenarios, scoring, every DEP-xx (empty)
+  ├── @hh/ui           message catalogue, §8.5.1's state machine, readouts
+  └── @hh/game         rules, scenarios, scoring, every DEP-xx
         └── @hh/sim    plan, timeline, quantisation, replay
               ├── @hh/propagation   universal-variable propagation, arcs, DOP853 oracle
               ├── @hh/astro         constants, time, frames, elements, Kepler, Lambert
