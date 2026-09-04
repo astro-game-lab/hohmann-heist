@@ -230,13 +230,24 @@ export const buildScene = (request: SceneRequest): SceneResult => {
   const labels: LabelSpec[] = [];
   const constraintGeometry: Primitive[] = [];
 
-  // Apsis ticks on every orbit shown (§9.3), suppressed below the eccentricity floor by
-  // `apsisMarkers` itself.
+  // Apsis ticks on **every orbit shown** (§9.3) — which means the planned arcs too, not
+  // just the current and target orbits. That distinction is not pedantic: in a transfer
+  // contract the starting orbit and the target are both circular and have no apsides at
+  // all, while the transfer ellipse between them is the one place an apoapsis exists and
+  // the one the player is actually steering by. Drawing only the endpoints would suppress
+  // every marker in the scene and look like the feature was not working.
+  //
+  // `apsisMarkers` applies the eccentricity floor itself, so a circular arc contributes
+  // nothing here and needs no special case.
+  //
   // `OrbitShape` rather than `ClassicalElements`: an arc's elements carry a `degeneracy`
   // tag and a marker's do not, and nothing here needs it — apsis geometry is a function of
-  // the shape alone, and `apsisMarkers` decides the degenerate case from eccentricity.
+  // the shape alone.
   const withApsides: readonly { elements: OrbitShape; id: string }[] = [
-    { elements: timeline.arcs[0]?.elements ?? request.ship.elements, id: 'current' },
+    ...timeline.arcs.map((arc, index) => ({
+      elements: arc.elements,
+      id: index === 0 ? 'current' : `arc-${String(index)}`,
+    })),
     ...(request.targetOrbit === undefined
       ? []
       : [{ elements: request.targetOrbit.elements, id: 'target' }]),

@@ -23,6 +23,7 @@ import { createCatalogue } from '@hh/ui';
 import { useEffect, useState } from 'preact/hooks';
 
 import { hrefFor, onRouteChange, parseHash, type Route } from './router.js';
+import { ScenePage } from './scene-harness/ScenePage.js';
 import { SpikePage } from './spike/SpikePage.js';
 
 /**
@@ -72,6 +73,7 @@ export const App = (): preact.JSX.Element => {
   // The one hook the spike has into the app. Deleting `src/spike/` and these two lines
   // removes it completely — #238 asks for a page nothing inherits from.
   if (route.name === 'spike') return <SpikePage />;
+  if (route.name === 'scene') return <ScenePage />;
 
   return (
     <main>
