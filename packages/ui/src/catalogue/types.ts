@@ -453,6 +453,105 @@ export interface UiMessageParams {
   readonly 'save.problem.unreadable': Record<string, never>;
   readonly 'save.problem.futureVersion': { readonly found: number; readonly supported: number };
   readonly 'save.problem.unknownVersion': { readonly found: number; readonly supported: number };
+
+  // ── Execution (§8.3.8, #144, #145, #146) ──────────────────────────────────
+  readonly 'execution.region.orbitView': Record<string, never>;
+  readonly 'execution.region.hud': Record<string, never>;
+
+  /** The playback rate, as the HUD shows it. DEP-05's *"current rate is visible"*. */
+  readonly 'execution.speed.label': Record<string, never>;
+  readonly 'execution.speed.option': { readonly multiplier: number };
+  readonly 'execution.speed.current': { readonly multiplier: number };
+
+  readonly 'execution.control.pause': Record<string, never>;
+  readonly 'execution.control.resume': Record<string, never>;
+  readonly 'execution.control.skip': Record<string, never>;
+  readonly 'execution.control.abort': Record<string, never>;
+  /**
+   * Why pausing does not offer an edit (§8.3.8).
+   *
+   * Shown beside Abort when the run is paused. Without it the absence of an edit control
+   * reads as an oversight; with it, it reads as the promise it is.
+   */
+  readonly 'execution.paused.notice': Record<string, never>;
+
+  readonly 'execution.progress.label': Record<string, never>;
+  readonly 'execution.progress.at': { readonly metSeconds: number; readonly ofSeconds: number };
+
+  /** §8.3.8's burn cue: the Δv flashed on the HUD as a burn fires. */
+  readonly 'execution.burn.flash': { readonly index: number; readonly deltaVMps: number };
+
+  readonly 'execution.log.heading': Record<string, never>;
+  readonly 'execution.log.label': { readonly count: number };
+  readonly 'execution.log.empty': Record<string, never>;
+  /** The live region's coalesced line when a step crossed more than it could speak. */
+  readonly 'execution.announce.summary': { readonly count: number };
+  readonly 'execution.announce.label': Record<string, never>;
+
+  // ── Debrief (§8.3.9, FR-304, FR-305, FR-307, #121) ────────────────────────
+  readonly 'debrief.heading.success': { readonly index: number; readonly title: string };
+  readonly 'debrief.heading.failure': { readonly index: number; readonly title: string };
+  /** §6.7's medals. A key per medal would be four keys saying the same shape. */
+  readonly 'debrief.medal': { readonly medal: string };
+  readonly 'debrief.medal.none': Record<string, never>;
+
+  readonly 'debrief.table.label': Record<string, never>;
+  readonly 'debrief.column.quantity': Record<string, never>;
+  readonly 'debrief.column.you': Record<string, never>;
+  readonly 'debrief.column.par': Record<string, never>;
+  readonly 'debrief.column.best': Record<string, never>;
+  readonly 'debrief.column.delta': Record<string, never>;
+
+  readonly 'debrief.row.deltaV': Record<string, never>;
+  readonly 'debrief.row.time': Record<string, never>;
+  readonly 'debrief.row.burns': Record<string, never>;
+
+  readonly 'debrief.value.deltaV': { readonly mps: number };
+  readonly 'debrief.value.time': { readonly seconds: number };
+  readonly 'debrief.value.burns': { readonly count: number };
+  readonly 'debrief.value.delta': { readonly fraction: number };
+  /** A quantity that does not exist — a personal best on a first completion. */
+  readonly 'debrief.value.absent': Record<string, never>;
+
+  readonly 'debrief.closest': {
+    readonly achievedM: number;
+    readonly neededM: number;
+    readonly metSeconds: number;
+  };
+
+  readonly 'debrief.whatHappened': Record<string, never>;
+  /**
+   * FR-307's fallback, said out loud.
+   *
+   * The debrief showing bare numbers and *nothing else* would read as a screen that
+   * failed to load. This says the numbers are the answer: the game does not know why,
+   * and will not guess.
+   */
+  readonly 'debrief.noDiagnosis': Record<string, never>;
+
+  readonly 'debrief.missed': Record<string, never>;
+  /** §8.3.9's failure block is labelled rows, so each row has a label as well as a value. */
+  readonly 'debrief.miss.label.closest': Record<string, never>;
+  readonly 'debrief.miss.label.needed': Record<string, never>;
+  readonly 'debrief.miss.label.deltaV': Record<string, never>;
+  readonly 'debrief.miss.closest': { readonly rangeM: number; readonly metSeconds: number };
+  readonly 'debrief.miss.needed': { readonly rangeM: number };
+  readonly 'debrief.miss.deltaV': { readonly usedMps: number; readonly budgetMps: number };
+
+  /** D12, FR-305: the player beat our optimum, so our optimum is the thing to fix. */
+  readonly 'debrief.beatPar': { readonly byMps: number };
+  readonly 'debrief.beatPar.report': Record<string, never>;
+
+  readonly 'debrief.action.retry': Record<string, never>;
+  readonly 'debrief.action.next': Record<string, never>;
+  readonly 'debrief.action.share': Record<string, never>;
+  readonly 'debrief.action.board': Record<string, never>;
+  /** Why NEXT is unavailable: this build ships one contract. */
+  readonly 'debrief.next.none': Record<string, never>;
+  /** §11.6's code, copied. Not a URL until the share-URL generator lands (M6). */
+  readonly 'debrief.share.copied': Record<string, never>;
+  readonly 'debrief.share.failed': Record<string, never>;
+  readonly 'debrief.share.hint': Record<string, never>;
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

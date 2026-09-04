@@ -99,6 +99,63 @@ export interface GameMessageParams {
   /** `L6` — the objective is not met anywhere in the timeline. A warning, never a block. */
   readonly 'legality.l6.objectiveNotMet': Record<string, never>;
 
+  // ── The flight log (FR-604, §8.3.8, #146) ─────────────────────────────────
+  //
+  // Every entry carries `metSeconds` even though the entry itself already has it as a
+  // field, because a message must be renderable from its parameters alone: the
+  // catalogue is handed a key and a bag of values, not the record they came from.
+
+  /** The run begins. `burnCount` lets the opening line say what is coming. */
+  readonly 'flightLog.ignition': { readonly burnCount: number };
+  /** A burn fired. `index` is 1-based — it is read by a player, not indexed by code. */
+  readonly 'flightLog.burn': {
+    readonly index: number;
+    readonly deltaVMps: number;
+    /** The signed along-track component (DEP-10's "prograde"), which is what §8.3.8 shows. */
+    readonly progradeMps: number;
+    readonly metSeconds: number;
+  };
+  /** Periapsis passage. Altitude above the scenario's reference radius, in metres. */
+  readonly 'flightLog.periapsis': { readonly altitudeM: number; readonly metSeconds: number };
+  /** Apoapsis passage. */
+  readonly 'flightLog.apoapsis': { readonly altitudeM: number; readonly metSeconds: number };
+  /** A revolution completed. `index` counts across the whole mission, from 1. */
+  readonly 'flightLog.revolution': {
+    readonly index: number;
+    readonly periodSeconds: number;
+    readonly metSeconds: number;
+  };
+  /** A constraint began to be violated. `kind` is a `ConstraintKind` identifier, not prose. */
+  readonly 'flightLog.constraintEnter': { readonly kind: string; readonly metSeconds: number };
+  /** A constraint stopped being violated. */
+  readonly 'flightLog.constraintExit': {
+    readonly kind: string;
+    readonly metSeconds: number;
+    readonly durationSeconds: number;
+  };
+  /** The closest the ship came to the target over the whole horizon. */
+  readonly 'flightLog.closestApproach': {
+    readonly rangeM: number;
+    readonly relativeSpeedMps: number;
+    readonly metSeconds: number;
+  };
+  /** The objective was satisfied, at an epoch that is not the closest approach. */
+  readonly 'flightLog.objectiveMet': { readonly metSeconds: number };
+  /** The horizon: prediction stops here, and so does the run (§6.3). */
+  readonly 'flightLog.end': { readonly metSeconds: number };
+
+  // ── The debrief's diagnosis (FR-307, §8.3.9, #121) ────────────────────────
+  //
+  // One rule this milestone; #83 adds the rest. An unmatched outcome produces no
+  // message at all rather than a vague one — see `outcome.ts`.
+
+  /** The objective was achieved, but after the contract's deadline. */
+  readonly 'debrief.diagnosis.pastDeadline': {
+    readonly metSeconds: number;
+    readonly deadlineSeconds: number;
+    readonly lateSeconds: number;
+  };
+
   // ── Plans that have no timeline at all ────────────────────────────────────
   /** A burn left position and velocity parallel; there is no orbital plane to continue on. */
   readonly 'legality.plan.rectilinear': { readonly nodeIndex: number };

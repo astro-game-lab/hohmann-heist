@@ -12,7 +12,27 @@ import { MU_EARTH, epoch, rtn, stateFromElements } from '@hh/astro';
 import type { MetresPerSec } from '@hh/math';
 import { V, metres, metresPerSec, radians } from '@hh/math';
 import type { ManeuverNode, Plan, Timeline, TimelineResult } from '@hh/sim';
+import type { GameMessage, GameMessageKey, GameMessageOf } from './messages.js';
 import { EMPTY_PLAN, buildTimeline, createManeuverNode, createPlan } from '@hh/sim';
+
+/**
+ * Narrow a message to one key, failing the test rather than asserting the check away.
+ *
+ * `GameMessage` is distributed over its keys, so narrowing on a *literal* key works
+ * perfectly at a call site — `message.key === 'flightLog.burn'` gives the right
+ * parameters. What TypeScript cannot do is narrow by a **generic** key, which is what a
+ * shared helper needs, so the assertion below is discharged at run time and the cast
+ * records exactly that. The alternative — indexing `params` with a string at every call
+ * site — loses the parameter types entirely, which is the thing worth keeping.
+ */
+export const messageOf = <K extends GameMessageKey>(
+  message: GameMessage | undefined,
+  key: K,
+): GameMessageOf<K> => {
+  if (message === undefined) throw new Error(`expected a "${key}" message, got none`);
+  if (message.key !== key) throw new Error(`expected "${key}", got "${message.key}"`);
+  return message as GameMessageOf<K>;
+};
 
 /** Narrow away `undefined`, failing the test rather than asserting it away. */
 export const definitely = <T>(value: T | undefined): T => {

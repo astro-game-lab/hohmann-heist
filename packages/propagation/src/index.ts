@@ -40,6 +40,9 @@ export { DEFAULT_MAX_ITERATIONS, DEFAULT_TOLERANCE_SECONDS } from './events.js';
 export type { ApsisEvent, ApsisKind } from './apsis.js';
 export { APSIS_ECCENTRICITY_FLOOR, findApsisCrossings } from './apsis.js';
 
+export type { RevolutionEvent } from './revolution.js';
+export { findRevolutions } from './revolution.js';
+
 export type { ShellCrossing, ShellCrossingDirection } from './shell.js';
 export { SHELL_CIRCULAR_FLOOR, findShellCrossings, findShellIntervals } from './shell.js';
 

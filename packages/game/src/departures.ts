@@ -160,9 +160,9 @@ export const DEPARTURES: readonly Departure[] = Object.freeze([
   {
     id: 'DEP-05',
     summary: 'Time acceleration during execution, up to 100 000×',
-    module: null,
+    module: '@hh/ui/execution/playback',
     layer: 'above-core',
-    status: 'planned',
+    status: 'active',
     visibility: 'player-visible',
   },
   {
@@ -229,9 +229,9 @@ export const DEPARTURES: readonly Departure[] = Object.freeze([
   {
     id: 'DEP-12',
     summary: 'Par values are the best known, not the proven optimum',
-    module: null,
+    module: '@hh/game/outcome',
     layer: 'above-core',
-    status: 'planned',
+    status: 'active',
     visibility: 'player-visible',
   },
   {

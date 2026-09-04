@@ -19,7 +19,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { contractById } from '../contracts/registry.js';
-import { PlannerScreen } from './PlannerScreen.js';
+import { PlannerScreen, type CommittedRun } from './PlannerScreen.js';
 
 const catalogue = createCatalogue();
 let container: HTMLElement;
@@ -30,13 +30,20 @@ const c03 = (): NonNullable<ReturnType<typeof contractById>> => {
   return scenario;
 };
 
+/** What `onCommit` was called with, or `null` if it has not been. */
+let committed: CommittedRun | null = null;
+
 const mount = async (): Promise<void> => {
+  committed = null;
   await act(() => {
     render(
       <PlannerScreen
         t={catalogue.resolve}
         resolveDynamic={catalogue.resolveDynamic}
         scenario={c03()}
+        onCommit={(run) => {
+          committed = run;
+        }}
       />,
       container,
     );
@@ -520,7 +527,7 @@ describe('keyboard editing (#134, #135, §8.5.3)', () => {
 });
 
 describe('commit (#139)', () => {
-  it('is offered, and reaches the machine’s terminal state', async () => {
+  it('is offered, and hands the run to execution', async () => {
     await mount();
     await press('n');
     const commit = el('commit');
@@ -528,9 +535,29 @@ describe('commit (#139)', () => {
     if ((commit as HTMLButtonElement).disabled) return;
 
     await click('commit');
-    // §8.5.1's exit to EXECUTION. That phase is #121 and PR 6, so it reaches the same
-    // honest placeholder every unbuilt route does.
-    expect(el('planner-committed')).not.toBeNull();
+
+    // §8.5.1's exit to EXECUTION. The plan and its **evaluation** both cross, which is
+    // FR-601: execution plays back the timeline the planner already solved, so handing
+    // over the plan alone would leave the next screen to recompute it.
+    const run: CommittedRun | null = committed;
+    expect(run).not.toBeNull();
+    expect(run?.plan.nodes).toHaveLength(1);
+    expect(run?.evaluation.timeline).not.toBeNull();
+  });
+
+  it('carries the scrub head and the selection, so aborting can restore them', async () => {
+    // #145's last criterion. The planner does not restore them itself — it reports them,
+    // and `ContractScreen` seeds the next planner with what came back.
+    await mount();
+    await press('n');
+    await press(']');
+    const commit = el('commit');
+    if (commit === null || (commit as HTMLButtonElement).disabled) return;
+
+    await click('commit');
+    const run: CommittedRun | null = committed;
+    expect(run?.selectedNodeId).not.toBeNull();
+    expect(run?.scrubEpoch).toBeGreaterThan(c03().startEpoch);
   });
 });
 
