@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./canvas2d": "./src/canvas2d.ts",
-    "./resize": "./src/resize.ts"
+    "./resize": "./src/resize.ts",
+    "./labels": "./src/labels.ts"
   },
   "dependencies": {
     "@hh/astro": "workspace:*",
