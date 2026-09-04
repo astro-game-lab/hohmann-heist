@@ -201,6 +201,18 @@ export {
   hasDistinctApsides,
 } from './apsis.js';
 
+export type { LabelAnchor, LabelLayer, LabelLayerStats, LabelSpec } from './label-spec.js';
+export {
+  CULL_MARGIN_PX,
+  LABEL_CLASS,
+  MAX_LABELS,
+  isOnScreen,
+  labelTransform,
+} from './label-spec.js';
+
+export type { ResolveMessage, SceneRequest, SceneResult } from './scene.js';
+export { buildScene } from './scene.js';
+
 export type { CacheStats, TessellationCache } from './cache.js';
 export {
   BUCKETS_PER_OCTAVE,
