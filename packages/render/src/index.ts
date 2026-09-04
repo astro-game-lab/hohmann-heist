@@ -8,15 +8,22 @@
  * compiles against its own `tsconfig.json` with the DOM library rather than the root
  * project's, which deliberately has none. `pnpm typecheck` runs both.
  *
- * **The Canvas2D implementation is deliberately absent from this barrel.** It lives
- * behind the `@hh/render/canvas2d` subpath, because it is the only part of this package
- * that needs a DOM: the `Renderer` interface, the camera and the tessellator are plain
+ * **The browser-facing modules are deliberately absent from this barrel.** The Canvas2D
+ * implementation lives behind `@hh/render/canvas2d` and the viewport observer behind
+ * `@hh/render/resize`, because they are the only parts of this package that need a DOM: the `Renderer` interface, the camera and the tessellator are plain
  * geometry over plain numbers. Keeping them reachable without the DOM is what lets the
  * benchmark suite under `tools/` measure the tessellator, lets the geometry be tested
  * under Node, and would let it run in a Worker — and it is checked rather than asserted,
  * because the root TypeScript project has no DOM library and does compile everything
  * this barrel reaches. Re-exporting `createCanvas2DRenderer` here would break all three
  * at once, and the failure would be a type error in a file nobody had touched.
+ *
+ * `resize.ts` is a slightly different case worth naming: its platform types are
+ * structural, so it would in fact compile without the DOM library. It stays behind a
+ * subpath anyway, because `observeViewport` reaches for `globalThis.window` and
+ * `globalThis.ResizeObserver` at run time when its defaults are taken. A module that
+ * needs a browser to *work* belongs with the one that needs a browser to *compile*,
+ * whatever the type checker can see.
  *
  * It costs consumers nothing that D7 cares about. The interface a consumer writes
  * against is here; only the line that constructs the concrete renderer names the
@@ -50,6 +57,19 @@ export {
   backingStoreScale,
   layersInDrawOrder,
 } from './renderer.js';
+
+export type { BackingStoreSize } from './viewport.js';
+export {
+  backingStoreSize,
+  cssToDevice,
+  deviceToCss,
+  resized,
+  sameViewport,
+  withDevicePixelRatio,
+} from './viewport.js';
+
+export type { Coastlines } from './coastlines.js';
+export { COASTLINES, decodeCoastlines } from './coastlines.js';
 
 export type { Camera, ViewBasis, ViewBounds } from './camera.js';
 export {
