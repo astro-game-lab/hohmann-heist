@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { App } from './app.js';
 import { SCREEN_TRANSITION_MS, type MotionMediaQuery } from './motion.js';
+import { SAVE_KEY } from './save/index.js';
 
 let container: HTMLElement;
 
@@ -37,6 +38,9 @@ const text = (testId: string): string => el(testId)?.textContent ?? '';
 
 beforeEach(() => {
   window.location.hash = '';
+  // The app reads the save on its first render, so a test that left one behind would
+  // hand the next one somebody else's attempt count.
+  localStorage.removeItem(SAVE_KEY);
   container = document.createElement('div');
   document.body.append(container);
 });
@@ -78,14 +82,18 @@ describe('routing', () => {
     }
   });
 
-  // P3's deep links. The heading carries the captured segment, which is what makes
-  // "resolved from a cold load" observable before the screen that consumes it exists.
-  it('resolves a deep link from a cold load', async () => {
+  // P3's deep links: no navigation happened, the hash was read at start-up, and the
+  // screen the URL named is the one that rendered — with the contract's own content on
+  // it, not a shell waiting for a fetch.
+  it('resolves a contract deep link from a cold load', async () => {
     window.location.hash = '#/contract/c03-cold-open';
     await mount();
-    expect(text('screen-heading')).toContain('c03-cold-open');
+    expect(text('screen-heading')).toBe('Contract 03 — “Cold Open”');
+    expect(text('brief')).toContain('KESTREL-2');
   });
 
+  // The Codex screen is #150's; its heading carrying the captured slug is what makes the
+  // deep link checkable before the screen that consumes it exists.
   it('resolves a Codex deep link from a cold load', async () => {
     window.location.hash = '#/codex/phasing';
     await mount();
@@ -198,5 +206,106 @@ describe('the workspace', () => {
     const heading = text('screen-heading');
     expect(heading).not.toContain('⟦');
     expect(heading.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('the contract route', () => {
+  const CONTRACT = '#/contract/c03-cold-open';
+
+  it('renders the briefing for a contract that ships', async () => {
+    window.location.hash = CONTRACT;
+    await mount();
+    expect(el('screen')?.dataset['screen']).toBe('contract');
+    expect(text('brief')).toContain('KESTREL-2');
+  });
+
+  // The heading is the contract's own, which is also what makes a deep link's success
+  // visible: "Contract 03" could not be rendered without the file having been read.
+  it('titles the screen with the contract’s number and name', async () => {
+    window.location.hash = CONTRACT;
+    await mount();
+    expect(text('screen-heading')).toBe('Contract 03 — “Cold Open”');
+  });
+
+  it('renders a not-found body for an id that does not ship', async () => {
+    window.location.hash = '#/contract/c99-nope';
+    await mount();
+    expect(text('unknown-contract')).toContain('c99-nope');
+    expect(el('brief')).toBeNull();
+  });
+
+  // §8.3.3: "straight to the planner; no loading screen". One route, two screens — so
+  // accepting is a state change rather than a navigation, and the hash does not move.
+  it('goes straight to the planner on ACCEPT, without navigating', async () => {
+    window.location.hash = CONTRACT;
+    await mount();
+    await act(() => {
+      el('accept')?.click();
+    });
+    expect(el('planner-placeholder')).not.toBeNull();
+    expect(el('brief')).toBeNull();
+    expect(window.location.hash).toBe(CONTRACT);
+  });
+
+  it('accepts on Enter, from wherever the route change left focus', async () => {
+    window.location.hash = '#/';
+    await mount();
+    await goTo(CONTRACT);
+    await act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(el('planner-placeholder')).not.toBeNull();
+  });
+});
+
+/** The save, read and written through the screen that first has something to record. */
+describe('progress', () => {
+  const CONTRACT = '#/contract/c03-cold-open';
+
+  it('starts at no best and no attempts', async () => {
+    window.location.hash = CONTRACT;
+    await mount();
+    expect(text('record')).toContain('best: —');
+    expect(text('record')).toContain('attempts: 0');
+  });
+
+  it('counts an accepted briefing and persists it', async () => {
+    window.location.hash = CONTRACT;
+    await mount();
+    await act(() => {
+      el('accept')?.click();
+    });
+
+    // Remounting is the honest version of a reload: the app re-reads the save.
+    render(null, container);
+    await mount();
+    expect(text('record')).toContain('attempts: 1');
+    expect(localStorage.getItem(SAVE_KEY)).toContain('"attempts":1');
+  });
+});
+
+describe('a save that cannot be read', () => {
+  it('says so, and the game still works', async () => {
+    localStorage.setItem(SAVE_KEY, 'mangled');
+    window.location.hash = '#/contract/c03-cold-open';
+    await mount();
+
+    expect(text('save-notice')).toContain('Nothing has been overwritten');
+    // Still playable, with an empty save behind it (FR-702).
+    expect(text('brief')).toContain('KESTREL-2');
+    expect(text('record')).toContain('attempts: 0');
+    // And still there — the game did not repair itself over the top of it.
+    expect(localStorage.getItem(SAVE_KEY)).toBe('mangled');
+  });
+
+  it('names the version when a newer build wrote it', async () => {
+    localStorage.setItem(SAVE_KEY, '{"v":9,"contracts":{}}');
+    await mount();
+    expect(text('save-notice')).toContain('newer version');
+  });
+
+  it('says nothing when there is nothing wrong', async () => {
+    await mount();
+    expect(el('save-notice')).toBeNull();
   });
 });

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hh/astro": "workspace:*",
+    "@hh/game": "workspace:*",
     "@hh/math": "workspace:*",
     "@hh/render": "workspace:*",
     "@hh/sim": "workspace:*",

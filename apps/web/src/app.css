@@ -61,3 +61,110 @@
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }
+
+/*
+ * The visually-hidden pattern.
+ *
+ * Not `display: none` and not `visibility: hidden` — both remove the element from the
+ * accessibility tree, which is the opposite of what this is for. The clip-rect idiom
+ * leaves the text in the tree and out of the layout, and is what makes §8.3.3's SI value
+ * reach a screen reader without putting it on screen twice.
+ */
+.hh-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The briefing (§8.3.3).
+ *
+ * Structure only, again: the boxed-document look in §8.3.3's mock is §9.2's typography
+ * and #99's tokens, and guessing at it here would be work to undo. What is here is the
+ * two-column block that makes the numbers scan as label/value pairs, which is a
+ * *structural* claim about the screen rather than a stylistic one.
+ */
+.hh-briefing__numbers,
+.hh-briefing__setup dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0;
+}
+
+.hh-briefing__numbers dd,
+.hh-briefing__setup dd {
+  margin: 0;
+}
+
+.hh-briefing__meta {
+  display: flex;
+  gap: 24px;
+}
+
+.hh-briefing__brief {
+  max-width: 62ch;
+}
+
+.hh-briefing__constraints ul {
+  list-style: none;
+  padding: 0;
+}
+
+.hh-constraint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+ * `currentColor` and `stroke`, so the icon inherits whatever palette #99 lands on and
+ * survives a high-contrast mode. `fill: none` because these are line drawings; without it
+ * the browser fills every path black by default and the altitude-floor glyph becomes a
+ * solid block.
+ */
+.hh-constraint__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/*
+ * A dotted underline marks a value that has more behind it, so the tooltip is
+ * discoverable rather than something you find by accident. `help` rather than `pointer`:
+ * hovering explains, it does not navigate.
+ */
+.hh-quantity {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.hh-briefing__footer {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.hh-briefing__record {
+  display: flex;
+  gap: 12px;
+}
+
+.hh-save-notice {
+  max-width: 62ch;
+  padding: 8px 12px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}

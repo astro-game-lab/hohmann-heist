@@ -65,17 +65,7 @@ const samples: AllMessageParams = {
     limit: 1000,
   },
   'app.title': {},
-  'app.skeletonNotice': {},
   'app.routesLabel': {},
-  'app.currentRouteHeading': {},
-  'app.routeName': {},
-  'app.routePath': {},
-  'app.routeParams': {},
-  'app.simulationHeading': {},
-  'app.geoSpeedLabel': {},
-  'app.geoSpeedValue': { speedMps: 3074.66 },
-  'app.missionClockLabel': {},
-  'nav.title': {},
   'nav.board': {},
   'nav.contract': { index: 5 },
   'nav.daily': {},
@@ -95,12 +85,68 @@ const samples: AllMessageParams = {
   'screen.notFound.backToTitle': {},
   'screen.notBuiltYet': {},
   'brief.c03': {},
+  'client.withheld': {},
   'planner.handle.prograde': {},
   'planner.handle.radial': {},
   'planner.apsis.periapsis': { altitudeMetres: 412_300 },
   'planner.apsis.apoapsis': { altitudeMetres: 35_786_000 },
   'planner.closestApproach': { separationMetres: 311.4, relativeSpeedMps: 0.02 },
   'mark.c03.departureWindow': {},
+  'briefing.heading': { index: 3, title: 'Cold Open' },
+  'briefing.backToBoard': {},
+  'briefing.clientLabel': {},
+  'briefing.feeLabel': {},
+  'briefing.fee': { kilocredits: 6 },
+  'briefing.objectiveLabel': {},
+  'briefing.dvBudgetLabel': {},
+  'briefing.deadlineLabel': {},
+  'briefing.parLabel': {},
+  'briefing.setupLabel': {},
+  'briefing.shipLabel': {},
+  'briefing.constraintsLabel': {},
+  'briefing.dvBudget': { budgetMps: 300 },
+  'briefing.deadline': { seconds: 10_800 },
+  'briefing.par': { dvMps: 109.1177, timeSeconds: 4122.965, burns: 1 },
+  'briefing.objective.reachOrbit': {
+    periapsisAltitudeMetres: 400_000,
+    apoapsisAltitudeMetres: 800_000,
+  },
+  'briefing.objective.intercept': { target: 'KESTREL-2', rangeMetres: 1000 },
+  'briefing.objective.rendezvous': {
+    target: 'KESTREL-2',
+    rangeMetres: 100,
+    relativeSpeedMps: 0.5,
+  },
+  'briefing.objective.softRendezvous': {
+    target: 'KESTREL-2',
+    rangeMetres: 100,
+    relativeSpeedMps: 0.1,
+  },
+  'briefing.setup.circular': { altitudeMetres: 400_000 },
+  'briefing.setup.circularPhased': { altitudeMetres: 800_000, trueAnomalyRad: 0.244_346_095 },
+  'briefing.setup.ellipse': {
+    periapsisAltitudeMetres: 400_000,
+    apoapsisAltitudeMetres: 800_000,
+  },
+  'briefing.setup.ellipsePhased': {
+    periapsisAltitudeMetres: 400_000,
+    apoapsisAltitudeMetres: 800_000,
+    trueAnomalyRad: 0.244_346_095,
+  },
+  'briefing.constraint.altitudeFloor': { floorAltitudeM: 100_000 },
+  'briefing.recordNone': {},
+  'briefing.record': { bestDvMps: 109.2, medal: 'gold', attempts: 7 },
+  'briefing.attempts': { attempts: 7 },
+  'briefing.dailyVariant': { date: '2026-09-01' },
+  'briefing.leaderboardLink': {},
+  'briefing.locked': { act: 2 },
+  'briefing.accept': {},
+  'briefing.unknownContract': { id: 'c99-nope' },
+  'briefing.si.metresPerSecond': { metresPerSecond: 109.1177 },
+  'briefing.si.seconds': { seconds: 10_800 },
+  'save.problem.unreadable': {},
+  'save.problem.futureVersion': { found: 2, supported: 1 },
+  'save.problem.unknownVersion': { found: 0, supported: 1 },
 };
 
 const catalogue = createCatalogue();
@@ -234,8 +280,11 @@ describe('formatting follows the locale, not English', () => {
 
   it('formats a unit rather than appending one', () => {
     // The abbreviation and its position are both locale-dependent, so appending "m/s"
-    // in the message would decide both for every language at once.
-    expect(catalogue.resolve('app.geoSpeedValue', { speedMps: 3074.66 })).toBe('3074.66 m/s');
+    // in the message would decide both for every language at once. §8.3.3's SI tooltip is
+    // where the game does this most literally: the quantity, unrounded, with its unit.
+    expect(catalogue.resolve('briefing.si.metresPerSecond', { metresPerSecond: 3074.66 })).toBe(
+      '3074.66 m/s',
+    );
   });
 
   it('formats mission elapsed time through @hh/astro', () => {

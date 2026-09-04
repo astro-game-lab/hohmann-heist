@@ -50,6 +50,15 @@
       "$ref": "#/$defs/catalogueKey",
       "description": "Message-catalogue key for the briefing text (D14, FR-910). Never literal prose: contract text is translated and reviewed separately from contract logic."
     },
+    "clientKey": {
+      "$ref": "#/$defs/catalogueKey",
+      "description": "Message-catalogue key for the client's name, shown in the briefing (\u00a78.3.3). A key rather than a string for the same reason briefKey is one: \"withheld\" is prose. Omitted when the contract names no client."
+    },
+    "fee_kcr": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "The contract's fee in kilocredits (\u00a76.10). Credits do nothing but rank a career total; the fee is flavour with a number attached, which is why it is not a game rule and nothing evaluates it. Omitted when the contract pays nothing."
+    },
     "epoch": {
       "type": "object",
       "required": ["scale", "j2000Seconds"],

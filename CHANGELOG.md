@@ -12,6 +12,35 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **The application shell, the contract briefing, and the save (#117, #120, #183).** Hash routing
+  over §8.2's whole table, with a screen frame that moves focus to the new heading on every route
+  change — a hash change replaces the document body and leaves focus on a link that no longer
+  exists, which strands a keyboard user silently — and a §9.4 entry transition that collapses to
+  0 ms under `prefers-reduced-motion`. An unknown hash renders a not-found screen rather than a
+  blank one. The seven routes whose screens are other issues render a placeholder inside the real
+  frame, each showing its own heading and captured segment, so a deep link is checkable before the
+  screen that consumes it exists.
+- **The briefing (§8.3.3)** — the first screen that renders real content. Contract number and
+  title, client and fee, the brief from its catalogue key, objective, Δv budget, deadline and par
+  (**always shown**, D12), a row per §6.5 constraint, and the ship and target setup lines, all read
+  out of the contract's own JSON. Numbers arrive in SI and leave in display units through the
+  catalogue rather than through the component, because metres-to-kilometres is a locale decision as
+  much as a unit one; §8.3.3's SI tooltip is a `title` **and** a visually-hidden span, since a
+  `title` is invisible to touch and unreliable to a screen reader. ACCEPT is bound to `Enter` on the
+  document, because focus is on the heading when the route change hands it over. Contracts are
+  bundled and parsed at load, never fetched — that is what makes "no loading screen" true rather
+  than asserted.
+- **Versioned save data (FR-701, FR-703, §11.7).** One `localStorage` key, one JSON document, an
+  explicit migration chain of pure functions, and export/import that round-trips byte-identically
+  through a canonical form. A save from a newer build is **refused before it is read** and left
+  untouched: reading the fields we recognise and ignoring the rest is how a v2 save comes back as a
+  v1 save with no medals and then gets written back that way. Corrupt data is reported with its
+  bytes intact, quota-exceeded is a returned outcome rather than an exception, and every load hands
+  back a usable save so the game stays playable when storage does not work (FR-702).
+- **`clientKey` and `fee_kcr` on the scenario schema**, both optional, so §8.3.3's client and fee
+  lines have something to render. `clientKey` is a catalogue key for the same reason `briefKey` is
+  one — "withheld" is prose — and §13.4's brief-keys check now covers it, so a contract naming a
+  client nobody wrote fails the content suite.
 - **The orbit scene (#106–#111, #113–#115, #177, §9.3).** Everything the planner draws.
   Earth to scale with Natural Earth 1:110 m coastlines and a terminator derived from a Sun vector
   the game layer supplies; hazard shells that serve both the 100 km floor and §6.5's no-fly annulus
@@ -36,6 +65,17 @@ they relied on has moved.
   checked rather than asserted.
 
 ### Changed
+- **§11.7's ~15 kB figure covers the campaign, not the dailies.** A completed 18-contract campaign
+  measures 8 729 bytes, comfortably inside it, and eighteen 300-character replay codes are 5 400 of
+  those — so replay length is the number to watch, not the field count. A year of daily results is
+  **18 728 bytes on its own**, more than twice the campaign and past the stated budget with no
+  contracts at all. Nothing is done about it here; the test records it so that #163 and M7 decide
+  whether to prune with the number in front of them.
+- **The save's `daily` record is `{ days, streak }`**, where §11.7's sketch puts `"streak"` in among
+  the dates. A map whose values are either a result or a number has no useful type and forces every
+  reader to narrow, and `"streak"` is a legal key in the same namespace as the dates. §11.7 is a
+  jsonc illustration rather than a schema — its `settings` is a comment — and this is the one place
+  taking it literally would cost something permanent.
 - **`@hh/render` joins the NFR-022 coverage gate**, its stated condition ("once it holds code and
   has a browser-environment testing story") now being met. A `render-dom` Vitest project runs
   `*.dom.test.ts` under jsdom; the rest of the package stays under Node, deliberately.

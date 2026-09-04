@@ -86,6 +86,9 @@ importers:
       '@hh/astro':
         specifier: workspace:*
         version: link:../../packages/astro
+      '@hh/game':
+        specifier: workspace:*
+        version: link:../../packages/game
       '@hh/math':
         specifier: workspace:*
         version: link:../../packages/math

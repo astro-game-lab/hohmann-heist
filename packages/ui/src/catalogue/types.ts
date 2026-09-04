@@ -67,18 +67,7 @@ export interface MessageFormatters {
 /** Keys the UI owns, with their parameters. Rules' keys come from `@hh/game`. */
 export interface UiMessageParams {
   readonly 'app.title': Record<string, never>;
-  readonly 'app.skeletonNotice': Record<string, never>;
   readonly 'app.routesLabel': Record<string, never>;
-  readonly 'app.currentRouteHeading': Record<string, never>;
-  readonly 'app.routeName': Record<string, never>;
-  readonly 'app.routePath': Record<string, never>;
-  readonly 'app.routeParams': Record<string, never>;
-  readonly 'app.simulationHeading': Record<string, never>;
-  readonly 'app.geoSpeedLabel': Record<string, never>;
-  /** The value and its unit, together: a unit is formatting, not a word to append. */
-  readonly 'app.geoSpeedValue': { readonly speedMps: number };
-  readonly 'app.missionClockLabel': Record<string, never>;
-  readonly 'nav.title': Record<string, never>;
   readonly 'nav.board': Record<string, never>;
   readonly 'nav.contract': { readonly index: number };
   readonly 'nav.daily': Record<string, never>;
@@ -137,7 +126,136 @@ export interface UiMessageParams {
   // contract *logic* (§11.5). The scenario names the key; this is where the sentence
   // lives, and `tools/content/content.test.ts` fails a contract whose key is not here.
   readonly 'brief.c03': Record<string, never>;
+  /**
+   * A contract's client (§8.3.3), named by `clientKey` in the scenario.
+   *
+   * A key rather than a string for the same reason `briefKey` is one — "withheld" is
+   * prose — and shared rather than one per contract, because most of them are withheld
+   * and a key nobody has to invent is a key nobody gets wrong.
+   */
+  readonly 'client.withheld': Record<string, never>;
   readonly 'mark.c03.departureWindow': Record<string, never>;
+
+  // ── The briefing (§8.3.3, #120) ────────────────────────────────────────────
+  //
+  // Every number the briefing shows arrives here in **SI** and leaves in display units.
+  // That split is the whole reason these are messages rather than values formatted in the
+  // component: metres in, kilometres out, is a locale decision as much as a unit one —
+  // the separator, the grouping and the abbreviation's position all change with the
+  // language, and none of them is the screen's business.
+  //
+  // §8.3.3 also asks that "every value has a tooltip with the SI value". The `briefing.si.*`
+  // keys are that tooltip. They exist as their own keys rather than as a second return from
+  // each display key because the tooltip is not a different rendering of the same sentence:
+  // it is the raw quantity, unrounded, which is what makes it worth showing at all.
+  readonly 'briefing.heading': { readonly index: number; readonly title: string };
+  readonly 'briefing.backToBoard': Record<string, never>;
+  /**
+   * Label *and* its colon.
+   *
+   * The punctuation is part of the message rather than markup between two of them:
+   * fr-FR writes "client :" with a non-breaking space before the colon, and a JSX
+   * `{': '}` would decide that for every language — which is also why NFR-028's rule
+   * refuses one.
+   */
+  readonly 'briefing.clientLabel': Record<string, never>;
+  readonly 'briefing.feeLabel': Record<string, never>;
+  /** §6.10's credits. Flavour with a number attached; no rule reads it. */
+  readonly 'briefing.fee': { readonly kilocredits: number };
+
+  readonly 'briefing.objectiveLabel': Record<string, never>;
+  readonly 'briefing.dvBudgetLabel': Record<string, never>;
+  readonly 'briefing.deadlineLabel': Record<string, never>;
+  readonly 'briefing.parLabel': Record<string, never>;
+  readonly 'briefing.setupLabel': Record<string, never>;
+  readonly 'briefing.shipLabel': Record<string, never>;
+  readonly 'briefing.constraintsLabel': Record<string, never>;
+
+  readonly 'briefing.dvBudget': { readonly budgetMps: number };
+  readonly 'briefing.deadline': { readonly seconds: number };
+  /** D12: always shown, never hidden until it is beaten. */
+  readonly 'briefing.par': {
+    readonly dvMps: number;
+    readonly timeSeconds: number;
+    readonly burns: number;
+  };
+
+  // One key per objective kind, and each says the whole sentence. Assembling "Intercept"
+  // + a target + "within 1.0 km" from three parameters would fix English's word order for
+  // every language at once, which is the failure `types.ts` opens by describing.
+  readonly 'briefing.objective.reachOrbit': {
+    readonly periapsisAltitudeMetres: number;
+    readonly apoapsisAltitudeMetres: number;
+  };
+  readonly 'briefing.objective.intercept': {
+    readonly target: string;
+    readonly rangeMetres: number;
+  };
+  readonly 'briefing.objective.rendezvous': {
+    readonly target: string;
+    readonly rangeMetres: number;
+    readonly relativeSpeedMps: number;
+  };
+  readonly 'briefing.objective.softRendezvous': {
+    readonly target: string;
+    readonly rangeMetres: number;
+    readonly relativeSpeedMps: number;
+  };
+
+  // The setup rows. Four keys rather than two plus a phase fragment, for the same reason.
+  readonly 'briefing.setup.circular': { readonly altitudeMetres: number };
+  readonly 'briefing.setup.circularPhased': {
+    readonly altitudeMetres: number;
+    readonly trueAnomalyRad: number;
+  };
+  readonly 'briefing.setup.ellipse': {
+    readonly periapsisAltitudeMetres: number;
+    readonly apoapsisAltitudeMetres: number;
+  };
+  readonly 'briefing.setup.ellipsePhased': {
+    readonly periapsisAltitudeMetres: number;
+    readonly apoapsisAltitudeMetres: number;
+    readonly trueAnomalyRad: number;
+  };
+
+  // §6.5's constraints, one line each. Only the two the scenario schema carries today have
+  // a key; the other six arrive with the rules that evaluate them.
+  readonly 'briefing.constraint.altitudeFloor': { readonly floorAltitudeM: number };
+
+  // The footer, and §8.3.3's four states.
+  readonly 'briefing.recordNone': Record<string, never>;
+  readonly 'briefing.record': {
+    readonly bestDvMps: number;
+    readonly medal: string;
+    readonly attempts: number;
+  };
+  readonly 'briefing.attempts': { readonly attempts: number };
+  readonly 'briefing.dailyVariant': { readonly date: string };
+  readonly 'briefing.leaderboardLink': Record<string, never>;
+  /** §6.8's unlock rule, stated. The rule is not evaluated here — see the screen. */
+  readonly 'briefing.locked': { readonly act: number };
+  readonly 'briefing.accept': Record<string, never>;
+  readonly 'briefing.unknownContract': { readonly id: string };
+
+  /**
+   * §8.3.3's tooltips: the quantity as it is actually held, unrounded.
+   *
+   * One key per unit that appears in the numbers block, and no more. The objective and
+   * setup lines are *sentences* rather than values — "Intercept KESTREL-2 within 1.0 km"
+   * has no single SI quantity behind it — so they carry no tooltip, and a `briefing.si.*`
+   * key with nothing to attach to would be a key that rots.
+   */
+  readonly 'briefing.si.metresPerSecond': { readonly metresPerSecond: number };
+  readonly 'briefing.si.seconds': { readonly seconds: number };
+
+  // ── Save problems (§11.7, #183) ────────────────────────────────────────────
+  //
+  // The save module returns a code and its numbers; this is where it becomes something a
+  // player can act on. Each says what happened *and* that their progress is still there,
+  // because the one thing every one of these means is "nothing has been overwritten".
+  readonly 'save.problem.unreadable': Record<string, never>;
+  readonly 'save.problem.futureVersion': { readonly found: number; readonly supported: number };
+  readonly 'save.problem.unknownVersion': { readonly found: number; readonly supported: number };
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

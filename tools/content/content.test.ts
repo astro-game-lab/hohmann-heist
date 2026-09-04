@@ -55,7 +55,8 @@ const CHECKS = {
   budget: 'budget headroom — dvBudget ≥ par.dv × 1.15, so par is not the only solution',
   deadline: 'deadline headroom — horizon ≥ par.time × 1.10',
   reachability: 'reachability — a player following the progression rules can get here',
-  briefKeys: 'brief keys — every briefKey and coachMarks entry resolves in the catalogue',
+  briefKeys:
+    'brief keys — every briefKey, clientKey and coachMarks entry resolves in the catalogue',
 } as const;
 
 /** §13.4's ±0.5% on both par figures. */
@@ -223,9 +224,17 @@ describe.each(files.map((file): readonly [string, ContractFile] => [file.stem, f
 
     it(CHECKS.briefKeys, () => {
       const scenario = requireContract(file);
-      const { briefKey, coachMarks } = scenario.document;
+      const { briefKey, clientKey, coachMarks } = scenario.document;
 
-      const missing = [briefKey, ...(coachMarks ?? [])].filter((key) => !catalogue.has(key));
+      // `clientKey` joins the list rather than getting a check of its own: it is a
+      // catalogue key named by contract data, which is exactly what this check is for,
+      // and #120 needs it to resolve for the same reason the brief does.
+      const named = [
+        briefKey,
+        ...(clientKey === undefined ? [] : [clientKey]),
+        ...(coachMarks ?? []),
+      ];
+      const missing = named.filter((key) => !catalogue.has(key));
       expect(missing, 'these keys are not in the message catalogue').toEqual([]);
 
       // Resolving is the real test — a key can exist and its message still throw on the
@@ -234,8 +243,8 @@ describe.each(files.map((file): readonly [string, ContractFile] => [file.stem, f
       const brief = catalogue.resolveDynamic(briefKey);
       expect(wordCount(brief)).toBeGreaterThanOrEqual(BRIEF_MIN_WORDS);
       expect(wordCount(brief)).toBeLessThanOrEqual(BRIEF_MAX_WORDS);
-      for (const mark of coachMarks ?? []) {
-        expect(catalogue.resolveDynamic(mark).length).toBeGreaterThan(0);
+      for (const key of named.slice(1)) {
+        expect(catalogue.resolveDynamic(key).length, key).toBeGreaterThan(0);
       }
     });
   },

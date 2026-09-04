@@ -6,6 +6,8 @@
   "index": 3,
   "title": "Cold Open",
   "briefKey": "brief.c03",
+  "clientKey": "client.withheld",
+  "fee_kcr": 6,
   "epoch": {
     "scale": "TAI",
     "j2000Seconds": 0

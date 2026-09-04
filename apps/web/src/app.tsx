@@ -26,10 +26,21 @@ import { createCatalogue, type Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { contractById } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
 import { onRouteChange, parseHash, type Route } from './router.js';
+import {
+  browserStorage,
+  loadSave,
+  writeSave,
+  type LoadOutcome,
+  type SaveV1,
+} from './save/index.js';
+import { UnknownContract } from './screens/Briefing.js';
+import { ContractScreen } from './screens/ContractScreen.js';
 import { NotFound } from './screens/NotFound.js';
 import { Placeholder } from './screens/Placeholder.js';
+import { SaveNotice } from './screens/SaveNotice.js';
 import { Screen } from './screens/Screen.js';
 import { ScenePage } from './scene-harness/ScenePage.js';
 import { SpikePage } from './spike/SpikePage.js';
@@ -60,7 +71,7 @@ const t = catalogue.resolve;
  */
 const NAV: readonly (readonly [path: string, label: string])[] = [
   ['/board', t('nav.board', {})],
-  ['/contract/5', t('nav.contract', { index: 5 })],
+  ['/contract/c03-cold-open', t('nav.contract', { index: 3 })],
   ['/daily', t('nav.daily', {})],
   ['/codex/phasing', t('nav.codex', {})],
   ['/settings', t('nav.settings', {})],
@@ -84,8 +95,19 @@ const headingFor = (route: Route, resolve: Catalogue['resolve']): string => {
       return resolve('app.title', {});
     case 'board':
       return resolve('screen.board.heading', {});
-    case 'contract':
-      return resolve('screen.contract.heading', { id: param(route, 'id') });
+    case 'contract': {
+      // The contract's own number and title once it is known, and the raw id when it is
+      // not — a heading that said "Contract" over a not-found body would be worse than
+      // one that quotes the link that failed.
+      const id = param(route, 'id');
+      const scenario = contractById(id);
+      return scenario === undefined
+        ? resolve('screen.contract.heading', { id })
+        : resolve('briefing.heading', {
+            index: scenario.document.index,
+            title: scenario.document.title,
+          });
+    }
     case 'daily':
       return resolve('screen.daily.heading', {});
     case 'dailyDate':
@@ -103,16 +125,66 @@ const headingFor = (route: Route, resolve: Catalogue['resolve']): string => {
   }
 };
 
+/**
+ * The storage the save lives in, decided once.
+ *
+ * Module scope rather than a hook: `browserStorage` probes with a real write, and there
+ * is nothing to gain from repeating that per mount. `null` here is a browser that will
+ * not store — the game runs anyway (FR-702).
+ */
+const storage = browserStorage();
+
 /** What goes under the heading. */
-const bodyFor = (route: Route, resolve: Catalogue['resolve']): JSX.Element => {
+const bodyFor = (
+  route: Route,
+  resolve: Catalogue['resolve'],
+  save: SaveV1,
+  onAccept: (id: string) => void,
+): JSX.Element => {
   switch (route.name) {
     case 'notFound':
       return <NotFound t={resolve} path={route.path} />;
     case 'title':
       return <Placeholder t={resolve} links={NAV} />;
+    case 'contract': {
+      const id = param(route, 'id');
+      const scenario = contractById(id);
+      if (scenario === undefined) return <UnknownContract t={resolve} id={id} />;
+      const progress = save.contracts[id];
+      return (
+        <ContractScreen
+          t={resolve}
+          resolveDynamic={catalogue.resolveDynamic}
+          scenario={scenario}
+          {...(progress === undefined ? {} : { progress })}
+          onAccept={() => {
+            onAccept(id);
+          }}
+        />
+      );
+    }
     default:
       return <Placeholder t={resolve} />;
   }
+};
+
+/**
+ * The save, with one attempt counted.
+ *
+ * A pure function of the save it was given, so the write and the state update below are
+ * the only effects and both take the same value. §11.7 counts an attempt per *accepted
+ * briefing*, which is this moment and not the debrief: a plan abandoned halfway was still
+ * an attempt at the contract.
+ */
+const withAttempt = (save: SaveV1, id: string): SaveV1 => {
+  const previous = save.contracts[id];
+  return {
+    ...save,
+    contracts: {
+      ...save.contracts,
+      [id]: { ...previous, attempts: (previous?.attempts ?? 0) + 1 },
+    },
+  };
 };
 
 export const App = (): JSX.Element => {
@@ -123,6 +195,19 @@ export const App = (): JSX.Element => {
   useEffect(() => onRouteChange(setRoute), []);
 
   const reducedMotion = useReducedMotion();
+
+  // Read once, on the first render rather than in an effect: the briefing needs the
+  // attempt count in the markup it first paints, and a save that arrived a frame later
+  // would show "attempts: 0" and then correct itself.
+  const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
+
+  const acceptContract = (id: string): void => {
+    const next = withAttempt(saved.save, id);
+    // A write that fails is not the player's problem right now — they are on their way to
+    // the planner. #167 owns the notice; what matters here is that it cannot throw.
+    writeSave(storage, next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
 
   // Focus moves to the new screen's heading on every route change *except the first*.
   // On a cold load there is no previous screen to have stranded anyone on, and taking
@@ -152,7 +237,8 @@ export const App = (): JSX.Element => {
       focusHeading={focusHeading}
       transitionMs={screenTransitionMs(reducedMotion)}
     >
-      {bodyFor(route, t)}
+      {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
+      {bodyFor(route, t, saved.save, acceptContract)}
     </Screen>
   );
 };
