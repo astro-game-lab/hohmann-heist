@@ -36,6 +36,7 @@
     "goldens:doc-gate": "node tools/goldens/physics-doc-gate.mjs",
     "schema:write": "node tools/schema/generate.mjs",
     "schema:check": "node tools/schema/generate.mjs --check",
+    "coastlines:write": "node tools/coastlines/process.mjs",
     "pars:write": "node tools/pars/write.mjs",
     "pars:check": "vitest run --project pars",
     "test:all": "vitest run --project !pars",

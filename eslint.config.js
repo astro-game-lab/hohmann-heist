@@ -66,6 +66,12 @@ export default defineConfig([
       globals: {
         process: 'readonly',
         console: 'readonly',
+        // `fetch` is a Node global with no importable form, and one tool genuinely
+        // needs it: tools/coastlines/process.mjs pulls the pinned Natural Earth
+        // release. Everything else Node-specific is imported by name -- `Buffer`
+        // from `node:buffer` in that same file -- so this is the only global the
+        // block has had to gain, and it is not reachable from packages/**.
+        fetch: 'readonly',
       },
     },
   },

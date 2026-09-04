@@ -47,3 +47,8 @@ tools/bench/.results/
 .venv/
 __pycache__/
 *.py[cod]
+
+# The upstream Natural Earth archive, fetched by `pnpm coastlines:write`. The
+# processed JSON is committed; the archive it came from is pinned by digest in
+# tools/coastlines/process.mjs and refetched on demand.
+tools/coastlines/.cache/
