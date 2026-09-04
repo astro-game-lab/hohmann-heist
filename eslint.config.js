@@ -109,6 +109,33 @@ export default defineConfig([
     },
   },
 
+  // ── A parameter that exists for its type ───────────────────────────────────
+  //
+  // `typescript-eslint`'s default is `args: 'after-used'`, which reports a trailing
+  // parameter nobody reads. That is the right default and stays on; this adds the
+  // `_`-prefix escape it ships without.
+  //
+  // The planner's state machine is what needs it. §8.5.1's edges are one function per
+  // transition, and each takes the state it legally leaves *purely so that the wrong
+  // call does not compile* — `cancelPlacement(state: PlacingState)` reads nothing out of
+  // its argument, because there is nothing in a placement worth carrying into IDLE. The
+  // parameter is the guarantee, and #143's "illegal transitions are impossible by
+  // construction" is exactly that guarantee, so deleting it to satisfy the linter would
+  // delete the acceptance criterion.
+  //
+  // Deliberately narrow: `args` only. An unused *variable*, an unused import and an
+  // unused caught error are all still errors, because none of them can be load-bearing
+  // the way a type-gating parameter is.
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { args: 'after-used', argsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
   // ── No literal user-facing text in JSX (NFR-028) ───────────────────────────
   //
   // FR-910: every user-facing string comes from the message catalogue in `@hh/ui`;
