@@ -83,6 +83,11 @@ const samples: AllMessageParams = {
   'nav.settings': {},
   'nav.spike': {},
   'brief.c03': {},
+  'planner.handle.prograde': {},
+  'planner.handle.radial': {},
+  'planner.apsis.periapsis': { altitudeMetres: 412_300 },
+  'planner.apsis.apoapsis': { altitudeMetres: 35_786_000 },
+  'planner.closestApproach': { separationMetres: 311.4, relativeSpeedMps: 0.02 },
   'mark.c03.departureWindow': {},
 };
 

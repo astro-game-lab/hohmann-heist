@@ -128,6 +128,79 @@ export {
   tessellate,
 } from './tessellate.js';
 
+export type { SceneColours } from './style.js';
+export {
+  DASH_CURRENT_ORBIT,
+  DASH_PLANNED_FALLBACK,
+  DASH_TARGET_ORBIT,
+  PLANNED_DOT_RADIUS,
+  TRAJECTORY_PATTERNS,
+  WIDTH_CURRENT_ORBIT,
+  WIDTH_PLANNED_TRAJECTORY,
+  WIDTH_TARGET_ORBIT,
+  currentOrbitStroke,
+  plannedDotFill,
+  targetOrbitStroke,
+} from './style.js';
+
+export type { EqualTimeDots, EqualTimeDotsRequest, KeplerianSampler } from './trajectory.js';
+export {
+  DEFAULT_DOTS_PER_REVOLUTION,
+  MAX_DOTS,
+  equalTimeDots,
+  keplerianSampler,
+  periodOfArc,
+} from './trajectory.js';
+
+export { coastlinePolylines, earthDisc, terminatorPolygon, viewDirection } from './earth.js';
+
+export type { HazardShell, ShellState } from './shells.js';
+export {
+  HATCH_SPACING_PX,
+  VIOLATED_HATCH_FACTOR,
+  hatchTickCount,
+  hazardShellPrimitives,
+} from './shells.js';
+
+export type { MarkerKind, MarkerSpec } from './markers.js';
+export {
+  MARKER_RADIUS_PX,
+  TRAIL_SECONDS,
+  TRAIL_SEGMENTS,
+  markerCentre,
+  markerPrimitive,
+  markerWithTrail,
+  shipMarker,
+  targetMarker,
+  trailPoints,
+  trailPrimitives,
+} from './markers.js';
+
+export type { HandleAnchor, HandleAxisId, NodeGeometry, NodeSpec } from './nodes.js';
+export {
+  HANDLE_ARM_PX,
+  HANDLE_AXES,
+  NODE_RADIUS_PX,
+  SELECTION_RING_PX,
+  axisScreenDirection,
+  handlePrimitives,
+  nodeDiamond,
+  nodeGeometry,
+  nodePosition,
+  nodePrimitives,
+  nodeVelocity,
+} from './nodes.js';
+
+export type { ApsisKind, ApsisMarker, TieLine, TieLineRequest } from './apsis.js';
+export {
+  APSIS_LABEL_KEYS,
+  APSIS_TICK_PX,
+  TIE_LINE_LABEL_KEY,
+  apsisMarkers,
+  closestApproachTieLine,
+  hasDistinctApsides,
+} from './apsis.js';
+
 export type { CacheStats, TessellationCache } from './cache.js';
 export {
   BUCKETS_PER_OCTAVE,

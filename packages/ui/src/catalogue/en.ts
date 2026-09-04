@@ -78,6 +78,27 @@ export const en: Messages = {
   // "Wait for it" is a mood, not a step — because a brief that tells the player what to
   // do has answered the puzzle for them. Asserted, not merely intended: the content
   // suite counts the words of every brief it can resolve.
+  // ── The orbit scene (§9.3, D8) ─────────────────────────────────────────────
+  //
+  // DEP-10 lives in this line and nowhere else: the axis the renderer draws is the
+  // transverse basis vector T̂, and "prograde" is the word players know for it.
+  'planner.handle.prograde': () => 'prograde',
+  'planner.handle.radial': () => 'radial',
+  // Altitudes arrive in metres, as everything below the UI does, and are shown in
+  // kilometres because that is the unit a player reads an orbit in. One decimal: a LEO
+  // altitude moves by tens of metres under a small burn, and a whole-kilometre readout
+  // would sit still while the player dragged.
+  'planner.apsis.periapsis': ({ altitudeMetres }, fmt) =>
+    `periapsis ${fmt.decimal(altitudeMetres / 1000, 1)} km`,
+  'planner.apsis.apoapsis': ({ altitudeMetres }, fmt) =>
+    `apoapsis ${fmt.decimal(altitudeMetres / 1000, 1)} km`,
+  // Metres below a kilometre, kilometres above it: a rendezvous ends at 100 m (DEP-03),
+  // and "0.1 km" is a worse reading of that than "100 m".
+  'planner.closestApproach': ({ separationMetres, relativeSpeedMps }, fmt) =>
+    separationMetres < 1000
+      ? `${fmt.integer(Math.round(separationMetres))} m · ${fmt.decimal(relativeSpeedMps, 2)} m/s`
+      : `${fmt.decimal(separationMetres / 1000, 2)} km · ${fmt.decimal(relativeSpeedMps, 2)} m/s`,
+
   'brief.c03': () =>
     'KESTREL-2 runs a courier loop four hundred kilometres above you, and its cargo does ' +
     'not stay aboard long. Getting up there is the cheap part — a single push will do it. ' +

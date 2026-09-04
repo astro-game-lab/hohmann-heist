@@ -165,9 +165,11 @@ describe('DEP-10 is a naming departure, and stays one', () => {
   it('separates the axis it draws from the word it shows', () => {
     // The geometry uses `axis`; only the text uses `labelKey`. That split is what makes
     // the departure checkable rather than merely claimed in a comment.
-    const prograde = HANDLE_AXES[0];
-    expect(prograde?.axis).toBe('transverse');
-    expect(prograde?.labelKey).toBe('planner.handle.prograde');
+    // `HANDLE_AXES` is a frozen tuple, so index 0 is genuinely non-nullable here.
+    const [prograde, radial] = HANDLE_AXES;
+    expect(prograde.axis).toBe('transverse');
+    expect(prograde.labelKey).toBe('planner.handle.prograde');
+    expect(radial.axis).toBe('radial');
   });
 
   it('emits a catalogue key rather than a sentence', () => {

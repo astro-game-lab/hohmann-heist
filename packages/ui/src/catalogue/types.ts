@@ -86,6 +86,26 @@ export interface UiMessageParams {
   readonly 'nav.settings': Record<string, never>;
   readonly 'nav.spike': Record<string, never>;
 
+  // ── The orbit scene's labels (§9.3, D8, #113) ─────────────────────────────
+  //
+  // Every string the planner draws over the canvas resolves through here. `@hh/render`
+  // emits the key and the raw numbers; the sentence, the unit and the rounding are this
+  // layer's, because all three are locale work.
+  //
+  // The handle axes are DEP-10: the geometry is the *transverse* basis vector, and only
+  // this label calls it "prograde". §7.5 files that as a naming departure, and keeping the
+  // word here rather than in the renderer is what keeps it one.
+  readonly 'planner.handle.prograde': Record<string, never>;
+  readonly 'planner.handle.radial': Record<string, never>;
+  /** An apsis tick's altitude above the reference radius. Metres in, kilometres out. */
+  readonly 'planner.apsis.periapsis': { readonly altitudeMetres: number };
+  readonly 'planner.apsis.apoapsis': { readonly altitudeMetres: number };
+  /** §9.3: the tie line is "labelled with distance and Δv_rel". */
+  readonly 'planner.closestApproach': {
+    readonly separationMetres: number;
+    readonly relativeSpeedMps: number;
+  };
+
   // ── Contract content (§8.3.3, FR-902, D14) ────────────────────────────────
   //
   // A contract's brief and its coach marks are catalogue keys, never literal prose in
