@@ -81,6 +81,71 @@ export const DEFAULT_DOTS_PER_REVOLUTION = 96;
 /** Hard cap on dots per arc, so a long plan cannot blow the frame budget. */
 export const MAX_DOTS = 256;
 
+/**
+ * A function from "seconds from the arc's start" to an inertial position.
+ *
+ * Built once per arc and then called per sample, so the element-dependent work — the
+ * semi-axes, the mean motion, the starting mean anomaly, the perifocal-to-inertial
+ * rotation — happens once rather than per point.
+ *
+ * Shared rather than private because two callers want exactly this and want it to agree.
+ * The planned trajectory's dots step forward from the arc's start (#108) and a marker's
+ * trail steps *backward* from the scrub epoch (#109); if they sampled by different routes
+ * the trail could disagree with the dots it lies under, which is the sort of discrepancy
+ * that reads as a physics bug and is a plumbing one.
+ *
+ * Negative offsets are fine and meaningful: mean anomaly runs backwards just as happily.
+ *
+ * @returns `undefined` for a sample whose Kepler solve did not converge. Non-convergence
+ * is a return value here as everywhere in this repo — a mark placed at a wrong or `NaN`
+ * position is worse than a mark that is missing.
+ */
+export type KeplerianSampler = (offsetSeconds: number) => EciVector<Metres> | undefined;
+
+/**
+ * Build a sampler for an elliptical arc.
+ *
+ * @throws RangeError when the orbit is not elliptic or `mu` is not finite and positive.
+ */
+export const keplerianSampler = (elements: OrbitShape, mu: number): KeplerianSampler => {
+  const { semiLatusRectum, eccentricity: e, inclination, raan, argp, trueAnomaly } = elements;
+  const p = semiLatusRectum as number;
+
+  if (!(e >= 0 && e < 1)) {
+    throw new RangeError(`a Keplerian sampler needs an elliptic orbit, got e = ${String(e)}`);
+  }
+  if (!(p > 0) || !Number.isFinite(p)) {
+    throw new RangeError(`semi-latus rectum must be finite and positive, got ${String(p)}`);
+  }
+  if (!(mu > 0) || !Number.isFinite(mu)) {
+    throw new RangeError(`mu must be finite and positive, got ${String(mu)}`);
+  }
+
+  const a = p / (1 - e * e);
+  const b = a * Math.sqrt(1 - e * e);
+  const n = Math.sqrt(mu / (a * a * a));
+  const startMean = meanFromEccentric(eccentricFromTrue(trueAnomaly, e), e);
+  const toInertial = perifocalToInertialMatrix(raan, inclination, argp);
+
+  return (offsetSeconds) => {
+    const solved = solveKeplerElliptic(startMean + n * offsetSeconds, e);
+    if (!solved.converged) return undefined;
+    const eccentric = solved.anomaly;
+    return pqwToEci(
+      toInertial,
+      pqw(
+        V.vec3(metres(a * (Math.cos(eccentric) - e)), metres(b * Math.sin(eccentric)), metres(0)),
+      ),
+    );
+  };
+};
+
+/** The orbital period of an elliptical arc, in seconds. */
+export const periodOfArc = (elements: OrbitShape, mu: number): number => {
+  const a = (elements.semiLatusRectum as number) / (1 - elements.eccentricity ** 2);
+  return 2 * Math.PI * Math.sqrt((a * a * a) / mu);
+};
+
 export interface EqualTimeDotsRequest {
   /** The arc's conic. `trueAnomaly` is the *start* of the arc. */
   readonly elements: OrbitShape;
@@ -122,14 +187,7 @@ export interface EqualTimeDots {
  * looks like a rendering bug rather than the input error it is.
  */
 export const equalTimeDots = (request: EqualTimeDotsRequest): EqualTimeDots => {
-  const {
-    semiLatusRectum,
-    eccentricity: e,
-    inclination,
-    raan,
-    argp,
-    trueAnomaly,
-  } = request.elements;
+  const { semiLatusRectum, eccentricity: e } = request.elements;
   const p = semiLatusRectum as number;
 
   if (!(e >= 0 && e < 1)) {
@@ -147,11 +205,9 @@ export const equalTimeDots = (request: EqualTimeDotsRequest): EqualTimeDots => {
     );
   }
 
-  const a = p / (1 - e * e);
-  const b = a * Math.sqrt(1 - e * e);
-  // n = sqrt(mu / a^3). Stepping M by n*dt is stepping time by dt, exactly.
-  const n = Math.sqrt(request.mu / (a * a * a));
-  const periodSeconds = (2 * Math.PI) / n;
+  // Stepping mean anomaly by `n dt` is stepping time by `dt` exactly, which is what the
+  // sampler does — so the dots are equal-time by construction rather than by correction.
+  const periodSeconds = periodOfArc(request.elements, request.mu);
 
   const perRevolution = request.dotsPerRevolution ?? DEFAULT_DOTS_PER_REVOLUTION;
   const maxDots = request.maxDots ?? MAX_DOTS;
@@ -161,28 +217,13 @@ export const equalTimeDots = (request: EqualTimeDotsRequest): EqualTimeDots => {
   const count = Math.min(wanted, maxDots);
   const capped = wanted > maxDots;
 
-  // Mean anomaly at the arc's start, via the eccentric anomaly.
-  const startMean = meanFromEccentric(eccentricFromTrue(trueAnomaly, e), e);
-  const toInertial = perifocalToInertialMatrix(raan, inclination, argp);
-
+  const sample = keplerianSampler(request.elements, request.mu);
   const points: EciVector<Metres>[] = [];
   for (let i = 0; i < count; i++) {
-    const mean = startMean + n * (i * intervalSeconds);
-    const solved = solveKeplerElliptic(mean, e);
-    // Non-convergence is a return value here as everywhere (see CLAUDE.md); a dot that
-    // cannot be placed is skipped rather than drawn at a wrong or NaN position, which
-    // would put a mark on screen that means nothing.
-    if (!solved.converged) continue;
-
-    const eccentric = solved.anomaly;
-    points.push(
-      pqwToEci(
-        toInertial,
-        pqw(
-          V.vec3(metres(a * (Math.cos(eccentric) - e)), metres(b * Math.sin(eccentric)), metres(0)),
-        ),
-      ),
-    );
+    const point = sample(i * intervalSeconds);
+    // A dot that cannot be placed is skipped rather than drawn at a wrong or `NaN`
+    // position, which would put a mark on screen that means nothing.
+    if (point !== undefined) points.push(point);
   }
 
   return { points, intervalSeconds, capped };
