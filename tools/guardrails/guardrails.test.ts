@@ -163,6 +163,34 @@ describe('the DOP853 oracle is unreachable from the game path (FR-009)', () => {
   }, 60_000);
 });
 
+describe('development tooling never reaches shipped code (NFR-020)', () => {
+  // #89 requires the par harness to be "a development tool: it is not in the app bundle
+  // and does not count against NFR-020". Nothing imports it today, which is a fact about
+  // this week rather than a property of the repository -- and `tools/` also holds the
+  // golden generator, the benchmarks and this suite, none of which should ever be one
+  // careless import away from the bundle. `no-tools-in-shipped-code` is that property;
+  // this is the check on it.
+  const dir = 'packages/game/src/__guardrail__';
+  const file = `${dir}/tools-leak.ts`;
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('rejects an import of the par solver from a package', async () => {
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      file,
+      "import { solvePar } from '../../../../tools/pars/solve.js';\nexport const leak = solvePar;\n",
+      'utf8',
+    );
+
+    await expect(cruise()).rejects.toMatchObject({
+      stdout: expect.stringContaining('no-tools-in-shipped-code') as unknown as string,
+    });
+  }, 60_000);
+});
+
 describe('the core compiles without the DOM library (NFR-005)', () => {
   // The lint rule above is one of two mechanisms, and it is the weaker one: it lists
   // globals by name, so it catches `document` and misses `CanvasRenderingContext2D`.

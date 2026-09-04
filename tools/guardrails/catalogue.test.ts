@@ -40,6 +40,16 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SEARCH_ROOTS = ['packages/game/src', 'packages/ui/src', 'apps/web/src'];
 
 /**
+ * Contracts name catalogue keys too, and a key only a contract uses is still in use.
+ *
+ * `briefKey` and every `coachMarks` entry is a message-catalogue key (D14, FR-910), so a
+ * brief written for `c03-cold-open` has no consumer anywhere in `packages/` or `apps/` —
+ * the scenario file is its consumer. Without this the rot check below would report every
+ * shipped brief as dead and be silenced, which is the failure mode it exists to prevent.
+ */
+const CONTENT_ROOTS = ['content'];
+
+/**
  * The files that merely *declare* keys.
  *
  * A key that appears only here is declared and unused, which is exactly what this is
@@ -51,7 +61,7 @@ const DECLARATION_FILES = [
   'packages/ui/src/catalogue/en.ts',
 ];
 
-const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
+const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.json']);
 
 const walk = (directory: string): string[] => {
   const entries = readdirSync(directory, { withFileTypes: true });
@@ -68,7 +78,8 @@ interface SourceFile {
   readonly text: string;
 }
 
-const sources: readonly SourceFile[] = SEARCH_ROOTS.flatMap((root) => walk(join(REPO_ROOT, root)))
+const sources: readonly SourceFile[] = [...SEARCH_ROOTS, ...CONTENT_ROOTS]
+  .flatMap((root) => walk(join(REPO_ROOT, root)))
   .map((path) => ({
     path: relative(REPO_ROOT, path).replaceAll('\\', '/'),
     text: readFileSync(path, 'utf8'),
@@ -90,13 +101,19 @@ describe('the search itself', () => {
     expect(sources.map((file) => file.path)).toContain('apps/web/src/app.tsx');
     expect(sources.map((file) => file.path)).toContain('packages/game/src/legality.ts');
     expect(sources.map((file) => file.path)).not.toContain('packages/game/src/messages.ts');
+    // Not a named file: which contracts ship is content, and a canary naming one would
+    // have to be edited every time the catalogue of contracts changes.
+    expect(sources.some((file) => file.path.startsWith('content/contracts/'))).toBe(true);
   });
 });
 
 describe('no key rots', () => {
   it('has a producer or a consumer for every key in the catalogue', () => {
+    // Either quoting: TypeScript writes `'brief.c03'` and a scenario file writes
+    // `"brief.c03"`, and both are the same key being used.
     const unused = catalogue.keys.filter(
-      (key) => !sources.some((file) => file.text.includes(`'${key}'`)),
+      (key) =>
+        !sources.some((file) => file.text.includes(`'${key}'`) || file.text.includes(`"${key}"`)),
     );
     expect(unused).toEqual([]);
   });

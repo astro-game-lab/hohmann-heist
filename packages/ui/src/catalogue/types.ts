@@ -85,6 +85,15 @@ export interface UiMessageParams {
   readonly 'nav.codex': Record<string, never>;
   readonly 'nav.settings': Record<string, never>;
   readonly 'nav.spike': Record<string, never>;
+
+  // ── Contract content (§8.3.3, FR-902, D14) ────────────────────────────────
+  //
+  // A contract's brief and its coach marks are catalogue keys, never literal prose in
+  // the scenario file, so contract *text* is translated and reviewed separately from
+  // contract *logic* (§11.5). The scenario names the key; this is where the sentence
+  // lives, and `tools/content/content.test.ts` fails a contract whose key is not here.
+  readonly 'brief.c03': Record<string, never>;
+  readonly 'mark.c03.departureWindow': Record<string, never>;
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

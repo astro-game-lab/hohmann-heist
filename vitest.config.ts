@@ -88,6 +88,50 @@ export default defineConfig({
         },
       },
       {
+        // §13.4's seven checks, applied to every contract in `content/contracts/`
+        // (#87). Under `tools/` rather than beside `@hh/game` because it reads a
+        // directory, and `node:fs` has no place in a package that must run in a
+        // browser and a Worker — the same reason `reference` is here.
+        //
+        // These only ever *replay* a stored reference solution, so the suite stays
+        // fast however many contracts ship. Computing par is the other project.
+        test: {
+          name: 'content',
+          environment: 'node',
+          // The par solver's own unit tests belong here rather than in `pars`: they are
+          // pure arithmetic on known functions, they cost milliseconds, and gating them
+          // behind a project that is excluded from `test:all` would leave the refinement
+          // the whole search depends on unexercised by the suite people actually run.
+          // Only the search *driver* is expensive, and it is named directly below.
+          include: ['tools/{content,pars}/**/*.test.ts'],
+          exclude: ['tools/pars/pars.test.ts'],
+        },
+      },
+      {
+        // The par solver (#89). Its own project so `pnpm pars:write` can run exactly
+        // this file — recomputing a published par is a deliberate act, the same
+        // arrangement `goldens` and `reference` have.
+        //
+        // Excluded from `test:all` by `pnpm test:all`'s project filter and run as its
+        // own CI step (`pnpm pars:check`), because it is a search rather than an
+        // assertion: it costs seconds where every other project costs milliseconds,
+        // and it gates the same thing either way.
+        //
+        // It does still run under `pnpm coverage`, which excludes only `bench`. That is
+        // not an oversight: **Vitest's repeated `--project` negations OR together**, so
+        // `--project !bench --project !pars` matches every project — `bench` is not
+        // `pars`, so the second filter admits it — and a brace glob is not matched
+        // either. A second exclusion is therefore not expressible, and letting the
+        // search run under coverage costs a few seconds and asserts nothing about time.
+        // Letting `bench` run under coverage would be the real damage: V8 instruments
+        // every function, and the block above records what that does to a budget.
+        test: {
+          name: 'pars',
+          environment: 'node',
+          include: ['tools/pars/pars.test.ts'],
+        },
+      },
+      {
         test: {
           name: 'web',
           // The simulation core is tested under node precisely because it must not

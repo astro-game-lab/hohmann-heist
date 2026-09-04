@@ -74,6 +74,19 @@ module.exports = {
       to: { path: '^packages/propagation/src/oracle/' },
     },
     {
+      name: 'no-tools-in-shipped-code',
+      comment:
+        'Development tooling never ships. `tools/` holds the par solver, the golden ' +
+        'generator, the benchmarks and the guardrail suite; an import of any of it from a ' +
+        'package or an app would put it in the bundle and charge it against NFR-020. #89 ' +
+        'requires the par harness to be a development tool that "is not in the app bundle ' +
+        'and does not count against NFR-020" -- this is what makes that a fact rather than ' +
+        'an intention. Content flows the other way: `tools/` reads `packages/`, never back.',
+      severity: 'error',
+      from: { path: '^(packages|apps|services)/' },
+      to: { path: '^tools/' },
+    },
+    {
       name: 'not-to-dev-dep',
       comment: 'Runtime code must not import a devDependency.',
       severity: 'error',
