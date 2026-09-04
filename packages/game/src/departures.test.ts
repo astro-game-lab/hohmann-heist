@@ -78,6 +78,7 @@ describe('the departures registry', () => {
       'DEP-02',
       'DEP-03',
       'DEP-04',
+      'DEP-07',
       'DEP-08',
       'DEP-09',
       'DEP-13',

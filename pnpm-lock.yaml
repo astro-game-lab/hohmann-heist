@@ -175,6 +175,9 @@ importers:
       '@hh/math':
         specifier: workspace:*
         version: link:../math
+      '@hh/propagation':
+        specifier: workspace:*
+        version: link:../propagation
       '@hh/sim':
         specifier: workspace:*
         version: link:../sim

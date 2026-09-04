@@ -59,6 +59,25 @@ const degrees = (radians: number, fmt: MessageFormatters): string => {
   return `${value >= 0 ? '+' : ''}${fmt.decimal(value, 1)}°`;
 };
 
+/**
+ * A signed component, with the sign always shown.
+ *
+ * A burn's sign is its direction, and "36.2" next to "−36.2" in a two-row transfer reads
+ * as the same number twice unless the positive one says so. The minus is `U+2212`, not a
+ * hyphen: it is the character that lines up under a digit in a monospaced column.
+ */
+const signed = (mps: number, fmt: MessageFormatters): string =>
+  `${mps > 0 ? '+' : mps < 0 ? '\u2212' : ''}${fmt.decimal(Math.abs(mps), 4)}`;
+
+/**
+ * FR-406's full-precision reveal.
+ *
+ * Twenty significant digits is `Intl.NumberFormat`'s maximum and comfortably more than a
+ * float64 carries, so the reading is the stored value rather than a rounding of it. The
+ * grouping stays on — this is read by a person, not parsed.
+ */
+const FULL_PRECISION: Intl.NumberFormatOptions = { maximumSignificantDigits: 20 };
+
 export const en: Messages = {
   // ── Legality (§6.4) ────────────────────────────────────────────────────────
   'legality.l1.overBudget': ({ excessMps }, fmt) =>
@@ -231,6 +250,199 @@ export const en: Messages = {
     }),
   'briefing.si.seconds': ({ seconds }, fmt) => `${fmt.number(seconds)} s`,
 
+  // ── The planner (§8.3.4) ──────────────────────────────────────────────────
+
+  'planner.region.orbitView': () => 'Orbit view',
+  'planner.region.hud': () => 'Contract status',
+
+  'planner.hud.back': () => 'Back to board',
+  'planner.hud.contract': ({ index, title }, fmt) =>
+    `${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })} ${title}`,
+  'planner.hud.dvLabel': () => 'Δv',
+  'planner.hud.dv': ({ usedMps, budgetMps }, fmt) =>
+    `${fmt.decimal(usedMps, 1)} / ${fmt.integer(budgetMps)} m/s`,
+  // §8.3.4's amber-at-90% and red-above-100% as *words*, because §8.8 refuses to let
+  // colour carry a meaning on its own. The bar is a `progressbar`, so this is its
+  // accessible name and the sentence a screen reader gets instead of the fill.
+  //
+  // The thresholds are read off `fraction` rather than passed in as a level, so this
+  // message states them once and the component does not restate them. `>= 1` before
+  // `>= 0.9`, or every over-budget plan would report as merely close to one.
+  'planner.hud.dvBar': ({ fraction, usedMps, budgetMps }, fmt) => {
+    const spend = `${fmt.decimal(usedMps, 1)} of ${fmt.integer(budgetMps)} m/s`;
+    if (fraction >= 1) return `Δv over budget — ${spend}`;
+    if (fraction >= 0.9) return `Δv near budget — ${spend}`;
+    return `Δv within budget — ${spend}`;
+  },
+  'planner.hud.metLabel': () => 'MET',
+  'planner.hud.met': ({ metSeconds }, fmt) => fmt.met(metSeconds),
+  'planner.hud.settings': () => 'Settings',
+  'planner.hud.help': () => 'Keyboard help',
+
+  'planner.timeline.label': () => 'Mission timeline',
+  'planner.timeline.scrubAt': ({ metSeconds }, fmt) => `Scrub head at ${fmt.met(metSeconds)}`,
+  'planner.timeline.stepHint': ({ stepSeconds }, fmt) =>
+    `Arrow keys move the scrub head by ${fmt.integer(stepSeconds)} s; hold Shift for a tenth, Ctrl for a minute`,
+  'planner.timeline.deadline': ({ metSeconds }, fmt) => `Deadline ${fmt.met(metSeconds)}`,
+  'planner.timeline.node': ({ index, metSeconds }, fmt) =>
+    `Node ${fmt.integer(index)} at ${fmt.met(metSeconds)}`,
+  'planner.timeline.objectiveMet': ({ metSeconds }, fmt) =>
+    `Objective met at ${fmt.met(metSeconds)}`,
+  // The kind arrives as an index rather than as a string, so the constraint's *name* is
+  // written here in the locale's own words instead of arriving pre-worded from `@hh/game`.
+  // Order matches `ConstraintKind`: dv_budget, deadline, altitude_floor. A kind outside
+  // the list falls back to the generic sentence rather than to `undefined`.
+  'planner.timeline.band': ({ kind, startMetSeconds, endMetSeconds }, fmt) => {
+    const names = ['Δv budget', 'deadline', 'altitude floor'];
+    const name = names[kind] ?? 'constraint';
+    return `${name} violated from ${fmt.met(startMetSeconds)} to ${fmt.met(endMetSeconds)}`;
+  },
+
+  'planner.plan.heading': () => 'Maneuver plan',
+  'planner.plan.empty': () => 'No burns yet. Click the trajectory or press N to add one.',
+  'planner.plan.listLabel': ({ count }, fmt) =>
+    `Maneuver plan, ${fmt.integer(count)} ${fmt.plural(count) === 'one' ? 'burn' : 'burns'}`,
+  'planner.plan.nodeEpoch': ({ index, metSeconds }, fmt) =>
+    `${fmt.integer(index)}  ${fmt.met(metSeconds)}`,
+  // #130's "announced meaningfully rather than as bare numbers". A sign is a direction
+  // and reads as one: "36.2 prograde" beats "−36.2" out loud, and "retrograde" is the
+  // word a player has actually learned. A zero component is dropped rather than announced
+  // as "0.0 radial", which is noise in every row of a two-burn transfer.
+  'planner.plan.nodeLabel': ({ index, metSeconds, progradeMps, radialMps }, fmt) => {
+    const parts: string[] = [];
+    if (progradeMps !== 0) {
+      parts.push(
+        `${fmt.decimal(Math.abs(progradeMps), 1)} metres per second ` +
+          (progradeMps > 0 ? 'prograde' : 'retrograde'),
+      );
+    }
+    if (radialMps !== 0) {
+      parts.push(
+        `${fmt.decimal(Math.abs(radialMps), 1)} metres per second ` +
+          `radial ${radialMps > 0 ? 'out' : 'in'}`,
+      );
+    }
+    const burn = parts.length === 0 ? 'no burn' : fmt.list(parts);
+    return `Node ${fmt.integer(index)}, at ${fmt.met(metSeconds)}, ${burn}`;
+  },
+  'planner.plan.prograde': ({ mps }, fmt) => `prograde ${signed(mps, fmt)}`,
+  'planner.plan.radial': ({ mps }, fmt) => `radial ${signed(mps, fmt)}`,
+  'planner.plan.delete': ({ index }, fmt) => `Delete node ${fmt.integer(index)}`,
+  'planner.plan.expand': ({ index }, fmt) => `Edit node ${fmt.integer(index)}`,
+  'planner.plan.addNode': () => 'Add node',
+
+  'planner.readouts.heading': () => 'Readouts',
+  'planner.readouts.apoapsisLabel': () => 'apoapsis',
+  'planner.readouts.periapsisLabel': () => 'periapsis',
+  'planner.readouts.altitudeLabel': () => 'altitude',
+  'planner.readouts.periodLabel': () => 'period',
+  'planner.readouts.eccentricityLabel': () => 'ecc',
+  'planner.readouts.apoapsis': ({ altitudeMetres }, fmt) => `${kilometres(altitudeMetres, fmt)} km`,
+  'planner.readouts.periapsis': ({ altitudeMetres }, fmt) =>
+    `${kilometres(altitudeMetres, fmt)} km`,
+  'planner.readouts.altitude': ({ altitudeMetres }, fmt) => `${kilometres(altitudeMetres, fmt)} km`,
+  // Minutes, because §8.3.4's mock-up reads "91.3 min" and an orbital period in seconds
+  // is a number nobody compares against anything.
+  'planner.readouts.period': ({ seconds }, fmt) => `${fmt.decimal(seconds / 60, 1)} min`,
+  // Four decimals: §8.3.4 shows "0.0094", and the suppression floor is 1e-3, so three
+  // would round every orbit near the threshold to the same reading.
+  'planner.readouts.eccentricity': ({ eccentricity }, fmt) => fmt.decimal(eccentricity, 4),
+  'planner.readouts.circularNote': () => 'Circular — no distinct apsides',
+  'planner.readouts.openNote': () => 'Open orbit — escapes Earth',
+
+  'planner.approach.heading': () => 'Closest approach',
+  'planner.approach.rangeLabel': () => 'distance',
+  'planner.approach.relativeSpeedLabel': () => 'Δv rel',
+  'planner.approach.atLabel': () => 'at',
+  'planner.approach.range': ({ rangeMetres }, fmt) => range(rangeMetres, fmt),
+  'planner.approach.relativeSpeed': ({ mps }, fmt) => `${fmt.decimal(mps, 2)} m/s`,
+  'planner.approach.at': ({ metSeconds }, fmt) => fmt.met(metSeconds),
+  // Met and unmet are separate sentences rather than one with a flag, because they are
+  // not the same statement with a word swapped — the unmet one has to say what would
+  // count, or the player is told "no" and not told what "yes" is.
+  'planner.approach.met': ({ maxRangeMetres }, fmt) =>
+    `Within the ${range(maxRangeMetres, fmt)} objective tolerance`,
+  'planner.approach.notMet': ({ maxRangeMetres }, fmt) =>
+    `Outside the ${range(maxRangeMetres, fmt)} objective tolerance`,
+  'planner.approach.none': () => 'No approach within the mission horizon',
+
+  'planner.assists.heading': () => 'Assists',
+  'planner.assists.snapToApsis': () => 'Snap burns to apsis',
+  'planner.assists.snapToApsisHint': ({ windowSeconds }, fmt) =>
+    `Places a burn at the nearest apsis within ${fmt.integer(windowSeconds)} s`,
+
+  'planner.tab.plan': ({ count }, fmt) => `Plan (${fmt.integer(count)})`,
+  'planner.tab.readouts': () => 'Readouts',
+  'planner.tab.assists': () => 'Assists',
+  'planner.tabsLabel': () => 'Planner panels',
+
+  // ── The node editor (§8.3.5) ──────────────────────────────────────────────
+
+  'planner.editor.heading': ({ index }, fmt) => `Node ${fmt.integer(index)}`,
+  'planner.editor.close': () => 'Close editor',
+
+  'planner.editor.epochLabel': () => 'Epoch',
+  'planner.editor.hours': () => 'hours',
+  'planner.editor.minutes': () => 'minutes',
+  'planner.editor.seconds': () => 'seconds',
+  'planner.editor.milliseconds': () => 'milliseconds',
+  'planner.editor.epochSlider': () => 'Epoch within the mission window',
+
+  'planner.editor.snapLabel': () => 'Snap to',
+  'planner.editor.snapPeriapsis': () => 'periapsis',
+  'planner.editor.snapApoapsis': () => 'apoapsis',
+  'planner.editor.snapFree': () => 'free',
+
+  'planner.editor.deltaVLabel': () => 'Δv (RTN, m/s)',
+  'planner.editor.prograde': () => 'prograde',
+  'planner.editor.radial': () => 'radial',
+  'planner.editor.normal': () => 'normal',
+  'planner.editor.normalNote': () => 'v1.1',
+  'planner.editor.magnitudeLabel': () => 'magnitude',
+  'planner.editor.magnitude': ({ mps }, fmt) => `${fmt.decimal(mps, 4)} m/s`,
+  // The axis arrives as an index into a list this message owns, for the same reason the
+  // timeline's constraint bands do: the axis *name* is a word, and a word assembled into
+  // a sentence elsewhere fixes English's order for every language.
+  'planner.editor.step': ({ sign, axis }) => {
+    const names = ['prograde', 'radial'];
+    const name = names[axis] ?? 'component';
+    return `${sign < 0 ? 'Decrease' : 'Increase'} ${name}`;
+  },
+  'planner.editor.stepHint': ({ stepMps }, fmt) =>
+    `Steps by ${fmt.decimal(stepMps, 1)} m/s; hold Shift for a tenth, Ctrl for ten times`,
+
+  'planner.editor.resultHeading': () => 'Result after this burn',
+  // Below a tenth of a kilometre the reading would be "(−0.0)", which says "something
+  // changed" and shows nothing — worse than saying the change is too small to see.
+  'planner.editor.deltaAltitude': ({ deltaMetres }, fmt) => {
+    const km = Math.round(deltaMetres / 100) / 10;
+    if (km === 0) return '(unchanged)';
+    return `(${km > 0 ? '+' : '\u2212'}${fmt.decimal(Math.abs(km), 1)})`;
+  },
+  'planner.editor.deltaPeriod': ({ deltaSeconds }, fmt) => {
+    const minutes = Math.round(deltaSeconds / 6) / 10;
+    if (minutes === 0) return '(unchanged)';
+    return `(${minutes > 0 ? '+' : '\u2212'}${fmt.decimal(Math.abs(minutes), 1)})`;
+  },
+  'planner.editor.resultOpen': () => 'This burn opens the orbit — no apoapsis or period',
+
+  'planner.editor.delete': () => 'Delete',
+  'planner.editor.done': () => 'Done',
+
+  'planner.commit': () => 'Commit plan',
+
+  'planner.camera.recentre': () => 'Recentre view',
+  'planner.camera.zoomIn': () => 'Zoom in',
+  'planner.camera.zoomOut': () => 'Zoom out',
+
+  // FR-406's reveal. Unrounded on purpose: `fmt.number` with twenty significant digits
+  // is the value as held, which is the only thing worth revealing — a longer rounding
+  // would be a second approximation dressed as precision.
+  'planner.si.metres': ({ metres }, fmt) => `${fmt.number(metres, FULL_PRECISION)} m`,
+  'planner.si.metresPerSecond': ({ metresPerSecond }, fmt) =>
+    `${fmt.number(metresPerSecond, FULL_PRECISION)} m/s`,
+  'planner.si.seconds': ({ seconds }, fmt) => `${fmt.number(seconds, FULL_PRECISION)} s`,
+
   // ── Save problems (§11.7) ──────────────────────────────────────────────────
   //
   // Each ends the same way, because that is the fact the player needs: nothing has been
@@ -257,7 +469,6 @@ export const en: Messages = {
   'nav.daily': () => 'Daily',
   'nav.codex': () => 'Codex',
   'nav.settings': () => 'Settings',
-  'nav.spike': () => 'M1 spike',
 
   // ── Screen headings and the not-found state (§8.2, §8.7) ───────────────────
   //

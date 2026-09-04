@@ -242,7 +242,7 @@ describe('the contract route', () => {
     await act(() => {
       el('accept')?.click();
     });
-    expect(el('planner-placeholder')).not.toBeNull();
+    expect(el('planner')).not.toBeNull();
     expect(el('brief')).toBeNull();
     expect(window.location.hash).toBe(CONTRACT);
   });
@@ -254,7 +254,7 @@ describe('the contract route', () => {
     await act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     });
-    expect(el('planner-placeholder')).not.toBeNull();
+    expect(el('planner')).not.toBeNull();
   });
 });
 

@@ -319,15 +319,15 @@ describe('no literal user-facing text in JSX (NFR-028)', () => {
   // parse error, which a `not.toContain` assertion would quietly accept. The core
   // guardrail cases above use existing paths for the same reason.
   const APP_FILE = 'apps/web/src/app.tsx';
-  const SPIKE_FILE = 'apps/web/src/spike/SpikePage.tsx';
+  const HARNESS_FILE = 'apps/web/src/scene-harness/ScenePage.tsx';
 
   // The first lint of a `.tsx` builds the whole `apps/web` program, which takes tens
   // of seconds. Pay it once here, for both paths, rather than charging it to whichever
-  // case runs first -- `apps/web/src/spike/` is inside the same project but is a
+  // case runs first -- `apps/web/src/scene-harness/` is inside the same project but is a
   // separate `ignores` decision, and warming only one left the other at a timeout.
   beforeAll(async () => {
     await ruleIdsFor('export const warmup = 1;\n', APP_FILE);
-    await ruleIdsFor('export const warmup = 1;\n', SPIKE_FILE);
+    await ruleIdsFor('export const warmup = 1;\n', HARNESS_FILE);
   }, 180_000);
 
   const fires: readonly (readonly [label: string, code: string])[] = [
@@ -362,11 +362,18 @@ describe('no literal user-facing text in JSX (NFR-028)', () => {
     30_000,
   );
 
-  // The M1 spike is exempt and is deleted whole in PR 5 of M2. The exemption is
-  // asserted so that removing the directory and its `ignores` entry together is a
-  // visible change rather than a silent one.
-  it('exempts the M1 spike, which is throwaway', async () => {
-    expect(await ruleIdsFor('export const k = <p>Hello</p>;\n', SPIKE_FILE)).not.toContain(
+  // The orbit-scene harness is exempt and will be deleted whole when it has served its
+  // purpose. The exemption is asserted so that removing the directory and its `ignores`
+  // entry together is a visible change rather than a silent one.
+  //
+  // This case pointed at the M1 spike until the planner replaced it. That deletion is
+  // exactly the visible change this comment promised: the test did not quietly keep
+  // passing against a path that no longer existed -- it timed out, because a `.tsx` in a
+  // directory the project no longer contains cannot be placed and the lint never
+  // returns. Retargeted rather than dropped, since the mechanism it checks is still in
+  // use by the one instrument that is left.
+  it('exempts the orbit-scene harness, which is throwaway', async () => {
+    expect(await ruleIdsFor('export const k = <p>Hello</p>;\n', HARNESS_FILE)).not.toContain(
       'no-restricted-syntax',
     );
   }, 30_000);

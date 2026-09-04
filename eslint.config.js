@@ -109,6 +109,33 @@ export default defineConfig([
     },
   },
 
+  // ── A parameter that exists for its type ───────────────────────────────────
+  //
+  // `typescript-eslint`'s default is `args: 'after-used'`, which reports a trailing
+  // parameter nobody reads. That is the right default and stays on; this adds the
+  // `_`-prefix escape it ships without.
+  //
+  // The planner's state machine is what needs it. §8.5.1's edges are one function per
+  // transition, and each takes the state it legally leaves *purely so that the wrong
+  // call does not compile* — `cancelPlacement(state: PlacingState)` reads nothing out of
+  // its argument, because there is nothing in a placement worth carrying into IDLE. The
+  // parameter is the guarantee, and #143's "illegal transitions are impossible by
+  // construction" is exactly that guarantee, so deleting it to satisfy the linter would
+  // delete the acceptance criterion.
+  //
+  // Deliberately narrow: `args` only. An unused *variable*, an unused import and an
+  // unused caught error are all still errors, because none of them can be load-bearing
+  // the way a type-gating parameter is.
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { args: 'after-used', argsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
   // ── No literal user-facing text in JSX (NFR-028) ───────────────────────────
   //
   // FR-910: every user-facing string comes from the message catalogue in `@hh/ui`;
@@ -141,14 +168,11 @@ export default defineConfig([
   // `id`, `href`, `class`, `data-*`, `type` -- is machinery.
   {
     files: ['apps/web/**/*.tsx', 'packages/ui/**/*.tsx'],
-    // Two throwaway development instruments, each deleted whole when the planner
-    // screen replaces it, and each taking its line here with it.
+    // One throwaway development instrument, deleted whole when it has served its
+    // purpose and taking its line here with it. The M1 spike (#238) was the other, and
+    // it went with the planner that replaced it.
     //
-    // The M1 spike (#238): its readout is a measurement instrument rather than a
-    // screen, and translating a number that exists to be read off a stopwatch would
-    // be ceremony with no reader.
-    //
-    // The orbit-scene harness (M2 PR 3): the same argument, and one more. Its
+    // The orbit-scene harness (M2 PR 3): its
     // controls are named after the thing they vary — "device pixel ratio",
     // "greyscale" — so that a developer checking #115's cap or §8.3.4's fifth
     // principle can find the slider. They are not addressed to a player, they will
@@ -157,7 +181,7 @@ export default defineConfig([
     // draws over the canvas are a different matter and do go through the
     // catalogue** — that is the point of the harness, and `ScenePage.tsx` resolves
     // every one of them through `@hh/ui`.
-    ignores: ['apps/web/src/spike/**', 'apps/web/src/scene-harness/**'],
+    ignores: ['apps/web/src/scene-harness/**'],
     rules: {
       'no-restricted-syntax': [
         'error',

@@ -168,3 +168,591 @@
   border: 1px solid currentColor;
   border-radius: 4px;
 }
+
+/* ── The planner (§8.3.4, #123) ─────────────────────────────────────────────
+ *
+ * Two layouts from one tree. `PlannerScreen.tsx` says why that matters: rendering a
+ * different component tree per breakpoint unmounts the panels when a phone rotates and
+ * takes their state with it, so the same instances are always mounted and only their
+ * placement changes.
+ *
+ * The wide layout is a grid; the narrow one stacks and the tab strip appears. The
+ * `hidden` attribute the tab strip sets is deliberately overridden above the breakpoint —
+ * every panel shows there, so `hidden` is inert rather than absent, and crossing the
+ * breakpoint cannot leave a panel hidden with no tab strip to reveal it. That override
+ * needs `!important` because `[hidden]` is a presentational attribute the UA stylesheet
+ * applies at a specificity this cannot otherwise beat.
+ *
+ * The breakpoints are §8.3.4's own: the side panels become tabs below 1024 px, which is
+ * where the wide arrangement stops fitting.
+ */
+
+.hh-planner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80vh;
+}
+
+.hh-planner__stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The containing block for the node editor's anchor. §8.3.5 puts the overlay beside
+     the node it edits, and the node's position is reported in the orbit view's own
+     pixel space — so the two have to share an origin. */
+  position: relative;
+}
+
+.hh-planner__side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hh-planner__tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.hh-planner__tabs button {
+  flex: 1 1 0;
+  padding: 6px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-planner__tabs button[aria-selected='true'] {
+  font-weight: 600;
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.hh-planner__refusal {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid #e2503c;
+}
+
+@media (min-width: 1024px) {
+  .hh-planner__stage {
+    flex-direction: row;
+  }
+
+  .hh-planner__side {
+    flex: 0 0 300px;
+  }
+
+  /* Every panel is visible in the wide layout; the tab strip is not. See the note above
+     on why `hidden` is overridden rather than the strip being unrendered. */
+  .hh-planner__tabs {
+    display: none;
+  }
+
+  .hh-planner__panel[hidden] {
+    display: block !important;
+  }
+}
+
+/* ── The orbit view ──────────────────────────────────────────────────────── */
+
+.hh-orbit {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 45vh;
+  background: #05070d;
+  border-radius: 6px;
+  overflow: hidden;
+  /* The canvas handles its own wheel events for zoom; without this the page scrolls too
+     on a trackpad, which makes zooming feel like the view is fighting the browser. */
+  touch-action: none;
+}
+
+.hh-orbit__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hh-orbit__labels {
+  position: absolute;
+  inset: 0;
+  /* Load-bearing rather than tidy: the label layer sits over the canvas, and without this
+     a label would swallow the pointer events the hit-test index exists to answer. */
+  pointer-events: none;
+}
+
+.hh-orbit__labels .hh-label {
+  font:
+    11px/1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  color: #cfe0f0;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px #05070d,
+    0 0 6px #05070d;
+  pointer-events: auto;
+  user-select: text;
+}
+
+.hh-orbit__labels .hh-label--handle {
+  color: #ffd479;
+}
+.hh-orbit__labels .hh-label--approach {
+  color: #8fa3bb;
+}
+
+.hh-orbit__controls {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+/* ── The HUD bar (#127) ──────────────────────────────────────────────────── */
+
+.hh-hud {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hh-hud__label {
+  opacity: 0.7;
+}
+
+/* §8.3.4 shows the contract in capitals. Done here rather than in the catalogue because
+   casing is locale-dependent — Turkish dotted i, German ß — and `text-transform` applies
+   the locale's own rule where an uppercased string in a message would not. */
+.hh-hud__contract {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hh-hud__budget,
+.hh-hud__met {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hh-dv-bar {
+  width: 120px;
+  height: 8px;
+  background: rgba(127, 127, 127, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hh-dv-bar__fill {
+  height: 100%;
+  background: #5bc0eb;
+}
+
+/* §8.3.4's amber at 90%, red above 100%. The word is in the bar's accessible name — see
+   `HudBar.tsx`; this only reinforces it, per §8.8's rule that colour carries nothing on
+   its own. */
+.hh-dv-bar[data-level='warning'] .hh-dv-bar__fill {
+  background: #d8a657;
+}
+.hh-dv-bar[data-level='exceeded'] .hh-dv-bar__fill {
+  background: #e2503c;
+}
+
+/* ── The timeline (#128) ─────────────────────────────────────────────────── */
+
+.hh-timeline__track {
+  position: relative;
+  height: 34px;
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  border-radius: 3px;
+}
+
+.hh-timeline__band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(45deg, rgba(226, 80, 60, 0.35) 0 4px, transparent 4px 8px);
+}
+
+.hh-timeline__deadline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e2503c;
+}
+
+.hh-timeline__objective {
+  position: absolute;
+  top: 2px;
+  width: 8px;
+  height: 8px;
+  background: #7fbf6a;
+  border-radius: 50%;
+}
+
+.hh-timeline__node {
+  position: absolute;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  transform: translateX(-50%) rotate(45deg);
+  background: #f5a623;
+  border: 1px solid #05070d;
+  cursor: pointer;
+}
+
+.hh-timeline__node[aria-pressed='true'] {
+  background: #ffd479;
+  outline: 2px solid #ffd479;
+  outline-offset: 2px;
+}
+
+.hh-timeline__scrub {
+  width: 100%;
+}
+
+/* ── The plan panel (#130) ───────────────────────────────────────────────── */
+
+.hh-panel__heading {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.hh-plan__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hh-plan__row {
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 3px;
+  padding: 4px 6px;
+}
+
+.hh-plan__row[data-selected='true'] {
+  border-color: #ffd479;
+  outline: 1px solid #ffd479;
+}
+
+.hh-plan__select {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hh-plan__components {
+  display: flex;
+  gap: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  opacity: 0.85;
+}
+
+.hh-plan__controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* ── The readouts (#131, #132) ───────────────────────────────────────────── */
+
+.hh-readouts__list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0 0 6px;
+}
+
+.hh-readouts__list dt {
+  opacity: 0.65;
+}
+
+.hh-readouts__list dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.hh-readouts__note {
+  margin: 0 0 8px;
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.hh-approach__verdict {
+  margin: 0;
+}
+
+.hh-approach__verdict[data-met='true'] {
+  color: #7fbf6a;
+}
+.hh-approach__verdict[data-met='false'] {
+  color: #d8a657;
+}
+
+/* ── FR-406's precision reveal ───────────────────────────────────────────── *
+ *
+ * Hover *or* focus, which is why the precise reading is a real element rather than a
+ * `title`: a tooltip is unreachable by keyboard. The hidden span stays in the accessible
+ * tree at all times — see `Value.tsx` — so this only controls whether it is painted.
+ */
+
+.hh-value {
+  position: relative;
+  cursor: help;
+}
+
+.hh-value__precise {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  z-index: 1;
+  display: none;
+  padding: 2px 6px;
+  white-space: nowrap;
+  background: #05070d;
+  border: 1px solid rgba(127, 127, 127, 0.5);
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.hh-value:hover .hh-value__precise,
+.hh-value:focus-visible .hh-value__precise {
+  display: block;
+}
+
+/* ── The assist tray (#133's toggle; #140 brings the rest in M3) ──────────── */
+
+.hh-assists__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hh-assists__hint {
+  margin: 4px 0 0;
+  opacity: 0.7;
+}
+
+/* ── Commit (#139) ───────────────────────────────────────────────────────── */
+
+.hh-commit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hh-commit__reasons {
+  margin: 0;
+  padding: 0 0 0 18px;
+  list-style: disc;
+}
+
+.hh-commit__reason[data-blocking='true'] {
+  color: #e2503c;
+}
+.hh-commit__reason[data-blocking='false'] {
+  color: #d8a657;
+}
+
+.hh-commit__button {
+  align-self: flex-start;
+  padding: 8px 18px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hh-commit__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The overlay's placement. Anchored beside the node when the orbit view can say where it
+   is drawn; docked at the stage's edge when it cannot — an overlay pointing at nothing is
+   worse than one that is merely nearby. Never a backdrop and never a scroll lock: it is
+   not modal, and the rest of the planner stays usable while it is open. */
+.hh-editor__anchor {
+  --hh-anchor-width: min(320px, calc(100% - 16px));
+
+  position: absolute;
+  z-index: 2;
+  width: var(--hh-anchor-width);
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  background: #0a0e17;
+}
+
+/* Clamped to the stage, so the overlay is beside its node where there is room and at the
+   edge where there is not. Measured in CSS rather than in JavaScript because `100%` here
+   is the stage's width and stays correct through every resize and re-frame without a
+   layout read. Without the clamp the panel runs off the right edge on a narrow layout,
+   which puts a horizontal scrollbar on the whole page. */
+.hh-editor__anchor[data-anchored='true'] {
+  left: clamp(8px, var(--hh-anchor-x, 8px), calc(100% - var(--hh-anchor-width) - 8px));
+  top: clamp(8px, var(--hh-anchor-y, 8px), calc(100% - 48px));
+}
+
+.hh-editor__anchor[data-anchored='false'] {
+  right: 8px;
+  top: 8px;
+}
+
+/* ── The node editor overlay (§8.3.5, #137) ──────────────────────────────── *
+ *
+ * Anchored and **never modal**: no backdrop, no scroll lock, nothing that would stop the
+ * rest of the planner being used while it is open. It is a panel that happens to float.
+ */
+
+.hh-editor {
+  border: 1px solid rgba(127, 127, 127, 0.5);
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hh-editor__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hh-editor__header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hh-editor__group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hh-editor__group legend {
+  padding: 0;
+  opacity: 0.7;
+}
+
+.hh-editor__epoch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.hh-editor__epoch input {
+  width: 5ch;
+  font: inherit;
+}
+
+.hh-editor__slider {
+  width: 100%;
+}
+
+.hh-editor__snap {
+  display: flex;
+  gap: 6px;
+}
+
+.hh-editor__field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hh-editor__field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.hh-editor__field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: right;
+}
+
+/* §8.5.2's 32 px hit target applies to the canvas handles; these are their DOM
+   equivalents and get the same floor, because a stepper that is hard to hit is the
+   control a touch player is left with when dragging is not viable (§8.5.4). */
+.hh-editor__stepper {
+  min-width: 32px;
+  min-height: 32px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-editor__magnitude,
+.hh-editor__note {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.hh-editor__result h4 {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.hh-editor__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hh-planner__committed {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid #7fbf6a;
+}
+
+.hh-orbit__control {
+  /* §8.5.2's 32 px floor. These sit over the canvas and are the touch route to the
+     camera, so they get the same target size the canvas handles do. */
+  min-width: 32px;
+  min-height: 32px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-editor__snap [role='radio'][aria-checked='true'] {
+  font-weight: 600;
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}

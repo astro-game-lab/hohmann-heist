@@ -73,7 +73,6 @@ export interface UiMessageParams {
   readonly 'nav.daily': Record<string, never>;
   readonly 'nav.codex': Record<string, never>;
   readonly 'nav.settings': Record<string, never>;
-  readonly 'nav.spike': Record<string, never>;
 
   // ── Screen headings and the not-found state (§8.2, §8.7, #117) ─────────────
   //
@@ -247,6 +246,204 @@ export interface UiMessageParams {
    */
   readonly 'briefing.si.metresPerSecond': { readonly metresPerSecond: number };
   readonly 'briefing.si.seconds': { readonly seconds: number };
+
+  // ── The planner (§8.3.4, §8.3.5, #123, #127–#132, #137, #139) ──────────────
+  //
+  // §8.3.4's five regions, and every string in them. Three habits are worth naming
+  // because the planner is where they first cost something:
+  //
+  // **Every number arrives in SI.** `altitudeMetres`, not kilometres; `seconds`, not
+  // minutes. The panel reads metres out of `@hh/ui`'s `orbitReadout` and hands them
+  // straight here, so the conversion happens exactly once, in the layer that also owns
+  // the separator and the grouping. A component that divided by 1000 before calling a
+  // message would have made "274,2 km" impossible in fr-FR while looking perfectly
+  // correct in review.
+  //
+  // **The accessible name is its own key, not the visible one reused.** A plan-panel row
+  // reads "1 · T+00:04:12 · −36.2" on screen, which is a table and not a sentence; a
+  // screen reader needs "Node 1, at T plus 4 minutes 12 seconds, prograde 36.2 metres per
+  // second retrograde". #130's last criterion asks for exactly this — "announced
+  // meaningfully rather than as bare numbers" — and it cannot be met by adding an
+  // `aria-label` built from the same fragments.
+  //
+  // **Status is text before it is colour.** §8.3.4's fifth principle and §8.8 both say
+  // nothing may be carried by colour alone, so the Δv bar's three levels and the
+  // approach block's met/unmet each have a key. The colour reinforces the word; it never
+  // replaces it.
+  readonly 'planner.region.orbitView': Record<string, never>;
+  readonly 'planner.region.hud': Record<string, never>;
+
+  // ① HUD bar (#127)
+  readonly 'planner.hud.back': Record<string, never>;
+  readonly 'planner.hud.contract': { readonly index: number; readonly title: string };
+  readonly 'planner.hud.dvLabel': Record<string, never>;
+  /** "72.4 / 250 m/s" — §8.3.4's own rendering. */
+  readonly 'planner.hud.dv': { readonly usedMps: number; readonly budgetMps: number };
+  /**
+   * The Δv bar's accessible name, and the non-colour channel for its three levels.
+   *
+   * `fraction` rather than a level string, so the message decides the wording *and* the
+   * thresholds' phrasing together. §8.3.4 puts amber at 90% and red above 100%, and
+   * `BUDGET_WARNING_FRACTION` in `@hh/game` is where the 0.9 itself lives.
+   */
+  readonly 'planner.hud.dvBar': {
+    readonly fraction: number;
+    readonly usedMps: number;
+    readonly budgetMps: number;
+  };
+  readonly 'planner.hud.metLabel': Record<string, never>;
+  readonly 'planner.hud.met': { readonly metSeconds: number };
+  readonly 'planner.hud.settings': Record<string, never>;
+  readonly 'planner.hud.help': Record<string, never>;
+
+  // ② Timeline (#128)
+  readonly 'planner.timeline.label': Record<string, never>;
+  /** The slider's accessible value: where the scrub head is. */
+  readonly 'planner.timeline.scrubAt': { readonly metSeconds: number };
+  /** §8.5.3 asks for a documented step; this is where it is documented to the player. */
+  readonly 'planner.timeline.stepHint': { readonly stepSeconds: number };
+  readonly 'planner.timeline.deadline': { readonly metSeconds: number };
+  readonly 'planner.timeline.node': { readonly index: number; readonly metSeconds: number };
+  readonly 'planner.timeline.objectiveMet': { readonly metSeconds: number };
+  /**
+   * A shaded constraint band (§6.5).
+   *
+   * One key per constraint kind would be four keys saying the same shape; the kind
+   * arrives as a *number* — the index into a list this message owns — rather than as a
+   * string fragment, so the sentence stays the message's to write. See `en.ts`.
+   */
+  readonly 'planner.timeline.band': {
+    readonly kind: number;
+    readonly startMetSeconds: number;
+    readonly endMetSeconds: number;
+  };
+
+  // ③ Plan panel (#130)
+  readonly 'planner.plan.heading': Record<string, never>;
+  readonly 'planner.plan.empty': Record<string, never>;
+  readonly 'planner.plan.listLabel': { readonly count: number };
+  /** The row's visible epoch. */
+  readonly 'planner.plan.nodeEpoch': { readonly index: number; readonly metSeconds: number };
+  /** The row's accessible name. See the note above on why it is not the visible one. */
+  readonly 'planner.plan.nodeLabel': {
+    readonly index: number;
+    readonly metSeconds: number;
+    readonly progradeMps: number;
+    readonly radialMps: number;
+  };
+  readonly 'planner.plan.prograde': { readonly mps: number };
+  readonly 'planner.plan.radial': { readonly mps: number };
+  readonly 'planner.plan.delete': { readonly index: number };
+  readonly 'planner.plan.expand': { readonly index: number };
+  readonly 'planner.plan.addNode': Record<string, never>;
+
+  // ④ Readouts (#131)
+  readonly 'planner.readouts.heading': Record<string, never>;
+  // Row labels are their own keys, separate from the values beside them. A label is a
+  // noun and a value is a quantity; sharing a key would mean one of the two decided the
+  // other's wording, and `planner.apsis.apoapsis` — which already carries an altitude —
+  // is a canvas annotation rather than a table heading.
+  readonly 'planner.readouts.apoapsisLabel': Record<string, never>;
+  readonly 'planner.readouts.periapsisLabel': Record<string, never>;
+  readonly 'planner.readouts.altitudeLabel': Record<string, never>;
+  readonly 'planner.readouts.periodLabel': Record<string, never>;
+  readonly 'planner.readouts.eccentricityLabel': Record<string, never>;
+  readonly 'planner.readouts.apoapsis': { readonly altitudeMetres: number };
+  readonly 'planner.readouts.periapsis': { readonly altitudeMetres: number };
+  /** The single row a near-circular orbit shows instead of the pair (§9.3's suppression). */
+  readonly 'planner.readouts.altitude': { readonly altitudeMetres: number };
+  readonly 'planner.readouts.period': { readonly seconds: number };
+  readonly 'planner.readouts.eccentricity': { readonly eccentricity: number };
+  /** Why the apsis rows are absent. Without it the suppression looks like a broken panel. */
+  readonly 'planner.readouts.circularNote': Record<string, never>;
+  /** Likewise for an open orbit, which is `L4` and has no period. */
+  readonly 'planner.readouts.openNote': Record<string, never>;
+
+  // ④ Closest approach (#132)
+  readonly 'planner.approach.heading': Record<string, never>;
+  readonly 'planner.approach.rangeLabel': Record<string, never>;
+  readonly 'planner.approach.relativeSpeedLabel': Record<string, never>;
+  readonly 'planner.approach.atLabel': Record<string, never>;
+  readonly 'planner.approach.range': { readonly rangeMetres: number };
+  readonly 'planner.approach.relativeSpeed': { readonly mps: number };
+  readonly 'planner.approach.at': { readonly metSeconds: number };
+  /** The met/unmet channel that is not colour (FR-407, §8.8). */
+  readonly 'planner.approach.met': { readonly maxRangeMetres: number };
+  readonly 'planner.approach.notMet': { readonly maxRangeMetres: number };
+  readonly 'planner.approach.none': Record<string, never>;
+
+  // ⑤ Assist tray (#133's snap toggle only; #140 brings the rest in M3)
+  readonly 'planner.assists.heading': Record<string, never>;
+  readonly 'planner.assists.snapToApsis': Record<string, never>;
+  readonly 'planner.assists.snapToApsisHint': { readonly windowSeconds: number };
+
+  // Narrow layout (#123): the tab strip the three side panels collapse into.
+  readonly 'planner.tab.plan': { readonly count: number };
+  readonly 'planner.tab.readouts': Record<string, never>;
+  readonly 'planner.tab.assists': Record<string, never>;
+  readonly 'planner.tabsLabel': Record<string, never>;
+
+  // ── The node editor overlay (§8.3.5, #137) ────────────────────────────────
+  //
+  // The result block's rows are **deltas**, and each delta key handles its own
+  // "unchanged" case rather than the component testing for zero. That is `types.ts`'s
+  // rule about branching inside the message: whether a change is worth reporting is a
+  // rounding decision, and rounding belongs with the formatting.
+  readonly 'planner.editor.heading': { readonly index: number };
+  readonly 'planner.editor.close': Record<string, never>;
+
+  readonly 'planner.editor.epochLabel': Record<string, never>;
+  readonly 'planner.editor.hours': Record<string, never>;
+  readonly 'planner.editor.minutes': Record<string, never>;
+  readonly 'planner.editor.seconds': Record<string, never>;
+  readonly 'planner.editor.milliseconds': Record<string, never>;
+  readonly 'planner.editor.epochSlider': Record<string, never>;
+
+  readonly 'planner.editor.snapLabel': Record<string, never>;
+  readonly 'planner.editor.snapPeriapsis': Record<string, never>;
+  readonly 'planner.editor.snapApoapsis': Record<string, never>;
+  readonly 'planner.editor.snapFree': Record<string, never>;
+
+  readonly 'planner.editor.deltaVLabel': Record<string, never>;
+  readonly 'planner.editor.prograde': Record<string, never>;
+  readonly 'planner.editor.radial': Record<string, never>;
+  readonly 'planner.editor.normal': Record<string, never>;
+  /** §8.3.5 marks the normal component v1.1. The field is shown, disabled, and says so. */
+  readonly 'planner.editor.normalNote': Record<string, never>;
+  readonly 'planner.editor.magnitudeLabel': Record<string, never>;
+  readonly 'planner.editor.magnitude': { readonly mps: number };
+  /** The steppers' accessible names. `sign` is −1 or +1; the message picks the wording. */
+  readonly 'planner.editor.step': { readonly sign: number; readonly axis: number };
+  readonly 'planner.editor.stepHint': { readonly stepMps: number };
+
+  readonly 'planner.editor.resultHeading': Record<string, never>;
+  /** "(−125.8)", or "(unchanged)" when the change rounds away. See the note above. */
+  readonly 'planner.editor.deltaAltitude': { readonly deltaMetres: number };
+  readonly 'planner.editor.deltaPeriod': { readonly deltaSeconds: number };
+  /** What the result block says when the burn opens the orbit and there is no apoapsis. */
+  readonly 'planner.editor.resultOpen': Record<string, never>;
+
+  readonly 'planner.editor.delete': Record<string, never>;
+  readonly 'planner.editor.done': Record<string, never>;
+
+  // Commit (#139). The reasons themselves are `@hh/game`'s keys, not this layer's.
+  readonly 'planner.commit': Record<string, never>;
+
+  // Camera (#103)
+  readonly 'planner.camera.recentre': Record<string, never>;
+  readonly 'planner.camera.zoomIn': Record<string, never>;
+  readonly 'planner.camera.zoomOut': Record<string, never>;
+
+  /**
+   * FR-406's full-precision reveal, on hover **or** focus.
+   *
+   * Three keys — one per unit — rather than one taking a formatted string, because a
+   * number that has already been turned into text has had its locale decided. `float64`
+   * in the name is the promise: this is the value as held, not a longer rounding of it.
+   */
+  readonly 'planner.si.metres': { readonly metres: number };
+  readonly 'planner.si.metresPerSecond': { readonly metresPerSecond: number };
+  readonly 'planner.si.seconds': { readonly seconds: number };
 
   // ── Save problems (§11.7, #183) ────────────────────────────────────────────
   //
