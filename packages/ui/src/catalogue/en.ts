@@ -376,6 +376,59 @@ export const en: Messages = {
   'planner.tab.assists': () => 'Assists',
   'planner.tabsLabel': () => 'Planner panels',
 
+  // ── The node editor (§8.3.5) ──────────────────────────────────────────────
+
+  'planner.editor.heading': ({ index }, fmt) => `Node ${fmt.integer(index)}`,
+  'planner.editor.close': () => 'Close editor',
+
+  'planner.editor.epochLabel': () => 'Epoch',
+  'planner.editor.hours': () => 'hours',
+  'planner.editor.minutes': () => 'minutes',
+  'planner.editor.seconds': () => 'seconds',
+  'planner.editor.milliseconds': () => 'milliseconds',
+  'planner.editor.epochSlider': () => 'Epoch within the mission window',
+
+  'planner.editor.snapLabel': () => 'Snap to',
+  'planner.editor.snapPeriapsis': () => 'periapsis',
+  'planner.editor.snapApoapsis': () => 'apoapsis',
+  'planner.editor.snapFree': () => 'free',
+
+  'planner.editor.deltaVLabel': () => 'Δv (RTN, m/s)',
+  'planner.editor.prograde': () => 'prograde',
+  'planner.editor.radial': () => 'radial',
+  'planner.editor.normal': () => 'normal',
+  'planner.editor.normalNote': () => 'v1.1',
+  'planner.editor.magnitudeLabel': () => 'magnitude',
+  'planner.editor.magnitude': ({ mps }, fmt) => `${fmt.decimal(mps, 4)} m/s`,
+  // The axis arrives as an index into a list this message owns, for the same reason the
+  // timeline's constraint bands do: the axis *name* is a word, and a word assembled into
+  // a sentence elsewhere fixes English's order for every language.
+  'planner.editor.step': ({ sign, axis }) => {
+    const names = ['prograde', 'radial'];
+    const name = names[axis] ?? 'component';
+    return `${sign < 0 ? 'Decrease' : 'Increase'} ${name}`;
+  },
+  'planner.editor.stepHint': ({ stepMps }, fmt) =>
+    `Steps by ${fmt.decimal(stepMps, 1)} m/s; hold Shift for a tenth, Ctrl for ten times`,
+
+  'planner.editor.resultHeading': () => 'Result after this burn',
+  // Below a tenth of a kilometre the reading would be "(−0.0)", which says "something
+  // changed" and shows nothing — worse than saying the change is too small to see.
+  'planner.editor.deltaAltitude': ({ deltaMetres }, fmt) => {
+    const km = Math.round(deltaMetres / 100) / 10;
+    if (km === 0) return '(unchanged)';
+    return `(${km > 0 ? '+' : '\u2212'}${fmt.decimal(Math.abs(km), 1)})`;
+  },
+  'planner.editor.deltaPeriod': ({ deltaSeconds }, fmt) => {
+    const minutes = Math.round(deltaSeconds / 6) / 10;
+    if (minutes === 0) return '(unchanged)';
+    return `(${minutes > 0 ? '+' : '\u2212'}${fmt.decimal(Math.abs(minutes), 1)})`;
+  },
+  'planner.editor.resultOpen': () => 'This burn opens the orbit — no apoapsis or period',
+
+  'planner.editor.delete': () => 'Delete',
+  'planner.editor.done': () => 'Done',
+
   'planner.commit': () => 'Commit plan',
 
   'planner.camera.recentre': () => 'Recentre view',

@@ -383,6 +383,49 @@ export interface UiMessageParams {
   readonly 'planner.tab.assists': Record<string, never>;
   readonly 'planner.tabsLabel': Record<string, never>;
 
+  // ── The node editor overlay (§8.3.5, #137) ────────────────────────────────
+  //
+  // The result block's rows are **deltas**, and each delta key handles its own
+  // "unchanged" case rather than the component testing for zero. That is `types.ts`'s
+  // rule about branching inside the message: whether a change is worth reporting is a
+  // rounding decision, and rounding belongs with the formatting.
+  readonly 'planner.editor.heading': { readonly index: number };
+  readonly 'planner.editor.close': Record<string, never>;
+
+  readonly 'planner.editor.epochLabel': Record<string, never>;
+  readonly 'planner.editor.hours': Record<string, never>;
+  readonly 'planner.editor.minutes': Record<string, never>;
+  readonly 'planner.editor.seconds': Record<string, never>;
+  readonly 'planner.editor.milliseconds': Record<string, never>;
+  readonly 'planner.editor.epochSlider': Record<string, never>;
+
+  readonly 'planner.editor.snapLabel': Record<string, never>;
+  readonly 'planner.editor.snapPeriapsis': Record<string, never>;
+  readonly 'planner.editor.snapApoapsis': Record<string, never>;
+  readonly 'planner.editor.snapFree': Record<string, never>;
+
+  readonly 'planner.editor.deltaVLabel': Record<string, never>;
+  readonly 'planner.editor.prograde': Record<string, never>;
+  readonly 'planner.editor.radial': Record<string, never>;
+  readonly 'planner.editor.normal': Record<string, never>;
+  /** §8.3.5 marks the normal component v1.1. The field is shown, disabled, and says so. */
+  readonly 'planner.editor.normalNote': Record<string, never>;
+  readonly 'planner.editor.magnitudeLabel': Record<string, never>;
+  readonly 'planner.editor.magnitude': { readonly mps: number };
+  /** The steppers' accessible names. `sign` is −1 or +1; the message picks the wording. */
+  readonly 'planner.editor.step': { readonly sign: number; readonly axis: number };
+  readonly 'planner.editor.stepHint': { readonly stepMps: number };
+
+  readonly 'planner.editor.resultHeading': Record<string, never>;
+  /** "(−125.8)", or "(unchanged)" when the change rounds away. See the note above. */
+  readonly 'planner.editor.deltaAltitude': { readonly deltaMetres: number };
+  readonly 'planner.editor.deltaPeriod': { readonly deltaSeconds: number };
+  /** What the result block says when the burn opens the orbit and there is no apoapsis. */
+  readonly 'planner.editor.resultOpen': Record<string, never>;
+
+  readonly 'planner.editor.delete': Record<string, never>;
+  readonly 'planner.editor.done': Record<string, never>;
+
   // Commit (#139). The reasons themselves are `@hh/game`'s keys, not this layer's.
   readonly 'planner.commit': Record<string, never>;
 

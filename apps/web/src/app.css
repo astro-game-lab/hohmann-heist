@@ -200,6 +200,10 @@
   gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
+  /* The containing block for the node editor's anchor. §8.3.5 puts the overlay beside
+     the node it edits, and the node's position is reported in the orbit view's own
+     pixel space — so the two have to share an origin. */
+  position: relative;
 }
 
 .hh-planner__side {
@@ -309,6 +313,8 @@
   position: absolute;
   right: 8px;
   bottom: 8px;
+  display: flex;
+  gap: 4px;
 }
 
 /* ── The HUD bar (#127) ──────────────────────────────────────────────────── */
@@ -583,4 +589,170 @@
 .hh-commit__button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* The overlay's placement. Anchored beside the node when the orbit view can say where it
+   is drawn; docked at the stage's edge when it cannot — an overlay pointing at nothing is
+   worse than one that is merely nearby. Never a backdrop and never a scroll lock: it is
+   not modal, and the rest of the planner stays usable while it is open. */
+.hh-editor__anchor {
+  --hh-anchor-width: min(320px, calc(100% - 16px));
+
+  position: absolute;
+  z-index: 2;
+  width: var(--hh-anchor-width);
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  background: #0a0e17;
+}
+
+/* Clamped to the stage, so the overlay is beside its node where there is room and at the
+   edge where there is not. Measured in CSS rather than in JavaScript because `100%` here
+   is the stage's width and stays correct through every resize and re-frame without a
+   layout read. Without the clamp the panel runs off the right edge on a narrow layout,
+   which puts a horizontal scrollbar on the whole page. */
+.hh-editor__anchor[data-anchored='true'] {
+  left: clamp(8px, var(--hh-anchor-x, 8px), calc(100% - var(--hh-anchor-width) - 8px));
+  top: clamp(8px, var(--hh-anchor-y, 8px), calc(100% - 48px));
+}
+
+.hh-editor__anchor[data-anchored='false'] {
+  right: 8px;
+  top: 8px;
+}
+
+/* ── The node editor overlay (§8.3.5, #137) ──────────────────────────────── *
+ *
+ * Anchored and **never modal**: no backdrop, no scroll lock, nothing that would stop the
+ * rest of the planner being used while it is open. It is a panel that happens to float.
+ */
+
+.hh-editor {
+  border: 1px solid rgba(127, 127, 127, 0.5);
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hh-editor__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hh-editor__header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hh-editor__group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hh-editor__group legend {
+  padding: 0;
+  opacity: 0.7;
+}
+
+.hh-editor__epoch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.hh-editor__epoch input {
+  width: 5ch;
+  font: inherit;
+}
+
+.hh-editor__slider {
+  width: 100%;
+}
+
+.hh-editor__snap {
+  display: flex;
+  gap: 6px;
+}
+
+.hh-editor__field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hh-editor__field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.hh-editor__field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: right;
+}
+
+/* §8.5.2's 32 px hit target applies to the canvas handles; these are their DOM
+   equivalents and get the same floor, because a stepper that is hard to hit is the
+   control a touch player is left with when dragging is not viable (§8.5.4). */
+.hh-editor__stepper {
+  min-width: 32px;
+  min-height: 32px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-editor__magnitude,
+.hh-editor__note {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.hh-editor__result h4 {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.hh-editor__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hh-planner__committed {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid #7fbf6a;
+}
+
+.hh-orbit__control {
+  /* §8.5.2's 32 px floor. These sit over the canvas and are the touch route to the
+     camera, so they get the same target size the canvas handles do. */
+  min-width: 32px;
+  min-height: 32px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-editor__snap [role='radio'][aria-checked='true'] {
+  font-weight: 600;
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
 }

@@ -296,3 +296,324 @@ describe('the camera control (#103)', () => {
     expect(el('orbit-recentre')).not.toBeNull();
   });
 });
+
+// ── The interactions (#133, #134, #135, #137, #139) ─────────────────────────
+//
+// Driven through the keyboard and the DOM controls rather than through the canvas, and
+// that is the point rather than a limitation: §8.5.3 and FR-405 require every one of
+// these to be reachable without a pointer, so a test that can only reach them by
+// simulating a drag would be testing the half that is not the requirement. The pointer
+// paths share the same store actions — `OrbitView` calls exactly what these do.
+
+const press = async (key: string, modifiers: Partial<KeyboardEventInit> = {}): Promise<void> => {
+  await act(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...modifiers }));
+  });
+};
+
+describe('adding a node by keyboard (#133, §8.5.3’s N)', () => {
+  it('places one at the scrub head', async () => {
+    await mount();
+    await press('n');
+    expect(el('plan-node-0')).not.toBeNull();
+  });
+
+  it('refuses a second node inside the minimum spacing, with the L5 reason (#133)', async () => {
+    await mount();
+    await press('n');
+    // The scrub head has not moved, so this lands on the same epoch — FR-101's 1 s
+    // separation refuses it, and the refusal is shown rather than silently merged.
+    await press('n');
+    expect(el('planner-refusal')).not.toBeNull();
+    expect(container.querySelectorAll('.hh-plan__row')).toHaveLength(1);
+  });
+});
+
+describe('the node editor (#137)', () => {
+  const open = async (): Promise<void> => {
+    await mount();
+    await press('n');
+    await click('plan-node-0');
+    await press('e');
+  };
+
+  it('opens with E on a selected node, and is not modal', async () => {
+    await open();
+    const editor = el('node-editor');
+    expect(editor).not.toBeNull();
+    // A `dialog` role would announce it as modal and invite a focus trap. §8.3.5 says
+    // "anchored to the node, never modal".
+    expect(editor?.getAttribute('role')).toBe('group');
+    // And the rest of the planner is still there and still interactive.
+    expect(el('timeline-scrub')).not.toBeNull();
+    expect(el('plan-node-0')).not.toBeNull();
+  });
+
+  it('opens from the plan panel’s ⤢ as well', async () => {
+    await mount();
+    await press('n');
+    await click('plan-expand-0');
+    expect(el('node-editor')).not.toBeNull();
+  });
+
+  it('shows the four epoch fields §8.3.5 draws', async () => {
+    await open();
+    for (const field of ['hours', 'minutes', 'seconds', 'milliseconds']) {
+      expect(el(`editor-epoch-${field}`)).not.toBeNull();
+    }
+  });
+
+  it('restores the previous value when an epoch field is out of range', async () => {
+    await open();
+    const minutes = el('editor-epoch-minutes');
+    if (!(minutes instanceof HTMLInputElement)) throw new Error('no minutes field');
+    const before = minutes.value;
+
+    // Two acts, not one. A browser delivers `input` and `blur` as separate tasks and
+    // renders between them; batching both into a single act would render once, with the
+    // restored value equal to the vnode value already on screen, and no DOM write —
+    // which would fail this test for a reason that never happens to a player.
+    await act(() => {
+      minutes.value = '75';
+      minutes.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(() => {
+      minutes.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    });
+
+    // §8.3.5: "rejected on blur with the previous value restored, never silently
+    // clamped". 75 must not become 59.
+    const after = (el('editor-epoch-minutes') as HTMLInputElement).value;
+    expect(after).not.toBe('75');
+    expect(after).not.toBe('59');
+    expect(after).toBe(before);
+  });
+
+  it('accepts full float64 Δv entry (§8.3.5)', async () => {
+    await open();
+    const prograde = el('editor-prograde');
+    if (!(prograde instanceof HTMLInputElement)) throw new Error('no prograde field');
+    // No `step` attribute: a step would make the browser refuse a value the game accepts.
+    expect(prograde.getAttribute('step')).toBeNull();
+
+    await act(() => {
+      prograde.value = '-36.2001';
+      prograde.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(Number((el('editor-prograde') as HTMLInputElement).value)).toBeCloseTo(-36.2001, 4);
+  });
+
+  it('steps prograde by 1 m/s, and by a tenth with Shift (§8.3.5)', async () => {
+    await open();
+    await click('editor-step-prograde-up');
+    expect(Number((el('editor-prograde') as HTMLInputElement).value)).toBeCloseTo(1, 4);
+
+    await act(() => {
+      el('editor-step-prograde-up')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, shiftKey: true }),
+      );
+    });
+    expect(Number((el('editor-prograde') as HTMLInputElement).value)).toBeCloseTo(1.1, 4);
+  });
+
+  it('keeps the normal component out — §8.3.5 marks it v1.1', async () => {
+    await open();
+    const normal = el('editor-normal');
+    expect(normal).not.toBeNull();
+    expect((normal as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('shows the result block as live deltas against the pre-burn orbit (FR-410)', async () => {
+    await open();
+    await act(() => {
+      const prograde = el('editor-prograde');
+      if (prograde instanceof HTMLInputElement) {
+        prograde.value = '40';
+        prograde.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    // A prograde burn raises apoapsis. The delta is what §8.3.5 calls the learning
+    // surface, and the sign is the rule a player is meant to see.
+    const apoapsis = text('editor-result-apoapsis');
+    expect(apoapsis).toContain('+');
+  });
+
+  it('closes without losing the edit', async () => {
+    await open();
+    await act(() => {
+      const prograde = el('editor-prograde');
+      if (prograde instanceof HTMLInputElement) {
+        prograde.value = '12.5';
+        prograde.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    await click('editor-done');
+    expect(el('node-editor')).toBeNull();
+    // The plan kept it — there was never a draft to lose, because every field commits as
+    // it is edited. #137's sixth criterion.
+    expect(text('plan-node-0')).toContain('12.5');
+  });
+});
+
+describe('keyboard editing (#134, #135, §8.5.3)', () => {
+  const withNode = async (): Promise<void> => {
+    await mount();
+    await press('n');
+    await click('plan-node-0');
+  };
+
+  it('nudges prograde with the arrow keys', async () => {
+    await withNode();
+    await press('ArrowUp');
+    await press('e');
+    expect(Number((el('editor-prograde') as HTMLInputElement).value)).toBeCloseTo(1, 4);
+  });
+
+  it('nudges radial with the horizontal arrows', async () => {
+    await withNode();
+    await press('ArrowRight');
+    await press('e');
+    expect(Number((el('editor-radial') as HTMLInputElement).value)).toBeCloseTo(1, 4);
+  });
+
+  it('nudges the epoch with `.` and `,`', async () => {
+    await withNode();
+    const before = text('plan-node-0');
+    await press('.');
+    expect(text('plan-node-0')).not.toBe(before);
+  });
+
+  it('deletes the selected node', async () => {
+    await withNode();
+    await press('Delete');
+    expect(el('plan-empty')).not.toBeNull();
+  });
+
+  it('scrubs with `[` and `]`, without touching the plan', async () => {
+    await withNode();
+    await press(']');
+    expect(text('hud-met')).toContain('00:01:00');
+    // FR-403: a view operation. The burn is still there and still where it was.
+    expect(el('plan-node-0')).not.toBeNull();
+  });
+
+  it('jumps to the start with Home', async () => {
+    await mount();
+    await press(']');
+    await press('Home');
+    expect(text('hud-met')).toContain('00:00:00');
+  });
+
+  it('does not fire while the player is typing into the editor', async () => {
+    await withNode();
+    await press('e');
+    const prograde = el('editor-prograde');
+    if (!(prograde instanceof HTMLInputElement)) throw new Error('no prograde field');
+
+    await act(() => {
+      prograde.focus();
+      prograde.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }));
+    });
+    // `N` would otherwise have added a second burn while the player was typing a number.
+    expect(container.querySelectorAll('.hh-plan__row')).toHaveLength(1);
+  });
+});
+
+describe('commit (#139)', () => {
+  it('is offered, and reaches the machine’s terminal state', async () => {
+    await mount();
+    await press('n');
+    const commit = el('commit');
+    expect(commit).not.toBeNull();
+    if ((commit as HTMLButtonElement).disabled) return;
+
+    await click('commit');
+    // §8.5.1's exit to EXECUTION. That phase is #121 and PR 6, so it reaches the same
+    // honest placeholder every unbuilt route does.
+    expect(el('planner-committed')).not.toBeNull();
+  });
+});
+
+describe('the overlay is anchored, and is not modal (§8.3.5)', () => {
+  it('docks at the stage edge when the node’s drawn position is unknown', async () => {
+    // jsdom has no 2-D context, so the orbit view draws nothing and reports no anchor —
+    // which is the same state a real browser reaches when the node is off screen. The
+    // overlay still appears, at the edge, rather than at (0, 0) pointing at nothing.
+    await mount();
+    await press('n');
+    await click('plan-expand-0');
+    const anchor = container.querySelector('.hh-editor__anchor');
+    expect(anchor).not.toBeNull();
+    expect(anchor?.getAttribute('data-anchored')).toBe('false');
+  });
+
+  it('lives inside the stage, so it is positioned in the orbit view’s pixel space', async () => {
+    await mount();
+    await press('n');
+    await click('plan-expand-0');
+    const stage = container.querySelector('.hh-planner__stage');
+    expect(stage?.contains(el('node-editor'))).toBe(true);
+  });
+
+  it('leaves the rest of the planner reachable while it is open', async () => {
+    await mount();
+    await press('n');
+    await click('plan-expand-0');
+    // No backdrop, no scroll lock, no focus trap: the timeline still scrubs and the HUD
+    // still follows it.
+    const scrub = el('timeline-scrub');
+    if (!(scrub instanceof HTMLInputElement)) throw new Error('no scrub control');
+    await act(() => {
+      scrub.value = '600';
+      scrub.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(text('hud-met')).toContain('00:10:00');
+    expect(el('node-editor')).not.toBeNull();
+  });
+});
+
+describe('§8.3.4’s camera controls', () => {
+  it('offers ⊕, ⊖ and ⌖, all as buttons', async () => {
+    // §8.8: nothing lives on the canvas alone. A wheel gesture is not reachable by
+    // keyboard, so the zoom has DOM controls beside the recentre.
+    await mount();
+    for (const id of ['orbit-zoom-in', 'orbit-zoom-out', 'orbit-recentre']) {
+      expect(el(id)?.tagName).toBe('BUTTON');
+    }
+  });
+});
+
+describe('§8.3.5’s snap radios', () => {
+  it('offers all three, with "free" reporting the state rather than commanding it', async () => {
+    await mount();
+    await press('n');
+    await click('plan-expand-0');
+    for (const kind of ['periapsis', 'apoapsis', 'free']) {
+      const radio = el(`editor-snap-${kind}`);
+      expect(radio).not.toBeNull();
+      expect(radio?.getAttribute('role')).toBe('radio');
+    }
+    // "Free" is where a burn is when it is on neither apsis; there is nothing to press to
+    // get there, so it reports and does not act.
+    expect((el('editor-snap-free') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('reads C03’s first burn as free — a circular orbit has no apsides to sit on', async () => {
+    await mount();
+    await press('n');
+    await click('plan-expand-0');
+    expect(el('editor-snap-free')?.getAttribute('aria-checked')).toBe('true');
+    expect(el('editor-snap-periapsis')?.getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+describe('the live preview during a gesture (#134, #135)', () => {
+  it('leaves the settled evaluation alone when nothing is being dragged', async () => {
+    // The preview exists only while a gesture is in flight; every region falls back to
+    // the settled evaluation, so there is one place that knows a preview is possible.
+    await mount();
+    await press('n');
+    expect(el('readouts')).not.toBeNull();
+    expect(el('plan-node-0')).not.toBeNull();
+  });
+});

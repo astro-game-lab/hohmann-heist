@@ -37,21 +37,24 @@
  * there is no narrow variant of `PlanPanel` that could quietly drop the delete button.
  */
 import { arcAt, type Timeline } from '@hh/sim';
-import { R_EARTH_EQ, elementsFromState, type Epoch } from '@hh/astro';
+import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
+import { snapToNamedApsis } from '@hh/game';
 import type { Catalogue } from '@hh/ui';
-import { approachReadout, orbitReadout } from '@hh/ui';
+import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 import { AssistTray } from './AssistTray.js';
 import { CommitBar } from './CommitBar.js';
+import { NodeEditor } from './NodeEditor.js';
+import { actionFor, isTypingTarget } from './keys.js';
 import { HudBar } from './HudBar.js';
 import { OrbitView } from './OrbitView.js';
 import { PlanPanel } from './PlanPanel.js';
 import { Readouts } from './Readouts.js';
 import { TimelineStrip } from './TimelineStrip.js';
-import { selectedIndex, usePlanner, nodeIdOf } from './store.js';
+import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf } from './store.js';
 
 /** Which side panel the narrow layout is showing. Ignored above the breakpoint. */
 type Tab = 'plan' | 'readouts' | 'assists';
@@ -78,8 +81,15 @@ const orbitAtScrub = (timeline: Timeline, at: Epoch, mu: number) => {
 export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProps): JSX.Element => {
   const [state, actions] = usePlanner(scenario);
   const [tab, setTab] = useState<Tab>('plan');
+  // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
+  // screen, or when the plan produced no trajectory to draw it on — see below.
+  const [anchor, setAnchor] = useState<{ readonly x: number; readonly y: number } | null>(null);
 
-  const { model, evaluation } = state;
+  const { model } = state;
+  // The preview while a gesture is in flight, the settled evaluation otherwise. Every
+  // region reads this one value, so the orbit view, the readouts and the timeline cannot
+  // disagree about which plan they are showing (#134, #135).
+  const evaluation = state.preview ?? state.evaluation;
   const index = selectedIndex(state);
   const selectedNode = index === null ? undefined : model.plan.nodes[index];
   const selectedNodeId = selectedNode === undefined ? null : nodeIdOf(selectedNode);
@@ -112,10 +122,148 @@ export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProp
         )
       : orbitAtScrub(evaluation.timeline, model.scrub.epoch, scenario.mu);
 
+  // #137's overlay, and the two orbits its result block compares. The impulse already
+  // carries the state on each side of the burn, so there is no propagation here.
+  const editorIndex = indexOfNodeId(model.plan, state.editorFor);
+  const editorNode = editorIndex === null ? undefined : model.plan.nodes[editorIndex];
+  const impulse = editorIndex === null ? undefined : evaluation.timeline?.impulses[editorIndex];
+  const editorOrbits =
+    impulse === undefined
+      ? null
+      : {
+          before: elementsFromState(impulse.before.position, impulse.before.velocity, scenario.mu),
+          after: elementsFromState(impulse.after.position, impulse.after.velocity, scenario.mu),
+        };
+
+  // What the orbit view needs to draw a gesture in flight (#134, #135). Read from the
+  // machine's drag payload rather than from the plan, because the plan is deliberately
+  // not touched until release.
+  const draggingInteraction = model.interaction.phase === 'DRAGGING' ? model.interaction : null;
+  const draggingIndex =
+    draggingInteraction === null ? null : indexOfNodeId(model.plan, draggingInteraction.nodeId);
+  const dragPreview =
+    draggingInteraction === null || draggingIndex === null
+      ? null
+      : {
+          nodeId: draggingInteraction.nodeId,
+          kind: draggingInteraction.drag.kind,
+          index: draggingIndex,
+          ...(draggingInteraction.drag.kind === 'deltaV'
+            ? componentsOfCounts(draggingInteraction.drag.counts)
+            : componentsOfCounts(model.plan.nodes[draggingIndex]?.deltaVCounts ?? [0, 0, 0])),
+        };
+
+  // Which apsis the overlay's burn is sitting on, for §8.3.5's radios. Compared against
+  // the epoch the *command* would produce, so the reading agrees with what pressing the
+  // radio would do — a separate tolerance here could say "free" for a burn that snapping
+  // would not move.
+  const editorSnappedTo = ((): 'periapsis' | 'apoapsis' | null => {
+    // Narrowed once, in a block, rather than asserted at each use. `evaluation.timeline`
+    // is nullable and the closure below reads it twice; hoisting is what lets both reads
+    // be checked instead of cast away.
+    const { timeline } = evaluation;
+    if (editorNode === undefined || timeline === null) return null;
+    return (
+      (['periapsis', 'apoapsis'] as const).find(
+        (kind) => snapToNamedApsis(timeline, editorNode.epoch, kind) === editorNode.epoch,
+      ) ?? null
+    );
+  })();
+
   const approach =
     evaluation.objective !== null && evaluation.objective.kind !== 'reach_orbit'
       ? approachReadout(evaluation.objective)
       : null;
+
+  /**
+   * §8.5.3's map, on the document.
+   *
+   * Installed once rather than per-region, because NFR-016's "fully operable without a
+   * pointer" has to hold wherever focus happens to be — a binding that only worked while
+   * focus was on the canvas would fail exactly when a keyboard user needed it. The
+   * typing guard is what keeps `,` and `N` from firing into the node editor's fields.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (isTypingTarget(event.target)) return;
+      const action = actionFor(event.key, { shift: event.shiftKey, ctrl: event.ctrlKey });
+      if (action === null) return;
+
+      const at = selectedIndex({ ...state });
+      switch (action.kind) {
+        case 'addNode':
+          actions.addNodeAt(model.scrub.epoch);
+          break;
+        case 'deleteNode':
+          if (at !== null) actions.deleteIndex(at);
+          break;
+        case 'editNode':
+          if (at !== null) actions.openEditor(at);
+          break;
+        case 'cycleNode': {
+          const count = model.plan.nodes.length;
+          if (count === 0) break;
+          // Wraps, so Tab keeps cycling rather than stopping at the last burn.
+          const next = at === null ? 0 : (at + action.delta + count) % count;
+          actions.selectIndex(next);
+          break;
+        }
+        case 'nudgeEpoch':
+          if (at !== null) {
+            const node = model.plan.nodes[at];
+            if (node !== undefined) {
+              actions.setEpoch(at, metAt(scenario.startEpoch, node.epoch) + action.seconds);
+            }
+          }
+          break;
+        case 'nudgeDeltaV':
+          if (at !== null) {
+            const node = model.plan.nodes[at];
+            if (node !== undefined) {
+              const current = componentsOfCounts(node.deltaVCounts);
+              actions.setDeltaV(
+                at,
+                current.progradeMps + action.progradeMps,
+                current.radialMps + action.radialMps,
+              );
+            }
+          }
+          break;
+        case 'scrub':
+          actions.scrubTo((model.scrub.epoch + action.seconds) as Epoch);
+          break;
+        case 'scrubTo':
+          actions.scrubTo(
+            action.where === 'start'
+              ? scenario.startEpoch
+              : ((scenario.startEpoch + scenario.rules.deadlineSeconds) as Epoch),
+          );
+          break;
+        case 'commit':
+          actions.commit();
+          break;
+        case 'cancel':
+          // Escape closes the overlay if it is open, and otherwise clears the selection.
+          // A drag's Escape is the orbit view's, which sees it first because it is
+          // holding the pointer capture (#134, #135).
+          if (state.editorFor !== null) actions.closeEditor();
+          else actions.deselect();
+          break;
+        case 'zoom':
+        case 'recentre':
+          // Handled by the orbit view, which owns the camera — see `OrbitView.tsx`. This
+          // arm exists so the switch stays exhaustive over `PlannerAction`: a new action
+          // is then a compile error here rather than a key that silently does nothing.
+          return;
+      }
+      event.preventDefault();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [actions, model, scenario, state]);
 
   const panel = (name: Tab, content: JSX.Element): JSX.Element => (
     <div
@@ -158,6 +306,26 @@ export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProp
             if (at !== -1) actions.selectIndex(at);
           }}
           onDeselect={actions.deselect}
+          onPlaceNode={actions.addNodeAt}
+          onOpenEditor={(id) => {
+            const at = indexOfNodeId(model.plan, id);
+            if (at !== null) actions.openEditor(at);
+          }}
+          onBeginEpochDrag={(id) => {
+            const at = indexOfNodeId(model.plan, id);
+            if (at !== null) actions.beginEpochDrag(at);
+          }}
+          onBeginDeltaVDrag={(id, axis) => {
+            const at = indexOfNodeId(model.plan, id);
+            if (at !== null) actions.beginDeltaVDrag(at, axis);
+          }}
+          onDragEpochTo={actions.dragEpochTo}
+          onDragDeltaVTo={actions.dragDeltaVTo}
+          onReleaseDrag={actions.releaseDragging}
+          onCancelDrag={actions.cancelDragging}
+          dragging={dragPreview}
+          anchorNodeId={state.editorFor}
+          onAnchor={setAnchor}
         />
 
         <div class="hh-planner__side">
@@ -195,7 +363,7 @@ export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProp
               selectedIndex={index}
               onSelect={actions.selectIndex}
               onDelete={actions.deleteIndex}
-              onExpand={actions.selectIndex}
+              onExpand={actions.openEditor}
               onAdd={() => {
                 // §8.5.3's `N`: add a node at the scrub head. The pointer route — clicking
                 // the trajectory — is #133 and lands with the rest of the interactions.
@@ -216,6 +384,56 @@ export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProp
             />,
           )}
         </div>
+        {editorNode === undefined || editorIndex === null ? null : (
+          <div
+            class="hh-editor__anchor"
+            data-anchored={anchor !== null}
+            // §8.3.5's "anchored to the node". Absolute over the stage when the orbit
+            // view can say where the node is drawn; docked at the edge when it cannot —
+            // the node is off screen, or the plan produced no trajectory — because an
+            // overlay pointing at nothing is worse than one that is merely nearby.
+            // The position goes out as custom properties and the *clamping* is CSS's,
+            // against the stage's own width — `clamp(…, calc(100% - …))`. Doing it here
+            // would mean measuring the stage and the panel on every frame of a re-frame
+            // ease; doing it there costs nothing and cannot go stale. Without it the
+            // overlay runs off the right edge on a narrow layout, which is a horizontal
+            // scrollbar on the whole page.
+            style={
+              anchor === null
+                ? undefined
+                : {
+                    '--hh-anchor-x': `${String(anchor.x + 16)}px`,
+                    '--hh-anchor-y': `${String(anchor.y)}px`,
+                  }
+            }
+          >
+            <NodeEditor
+              t={t}
+              node={editorNode}
+              index={editorIndex}
+              startEpoch={scenario.startEpoch}
+              horizonSeconds={scenario.horizonSeconds}
+              orbits={editorOrbits}
+              mu={scenario.mu}
+              referenceRadiusM={R_EARTH_EQ}
+              onEpoch={(metSeconds) => {
+                actions.setEpoch(editorIndex, metSeconds);
+              }}
+              onDeltaV={(progradeMps, radialMps) => {
+                actions.setDeltaV(editorIndex, progradeMps, radialMps);
+              }}
+              onSnap={(kind) => {
+                actions.snapNode(editorIndex, kind);
+              }}
+              snappedTo={editorSnappedTo}
+              onDelete={() => {
+                actions.deleteIndex(editorIndex);
+                actions.closeEditor();
+              }}
+              onClose={actions.closeEditor}
+            />
+          </div>
+        )}
       </div>
 
       <TimelineStrip

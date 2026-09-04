@@ -56,3 +56,16 @@ export {
 
 export type { ApproachReadout, OrbitReadout } from './readouts.js';
 export { approachReadout, orbitReadout } from './readouts.js';
+
+export type { BurnResult, MetParts, ResultRow } from './node-editor.js';
+export { DELTA_V_STEP_MPS, burnResult, deltaVStep, metFromParts, metParts } from './node-editor.js';
+
+/**
+ * A node's Δv in the planner's order, from its quantised counts.
+ *
+ * Re-exported from `@hh/game` under a name that says what it takes, so a component reads
+ * one import for everything the planner's own logic offers rather than two. The rule it
+ * implements — RTN order is (radial, transverse, normal), and DEP-10 calls the transverse
+ * one "prograde" — belongs with the departures, which is why it lives there.
+ */
+export { componentsOf as componentsOfCounts } from '@hh/game';

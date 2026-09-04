@@ -48,6 +48,7 @@
  * no test that could distinguish it from being broken.
  */
 import type { Epoch } from '@hh/astro';
+import { period, semiMajorAxis } from '@hh/astro';
 import type { Arc } from '@hh/propagation';
 import { findApsisCrossings } from '@hh/propagation';
 import type { Timeline } from '@hh/sim';
@@ -124,3 +125,51 @@ export const snapToApsis = (
   windowSeconds: number = SNAP_WINDOW_SECONDS,
 ): SnapResult =>
   enabled ? snapToApsisOnArc(arcAt(timeline, at), at, windowSeconds) : unsnapped(at);
+
+/**
+ * Move `at` to the nearest crossing of a **named** apsis — §8.3.5's snap radios.
+ *
+ * A different operation from DEP-07's assist, and deliberately not a parameterisation of
+ * it. The assist is a *tolerance*: it catches a click that was nearly on an apsis, within
+ * 30 s, and is off by default for players who want the epoch they asked for. This is a
+ * *command*: §8.3.5 calls it "explicit 'put this burn at periapsis/apoapsis' — the
+ * operation players actually want", and a command that silently did nothing because the
+ * apsis was 31 s away would be broken.
+ *
+ * So there is no window. It searches a full revolution either side and takes the nearest
+ * crossing of the requested kind, which is guaranteed to find one for any closed orbit
+ * above the eccentricity floor. `null` when there is nothing to snap to — a near-circular
+ * orbit, which has no apsides, or an open one, which has no apoapsis — and the caller
+ * leaves the node where it is rather than moving it somewhere arbitrary.
+ *
+ * The search is clamped to the timeline's horizon, so a burn near the end of the mission
+ * cannot be snapped past it into an epoch the plan says nothing about (§6.3).
+ */
+export const snapToNamedApsis = (
+  timeline: Timeline,
+  at: Epoch,
+  kind: 'periapsis' | 'apoapsis',
+): Epoch | null => {
+  const arc = arcAt(timeline, at);
+  const elements = arc.elements;
+  if (elements.eccentricity >= 1 && kind === 'apoapsis') return null;
+
+  // A full revolution either side guarantees a crossing of each kind for a closed orbit,
+  // and is finite for an open one — where only periapsis exists, and exists once.
+  const revolution = elements.eccentricity < 1 ? period(semiMajorAxis(elements), timeline.mu) : 0;
+  const reach = revolution > 0 ? revolution : timeline.horizon - timeline.startEpoch;
+  const start = Math.max(timeline.startEpoch, at - reach) as Epoch;
+  const end = Math.min(timeline.horizon, at + reach) as Epoch;
+
+  let best: Epoch | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const crossing of findApsisCrossings(arc, start, end)) {
+    if (crossing.kind !== kind) continue;
+    const distance = Math.abs(crossing.epoch - at);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = crossing.epoch;
+    }
+  }
+  return best;
+};

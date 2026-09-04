@@ -30,6 +30,30 @@ they relied on has moved.
   frame landing exactly on the target rather than overshooting, and `prefers-reduced-motion`
   collapses it to one frame. The union is assembled per frame from the real content — every
   tessellated arc, the target orbit and Earth's disc — rather than from a fixture.
+- **The planner's interactions (#133, #134, #135, #137).** Clicking the planned
+  trajectory places a burn there, snapped per DEP-07 and refused with `L5` rather than
+  silently merged when it lands inside FR-101's one-second separation. Dragging a node
+  marker changes its epoch and dragging a Δv handle changes that component, both
+  quantised on release rather than continuously, both cancelled by Escape — which
+  restores nothing, because a gesture never touches the plan until it is released.
+  Dragging a node past a neighbour **reorders** rather than clamping: the node keeps its
+  Δv and the list re-sorts, which is what the player was plainly trying to do, where a
+  clamp would stop them short with no explanation and produce a plan they did not ask
+  for. §8.3.5's node editor gives all of it a numeric route — four epoch fields that
+  reject an out-of-range entry on blur and restore the previous value, Δv fields taking
+  full float64, steppers at 1 m/s with Shift for a tenth and Ctrl for ten times, and a
+  result block showing apoapsis, periapsis and period as **live deltas against the
+  pre-burn orbit**. That block is the answer to what the M1 spike measured: a 45 m/s
+  change moves the drawn trajectory 5.455 px at LEO, so the picture cannot teach a Δv
+  edit and the numbers have to.
+- **§8.5.3's keyboard map, for the planner (#133–#135, #137, NFR-016).** `N` to add at
+  the scrub head, `Delete` to remove, `E` to edit, `Tab` to cycle, `,`/`.` to nudge an
+  epoch, the arrows to nudge prograde and radial, `[`/`]`/`Home`/`End` to scrub, `Enter`
+  to commit and `Escape` to cancel — with §8.5.3's modifiers, and the same step rule the
+  node editor's steppers use rather than a second statement of it. Installed on the
+  document, so a binding works wherever focus is, and guarded so nothing fires while the
+  player is typing into a field.
+
 - **DEP-07 — node snapping to the nearest apsis within 30 s**, in `@hh/game/snap`, disableable
   from the assist tray. Its `docs/PHYSICS.md` row moves from planned to implemented and records
   that the node-crossing half is deliberately absent: every v1.0 contract is equatorial-equivalent,

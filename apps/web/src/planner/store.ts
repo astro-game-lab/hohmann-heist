@@ -30,23 +30,46 @@
  */
 import { type Epoch } from '@hh/astro';
 import type { LegalityReason, LoadedScenario, PlanEdit } from '@hh/game';
-import { addNode, deleteNode, snapToApsis } from '@hh/game';
+import {
+  addNode,
+  deleteNode,
+  moveNode,
+  setNodeDeltaV,
+  snapToApsis,
+  snapToNamedApsis,
+} from '@hh/game';
+import { metresPerSec } from '@hh/math';
 import type { ManeuverNode, Plan } from '@hh/sim';
 import { EMPTY_PLAN } from '@hh/sim';
-import type { Interaction, NodeId, PlannerModel } from '@hh/ui';
+import type {
+  DeltaVDrag,
+  DraggingState,
+  EpochDrag,
+  HandleAxis,
+  Interaction,
+  NodeId,
+  PlannerModel,
+} from '@hh/ui';
+import type { DeltaVCounts } from '@hh/sim';
+import { fromDeltaVCounts, fromEpochTicks, toDeltaVCounts, toEpochTicks } from '@hh/sim';
 import {
   activeNodeId,
+  beginDrag,
+  cancelDrag,
   commit as commitPlan,
   createModel,
   deselect as deselectNode,
   evaluated,
   isCommittable,
+  releaseDrag,
   scrubTo as scrubModel,
   select as selectInteraction,
+  updateDeltaVDrag,
+  updateEpochDrag,
 } from '@hh/ui';
 import { useCallback, useMemo, useState } from 'preact/hooks';
 
-import { evaluatePlan, type Evaluation } from './evaluate.js';
+import { evaluateDrag, evaluatePlan, type Evaluation } from './evaluate.js';
 
 /** A node's identity, derived from its epoch. See the docstring. */
 export const nodeIdOf = (node: ManeuverNode): NodeId => `node:${String(node.epochTicks)}`;
@@ -65,6 +88,22 @@ export interface PlannerState {
   readonly snapToApsis: boolean;
   /** The last refused edit, shown until the next successful one (#133). */
   readonly lastRefusal: LegalityReason | null;
+  /** Whether §8.3.5's overlay is open, and for which node id (#137). */
+  readonly editorFor: NodeId | null;
+  /**
+   * What the plan *would* evaluate to if the gesture in flight were released — #134, #135.
+   *
+   * Both issues ask for the resulting orbit to update live, inside NFR-011's one-frame
+   * budget. The plan itself deliberately does not change during a drag — that is what
+   * makes Escape a no-op rather than an undo — so the live picture has to come from
+   * somewhere else, and this is it.
+   *
+   * Built with `evaluateDrag`: `withPlan`'s incremental path and **no objective**, which
+   * is where the frame budget is actually won. `null` whenever nothing is being dragged,
+   * and every consumer falls back to `evaluation`, so there is exactly one place that
+   * knows a preview exists.
+   */
+  readonly preview: Evaluation | null;
 }
 
 export interface PlannerActions {
@@ -76,6 +115,26 @@ export interface PlannerActions {
   readonly setSnapToApsis: (enabled: boolean) => void;
   /** §8.5.1's EVALUATED → COMMITTED. A no-op unless the verdict permits it. */
   readonly commit: () => void;
+
+  // ── #137's overlay ─────────────────────────────────────────────────────────
+  readonly openEditor: (index: number) => void;
+  readonly closeEditor: () => void;
+  /** Move a node to a mission-elapsed time. Quantised at entry by `createManeuverNode`. */
+  readonly setEpoch: (index: number, metSeconds: number) => void;
+  readonly setDeltaV: (index: number, progradeMps: number, radialMps: number) => void;
+  /** §8.3.5's snap radios — a command, not DEP-07's tolerance. */
+  readonly snapNode: (index: number, kind: 'periapsis' | 'apoapsis') => void;
+
+  // ── #134, #135: a gesture in flight ────────────────────────────────────────
+  readonly beginEpochDrag: (index: number) => void;
+  readonly beginDeltaVDrag: (index: number, axis: HandleAxis) => void;
+  /** Continuous; quantised only on release (FR-105). */
+  readonly dragEpochTo: (epoch: Epoch) => void;
+  readonly dragDeltaVTo: (progradeMps: number, radialMps: number) => void;
+  /** Commits the gesture to the plan. */
+  readonly releaseDragging: () => void;
+  /** Escape: restores the pre-drag value and changes nothing. */
+  readonly cancelDragging: () => void;
 }
 
 /** The selected node's index, or `null`. Derived, never stored — see the docstring. */
@@ -99,6 +158,46 @@ const afterEdit = (interaction: Interaction, nodeId: NodeId | null): Interaction
     ? interaction
     : evaluated(interaction, nodeId);
 
+/**
+ * The current interaction as an epoch drag, or `null`.
+ *
+ * `DraggingState<EpochDrag>` and `DraggingState<DeltaVDrag>` are distinct types, and
+ * `updateEpochDrag` accepts only the first — see `machine.ts`. These two functions are
+ * where that distinction is discharged at run time, once, rather than at each call site.
+ */
+const epochDragging = (state: PlannerState): DraggingState<EpochDrag> | null => {
+  const { interaction } = state.model;
+  return interaction.phase === 'DRAGGING' && interaction.drag.kind === 'epoch'
+    ? { ...interaction, drag: interaction.drag }
+    : null;
+};
+
+const deltaVDragging = (state: PlannerState): DraggingState<DeltaVDrag> | null => {
+  const { interaction } = state.model;
+  return interaction.phase === 'DRAGGING' && interaction.drag.kind === 'deltaV'
+    ? { ...interaction, drag: interaction.drag }
+    : null;
+};
+
+/**
+ * The evaluation a gesture's candidate plan would produce, or the last one.
+ *
+ * A refused candidate — a drag that has carried a node inside FR-101's spacing — keeps
+ * the previous preview rather than blanking the orbit view mid-gesture. The refusal is
+ * reported on release, which is when the player finds out, and until then the picture
+ * simply stops following. Falling back to `null` here would make the trajectory vanish
+ * and reappear as the cursor crossed the boundary.
+ */
+const previewOf = (
+  scenario: LoadedScenario,
+  current: PlannerState,
+  edit: PlanEdit,
+): Evaluation | null => {
+  const base = current.evaluation.timeline;
+  if (!edit.ok || base === null) return current.preview;
+  return evaluateDrag(scenario, edit.plan, base);
+};
+
 export const usePlanner = (
   scenario: LoadedScenario,
   initialPlan: Plan = EMPTY_PLAN,
@@ -108,6 +207,8 @@ export const usePlanner = (
     evaluation: evaluatePlan(scenario, initialPlan),
     snapToApsis: true,
     lastRefusal: null,
+    editorFor: null,
+    preview: null,
   }));
 
   /**
@@ -139,6 +240,12 @@ export const usePlanner = (
           evaluation: evaluatePlan(scenario, result.plan, current.evaluation.timeline),
           snapToApsis: current.snapToApsis,
           lastRefusal: null,
+          preview: null,
+          // The overlay follows the node it was opened for. An edit that moved the node
+          // changed its id — ids are derived from the epoch, see the docstring — so
+          // carrying the old one forward would close the editor on every epoch change.
+          editorFor:
+            current.editorFor === null || node === undefined ? current.editorFor : nodeIdOf(node),
         };
       });
     },
@@ -221,6 +328,210 @@ export const usePlanner = (
 
       setSnapToApsis: (enabled) => {
         setState((current) => ({ ...current, snapToApsis: enabled }));
+      },
+
+      // ── #137's overlay ───────────────────────────────────────────────────
+      openEditor: (index) => {
+        setState((current) => {
+          const node = current.model.plan.nodes[index];
+          return node === undefined ? current : { ...current, editorFor: nodeIdOf(node) };
+        });
+      },
+
+      closeEditor: () => {
+        // Nothing to save: every field in the overlay commits as it is edited, so there
+        // is no draft to lose (#137's sixth criterion). See `NodeEditor.tsx`.
+        setState((current) => ({ ...current, editorFor: null }));
+      },
+
+      setEpoch: (index, metSeconds) => {
+        apply((current) =>
+          current.model.plan.nodes[index] === undefined
+            ? null
+            : moveNode(current.model.plan, index, (scenario.startEpoch + metSeconds) as Epoch),
+        );
+      },
+
+      setDeltaV: (index, progradeMps, radialMps) => {
+        apply((current) =>
+          current.model.plan.nodes[index] === undefined
+            ? null
+            : setNodeDeltaV(current.model.plan, index, progradeMps, radialMps),
+        );
+      },
+
+      snapNode: (index, kind) => {
+        apply((current) => {
+          const node = current.model.plan.nodes[index];
+          const { timeline } = current.evaluation;
+          if (node === undefined || timeline === null) return null;
+          const at = snapToNamedApsis(timeline, node.epoch, kind);
+          // `null` is a round orbit, which has no apsides, or an open one with no
+          // apoapsis. Leaving the node alone is the honest answer — moving it to an
+          // arbitrary point on a circle would be motion with no meaning.
+          return at === null ? null : moveNode(current.model.plan, index, at);
+        });
+      },
+
+      // ── #134, #135 ───────────────────────────────────────────────────────
+      beginEpochDrag: (index) => {
+        setState((current) => {
+          const node = current.model.plan.nodes[index];
+          const { interaction } = current.model;
+          // `beginDrag` accepts SELECTED and nothing else, so the node has to be selected
+          // first. The orbit view does that on the same pointer-down.
+          if (node === undefined || interaction.phase !== 'SELECTED') return current;
+          const drag: EpochDrag = {
+            kind: 'epoch',
+            fromTicks: node.epochTicks,
+            ticks: node.epochTicks,
+          };
+          return {
+            ...current,
+            model: { ...current.model, interaction: beginDrag(interaction, drag) },
+          };
+        });
+      },
+
+      beginDeltaVDrag: (index, axis) => {
+        setState((current) => {
+          const node = current.model.plan.nodes[index];
+          const { interaction } = current.model;
+          if (node === undefined || interaction.phase !== 'SELECTED') return current;
+          const drag: DeltaVDrag = {
+            kind: 'deltaV',
+            axis,
+            fromCounts: node.deltaVCounts,
+            counts: node.deltaVCounts,
+          };
+          return {
+            ...current,
+            model: { ...current.model, interaction: beginDrag(interaction, drag) },
+          };
+        });
+      },
+
+      dragEpochTo: (epoch) => {
+        setState((current) => {
+          const dragging = epochDragging(current);
+          if (dragging === null) return current;
+          // Ticks, continuously. The *value* is quantised here because ticks are the
+          // unit the drag carries — see `machine.ts` — but the **plan** is not touched
+          // until release, which is what FR-105 and #134 actually ask for.
+          const at = Math.min(Math.max(epoch, scenario.startEpoch), scenario.horizon) as Epoch;
+          const index = indexOfNodeId(current.model.plan, dragging.nodeId);
+          return {
+            ...current,
+            model: {
+              ...current.model,
+              interaction: updateEpochDrag(dragging, toEpochTicks(at)),
+            },
+            preview:
+              index === null
+                ? current.preview
+                : previewOf(scenario, current, moveNode(current.model.plan, index, at)),
+          };
+        });
+      },
+
+      dragDeltaVTo: (progradeMps, radialMps) => {
+        setState((current) => {
+          const dragging = deltaVDragging(current);
+          if (dragging === null) return current;
+          const counts: DeltaVCounts = [
+            toDeltaVCounts(metresPerSec(radialMps)),
+            toDeltaVCounts(metresPerSec(progradeMps)),
+            0,
+          ];
+          const index = indexOfNodeId(current.model.plan, dragging.nodeId);
+          return {
+            ...current,
+            model: {
+              ...current.model,
+              interaction: updateDeltaVDrag(dragging, counts),
+            },
+            preview:
+              index === null
+                ? current.preview
+                : previewOf(
+                    scenario,
+                    current,
+                    setNodeDeltaV(current.model.plan, index, progradeMps, radialMps),
+                  ),
+          };
+        });
+      },
+
+      releaseDragging: () => {
+        setState((current) => {
+          const { interaction } = current.model;
+          if (interaction.phase !== 'DRAGGING') return current;
+
+          const index = indexOfNodeId(current.model.plan, interaction.nodeId);
+          // §8.5.1 requires the release even when there is nothing to commit, so the
+          // machine leaves DRAGGING either way.
+          const released = releaseDrag(interaction);
+          if (index === null) {
+            return {
+              ...current,
+              model: { ...current.model, interaction: released },
+              preview: null,
+            };
+          }
+
+          const { drag } = interaction;
+          const edit =
+            drag.kind === 'epoch'
+              ? moveNode(current.model.plan, index, fromEpochTicks(drag.ticks))
+              : setNodeDeltaV(
+                  current.model.plan,
+                  index,
+                  fromDeltaVCounts(drag.counts[1]),
+                  fromDeltaVCounts(drag.counts[0]),
+                );
+
+          if (!edit.ok) {
+            // A refused release — #134's "lands within the minimum spacing" case. The
+            // plan is unchanged, which *is* the restoration: the pre-drag value was never
+            // overwritten, because a drag does not touch the plan until here.
+            return {
+              ...current,
+              model: { ...current.model, interaction: released },
+              lastRefusal: edit.reason,
+              preview: null,
+            };
+          }
+
+          const node = edit.plan.nodes[edit.nodeIndex];
+          return {
+            model: {
+              plan: edit.plan,
+              interaction: evaluated(released, node === undefined ? null : nodeIdOf(node)),
+              scrub: current.model.scrub,
+            },
+            evaluation: evaluatePlan(scenario, edit.plan, current.evaluation.timeline),
+            snapToApsis: current.snapToApsis,
+            lastRefusal: null,
+            preview: null,
+            editorFor:
+              current.editorFor === null || node === undefined ? current.editorFor : nodeIdOf(node),
+          };
+        });
+      },
+
+      cancelDragging: () => {
+        setState((current) => {
+          const { interaction } = current.model;
+          if (interaction.phase !== 'DRAGGING') return current;
+          // Nothing to restore. The plan was never edited during the gesture, so
+          // returning to SELECTED *is* the restoration — which is why `cancelDrag` goes
+          // back to SELECTED rather than to EVALUATED (#134, #135).
+          return {
+            ...current,
+            model: { ...current.model, interaction: cancelDrag(interaction) },
+            preview: null,
+          };
+        });
       },
 
       commit: () => {
