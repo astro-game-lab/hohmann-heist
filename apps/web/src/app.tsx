@@ -1,28 +1,47 @@
 /**
- * The application shell.
+ * The application shell — §8.2.
  *
- * A skeleton: it proves routing works and that the simulation packages import and
- * run in a browser. It is not the game. The real screens are #101 through #109 and
- * arrive in M3; every route below renders a placeholder until then.
+ * Its whole job is to turn a hash into a screen. `router.ts` decides *which* route a hash
+ * names; this decides what that route renders, and `Screen` handles the two things that
+ * must happen on every change regardless of which screen it is (focus, motion).
+ *
+ * ## Every route resolves, including the ones nobody has built
+ *
+ * §8.2's table has nine routes and M2 builds two of them. The rest render
+ * `Placeholder` inside the real frame rather than being absent from the switch, because
+ * #117's first criterion is that every route in the table *resolves* — and a route that
+ * falls through to not-found cannot be told apart from a typo by the person looking at
+ * it. Each placeholder still shows its own heading and its own captured parameters, which
+ * is what makes "deep links to a contract and to a Codex entry work from a cold load"
+ * checkable before either screen exists.
  *
  * ## Every string here comes from the catalogue
  *
  * NFR-028's ESLint rule refuses literal text in JSX, and this file is the first thing
- * it was pointed at. What was placeholder prose is now catalogue keys resolved through
- * `@hh/ui` — not because a skeleton needs translating, but because the rule has to be
- * true of the codebase on the day it lands, and a rule with an exemption for "the parts
- * that were already here" is a rule nobody trusts.
- *
- * The one place this shows in the markup is the split between a label and its value:
- * `app.geoSpeedLabel` is a sentence and `app.geoSpeedValue` is a quantity formatted with
- * its unit by `Intl`. They are two elements — a label and an `<output>` — rather than
- * one string with a hole in it, because that is what they are in the DOM.
+ * it was pointed at. Screens take `t` as a prop rather than importing the catalogue
+ * themselves, so the locale is decided in exactly one place and a component can be
+ * rendered against a different message set in a test without touching a global.
  */
-import { R_GEO, formatMet, met, MU_EARTH } from '@hh/astro';
-import { createCatalogue } from '@hh/ui';
-import { useEffect, useState } from 'preact/hooks';
+import { createCatalogue, type Catalogue } from '@hh/ui';
+import type { JSX } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
-import { hrefFor, onRouteChange, parseHash, type Route } from './router.js';
+import { contractById } from './contracts/registry.js';
+import { screenTransitionMs, useReducedMotion } from './motion.js';
+import { onRouteChange, parseHash, type Route } from './router.js';
+import {
+  browserStorage,
+  loadSave,
+  writeSave,
+  type LoadOutcome,
+  type SaveV1,
+} from './save/index.js';
+import { UnknownContract } from './screens/Briefing.js';
+import { ContractScreen } from './screens/ContractScreen.js';
+import { NotFound } from './screens/NotFound.js';
+import { Placeholder } from './screens/Placeholder.js';
+import { SaveNotice } from './screens/SaveNotice.js';
+import { Screen } from './screens/Screen.js';
 import { ScenePage } from './scene-harness/ScenePage.js';
 import { SpikePage } from './spike/SpikePage.js';
 
@@ -43,78 +62,183 @@ const catalogue = createCatalogue({
 });
 const t = catalogue.resolve;
 
+/**
+ * Links offered from the title route.
+ *
+ * Temporary. §8.2 routes the player title → board → briefing, and neither the title
+ * screen (#101) nor the board (#102) exists; until they do this is the only way to reach
+ * a route without typing its hash, and it goes with them.
+ */
 const NAV: readonly (readonly [path: string, label: string])[] = [
-  ['/', t('nav.title', {})],
   ['/board', t('nav.board', {})],
-  ['/contract/5', t('nav.contract', { index: 5 })],
+  ['/contract/c03-cold-open', t('nav.contract', { index: 3 })],
   ['/daily', t('nav.daily', {})],
   ['/codex/phasing', t('nav.codex', {})],
   ['/settings', t('nav.settings', {})],
   ['/spike', t('nav.spike', {})],
 ];
 
-/**
- * A live number computed by the simulation packages.
- *
- * Circular orbital speed at geostationary radius. This exists to prove the
- * workspace wiring end to end in a real browser rather than only under Node — if
- * `@hh/astro` failed to resolve or its float64 arithmetic behaved oddly once
- * bundled, this is where it would show.
- */
-const geoSpeed = (): number => Math.sqrt(MU_EARTH / R_GEO);
+/** A captured route parameter. Absent is empty rather than `undefined` — it is text. */
+const param = (route: Route, name: string): string => route.params[name] ?? '';
 
-export const App = (): preact.JSX.Element => {
+/**
+ * The screen's `<h1>`.
+ *
+ * A switch rather than a lookup table keyed by route name, because the catalogue's
+ * `resolve` checks each key against its own parameter type — which is the property worth
+ * having here, since half of these headings carry a captured segment and half take none.
+ * A `Record<RouteName, MessageKey>` would type-check the *names* and lose that.
+ */
+const headingFor = (route: Route, resolve: Catalogue['resolve']): string => {
+  switch (route.name) {
+    case 'title':
+      return resolve('app.title', {});
+    case 'board':
+      return resolve('screen.board.heading', {});
+    case 'contract': {
+      // The contract's own number and title once it is known, and the raw id when it is
+      // not — a heading that said "Contract" over a not-found body would be worse than
+      // one that quotes the link that failed.
+      const id = param(route, 'id');
+      const scenario = contractById(id);
+      return scenario === undefined
+        ? resolve('screen.contract.heading', { id })
+        : resolve('briefing.heading', {
+            index: scenario.document.index,
+            title: scenario.document.title,
+          });
+    }
+    case 'daily':
+      return resolve('screen.daily.heading', {});
+    case 'dailyDate':
+      return resolve('screen.dailyDate.heading', { date: param(route, 'date') });
+    case 'leaderboard':
+      return resolve('screen.leaderboard.heading', { date: param(route, 'date') });
+    case 'codex':
+      return resolve('screen.codex.heading', { slug: param(route, 'slug') });
+    case 'replay':
+      return resolve('screen.replay.heading', {});
+    case 'settings':
+      return resolve('screen.settings.heading', {});
+    default:
+      return resolve('screen.notFound.heading', {});
+  }
+};
+
+/**
+ * The storage the save lives in, decided once.
+ *
+ * Module scope rather than a hook: `browserStorage` probes with a real write, and there
+ * is nothing to gain from repeating that per mount. `null` here is a browser that will
+ * not store — the game runs anyway (FR-702).
+ */
+const storage = browserStorage();
+
+/** What goes under the heading. */
+const bodyFor = (
+  route: Route,
+  resolve: Catalogue['resolve'],
+  save: SaveV1,
+  onAccept: (id: string) => void,
+): JSX.Element => {
+  switch (route.name) {
+    case 'notFound':
+      return <NotFound t={resolve} path={route.path} />;
+    case 'title':
+      return <Placeholder t={resolve} links={NAV} />;
+    case 'contract': {
+      const id = param(route, 'id');
+      const scenario = contractById(id);
+      if (scenario === undefined) return <UnknownContract t={resolve} id={id} />;
+      const progress = save.contracts[id];
+      return (
+        <ContractScreen
+          t={resolve}
+          resolveDynamic={catalogue.resolveDynamic}
+          scenario={scenario}
+          {...(progress === undefined ? {} : { progress })}
+          onAccept={() => {
+            onAccept(id);
+          }}
+        />
+      );
+    }
+    default:
+      return <Placeholder t={resolve} />;
+  }
+};
+
+/**
+ * The save, with one attempt counted.
+ *
+ * A pure function of the save it was given, so the write and the state update below are
+ * the only effects and both take the same value. §11.7 counts an attempt per *accepted
+ * briefing*, which is this moment and not the debrief: a plan abandoned halfway was still
+ * an attempt at the contract.
+ */
+const withAttempt = (save: SaveV1, id: string): SaveV1 => {
+  const previous = save.contracts[id];
+  return {
+    ...save,
+    contracts: {
+      ...save.contracts,
+      [id]: { ...previous, attempts: (previous?.attempts ?? 0) + 1 },
+    },
+  };
+};
+
+export const App = (): JSX.Element => {
   // Resolve the route during the first render rather than in an effect. Effects
   // run after paint, so deferring this would show a placeholder for a frame on
   // every load — and would make the route unobservable to a synchronous test.
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => onRouteChange(setRoute), []);
 
-  // The one hook the spike has into the app. Deleting `src/spike/` and these two lines
-  // removes it completely — #238 asks for a page nothing inherits from.
+  const reducedMotion = useReducedMotion();
+
+  // Read once, on the first render rather than in an effect: the briefing needs the
+  // attempt count in the markup it first paints, and a save that arrived a frame later
+  // would show "attempts: 0" and then correct itself.
+  const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
+
+  const acceptContract = (id: string): void => {
+    const next = withAttempt(saved.save, id);
+    // A write that fails is not the player's problem right now — they are on their way to
+    // the planner. #167 owns the notice; what matters here is that it cannot throw.
+    writeSave(storage, next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
+
+  // Focus moves to the new screen's heading on every route change *except the first*.
+  // On a cold load there is no previous screen to have stranded anyone on, and taking
+  // focus off the document's start would move a keyboard user past the browser's own
+  // controls for nothing. This ref is the whole distinction: false while the first
+  // render is in flight, true from the effect that follows it onward.
+  const rendered = useRef(false);
+  const focusHeading = rendered.current;
+  useEffect(() => {
+    rendered.current = true;
+  });
+
+  // The two throwaway development instruments. Deleting `src/spike/` or
+  // `src/scene-harness/` and its line here removes it completely — neither renders
+  // inside the screen frame, because neither is a screen.
   if (route.name === 'spike') return <SpikePage />;
   if (route.name === 'scene') return <ScenePage />;
 
   return (
-    <main>
-      <h1>{t('app.title', {})}</h1>
-      <p>{t('app.skeletonNotice', {})}</p>
-
-      <nav aria-label={t('app.routesLabel', {})}>
-        <ul>
-          {NAV.map(([path, label]) => (
-            <li key={path}>
-              <a href={hrefFor(path)}>{label}</a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      <section aria-labelledby="route-heading">
-        <h2 id="route-heading">{t('app.currentRouteHeading', {})}</h2>
-        <dl>
-          <dt>{t('app.routeName', {})}</dt>
-          <dd data-testid="route-name">{route.name}</dd>
-          <dt>{t('app.routePath', {})}</dt>
-          <dd data-testid="route-path">{route.path}</dd>
-          <dt>{t('app.routeParams', {})}</dt>
-          <dd data-testid="route-params">{JSON.stringify(route.params)}</dd>
-        </dl>
-      </section>
-
-      <section aria-labelledby="sim-heading">
-        <h2 id="sim-heading">{t('app.simulationHeading', {})}</h2>
-        <p>
-          {t('app.geoSpeedLabel', {})}{' '}
-          <output data-testid="geo-speed">
-            {t('app.geoSpeedValue', { speedMps: geoSpeed() })}
-          </output>
-        </p>
-        <p>
-          {t('app.missionClockLabel', {})}{' '}
-          <output data-testid="met">{formatMet(met(43784))}</output>
-        </p>
-      </section>
-    </main>
+    // Keyed by path, so a route change unmounts one screen and mounts the next: that is
+    // what re-runs the entry transition and what stops a screen's local state outliving
+    // the contract it was opened for.
+    <Screen
+      key={route.path}
+      name={route.name}
+      heading={headingFor(route, t)}
+      focusHeading={focusHeading}
+      transitionMs={screenTransitionMs(reducedMotion)}
+    >
+      {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
+      {bodyFor(route, t, saved.save, acceptContract)}
+    </Screen>
   );
 };

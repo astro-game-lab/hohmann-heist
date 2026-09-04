@@ -120,3 +120,21 @@ export const onRouteChange = (handler: (route: Route) => void): (() => void) => 
     window.removeEventListener('hashchange', emit);
   };
 };
+
+/**
+ * Go to a route.
+ *
+ * Assigning to `location.hash` rather than calling `history.pushState` is what keeps
+ * back and forward working for free: a hash assignment pushes a history entry and fires
+ * `hashchange`, which is the event {@link onRouteChange} is already listening for, so
+ * programmatic navigation and a clicked `<a href="#/…">` take exactly the same path
+ * through the app. `pushState` fires nothing and would need every caller to notify the
+ * router itself — two ways to navigate, one of which silently does not update the URL.
+ *
+ * Assigning the same hash twice is a no-op in every browser: no history entry, no event.
+ * That is the desired behaviour rather than a quirk to work around — ACCEPT pressed
+ * twice should not put a second copy of the planner in the back stack.
+ */
+export const navigate = (path: string): void => {
+  window.location.hash = hrefFor(path);
+};

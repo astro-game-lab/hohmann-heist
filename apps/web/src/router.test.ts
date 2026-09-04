@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hrefFor, parseHash } from './router.js';
+import { hrefFor, navigate, parseHash } from './router.js';
 
 describe('parseHash', () => {
   it('resolves the title route from the empty and root hashes', () => {
@@ -71,5 +71,18 @@ describe('hrefFor', () => {
     for (const path of ['/', '/board', '/contract/12', '/codex/phasing']) {
       expect(parseHash(hrefFor(path)).path).toBe(path === '/' ? '/' : path);
     }
+  });
+});
+
+describe('navigate', () => {
+  it('sets the hash, which is what makes back and forward work', () => {
+    window.location.hash = '';
+    navigate('/board');
+    expect(window.location.hash).toBe('#/board');
+  });
+
+  it('normalises a path without a leading slash, like hrefFor', () => {
+    navigate('board');
+    expect(window.location.hash).toBe('#/board');
   });
 });
