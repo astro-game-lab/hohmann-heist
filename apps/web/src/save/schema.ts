@@ -43,7 +43,19 @@ export const CURRENT_SAVE_VERSION = 1;
 /** §6.7's medals. Cumulative in the player's head; the highest earned is what is stored. */
 export type Medal = 'bronze' | 'silver' | 'gold' | 'clean';
 
-const MEDALS: readonly string[] = ['bronze', 'silver', 'gold', 'clean'];
+/**
+ * §6.7's medals, worst to best.
+ *
+ * Exported as an ordered list rather than a set, because the save keeps the *highest*
+ * medal earned (§6.7: *"medals are cumulative — earning Gold does not remove Bronze"*)
+ * and "highest" needs an order. `MEDAL_RANK` is what a comparison uses; the array is
+ * what the validator checks membership against, so the two cannot name different sets.
+ */
+export const MEDALS: readonly Medal[] = Object.freeze(['bronze', 'silver', 'gold', 'clean']);
+
+/** Where a medal sits in {@link MEDALS}. Higher is better. */
+export const medalRank = (medal: Medal | undefined): number =>
+  medal === undefined ? -1 : MEDALS.indexOf(medal);
 
 /** What one contract's history holds. Everything but `attempts` needs a completion. */
 export interface ContractProgress {
@@ -144,7 +156,7 @@ const unreadable = (detail: string): ParseResult => ({
 const parseContract = (value: unknown): ContractProgress | undefined => {
   if (!isRecord(value)) return undefined;
   if (!isFiniteNumber(value['attempts']) || value['attempts'] < 0) return undefined;
-  if (!optional(value['medal'], (v) => typeof v === 'string' && MEDALS.includes(v))) {
+  if (!optional(value['medal'], (v) => MEDALS.some((medal): boolean => medal === v))) {
     return undefined;
   }
   if (!optional(value['bestDv_mps'], isFiniteNumber)) return undefined;

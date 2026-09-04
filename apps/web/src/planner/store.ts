@@ -53,6 +53,7 @@ import type {
 import type { DeltaVCounts } from '@hh/sim';
 import { fromDeltaVCounts, fromEpochTicks, toDeltaVCounts, toEpochTicks } from '@hh/sim';
 import {
+  IDLE,
   activeNodeId,
   beginDrag,
   cancelDrag,
@@ -198,18 +199,60 @@ const previewOf = (
   return evaluateDrag(scenario, edit.plan, base);
 };
 
+/**
+ * What the planner opens with.
+ *
+ * Empty for a fresh contract. Populated when the player comes *back* — aborting a run
+ * (FR-603, *"back to the planner with the plan intact"*) or retrying from the debrief
+ * (§6.11, *"Retry restores the plan"*).
+ *
+ * The scrub head and the selection are part of it because #145's last criterion asks for
+ * them: *"abort returns to the planner with selection and scrub state sensibly
+ * restored"*. Restoring the plan and dropping the player at T+0 with nothing selected
+ * would technically satisfy "intact" and would still lose the place they were working.
+ */
+export interface PlannerSeed {
+  readonly plan?: Plan;
+  readonly scrubEpoch?: Epoch;
+  readonly selectedNodeId?: NodeId | null;
+}
+
 export const usePlanner = (
   scenario: LoadedScenario,
-  initialPlan: Plan = EMPTY_PLAN,
+  seed: PlannerSeed = {},
 ): readonly [PlannerState, PlannerActions] => {
-  const [state, setState] = useState<PlannerState>(() => ({
-    model: createModel(initialPlan, scenario.startEpoch),
-    evaluation: evaluatePlan(scenario, initialPlan),
-    snapToApsis: true,
-    lastRefusal: null,
-    editorFor: null,
-    preview: null,
-  }));
+  const [state, setState] = useState<PlannerState>(() => {
+    const initialPlan = seed.plan ?? EMPTY_PLAN;
+    const model = createModel(initialPlan, seed.scrubEpoch ?? scenario.startEpoch);
+    // A restored selection has to name a node that still exists — the plan came back with
+    // the run, so it does, but a seed assembled elsewhere might not. The check is what
+    // keeps a stale id out of the machine.
+    const selected = seed.selectedNodeId ?? null;
+    const restored = selected !== null && indexOfNodeId(initialPlan, selected) !== null;
+
+    return {
+      model: {
+        ...model,
+        // **A restored planner starts EVALUATED, not IDLE**, and that is a correctness
+        // point rather than a nicety. §8.5.1 reaches COMMITTED only from EVALUATED, and
+        // `commit` enforces it by taking that state — so a planner seeded with a plan and
+        // left IDLE would render an enabled Commit button that did nothing. The state is
+        // also simply true: the line above evaluated the plan, which is exactly what
+        // EVALUATED means.
+        //
+        // A fresh planner stays IDLE. There is no plan there to have evaluated, and
+        // offering Commit before the player has placed a burn would be offering to fly an
+        // empty plan.
+        interaction:
+          seed.plan === undefined ? model.interaction : evaluated(IDLE, restored ? selected : null),
+      },
+      evaluation: evaluatePlan(scenario, initialPlan),
+      snapToApsis: true,
+      lastRefusal: null,
+      editorFor: null,
+      preview: null,
+    };
+  });
 
   /**
    * Apply an edit, or record why it was refused.

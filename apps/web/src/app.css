@@ -756,3 +756,326 @@
   outline: 2px solid currentColor;
   outline-offset: -2px;
 }
+
+/* ── Execution — §8.3.8 ──────────────────────────────────────────────────────
+ *
+ * "Same orbit view, different chrome." The stage reuses the planner's arrangement — the
+ * view filling the space and a panel beside it above the breakpoint — because it *is*
+ * the same arrangement, with the flight log where the plan panel was. The rules live
+ * here rather than being shared selectors with `.hh-planner__*`, so that changing one
+ * screen's layout cannot silently change the other's.
+ */
+
+.hh-execution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80vh;
+}
+
+.hh-execution__stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The burn cue (§8.3.8). Distinct enough to catch the eye at 1× and not so loud that it
+   strobes at 1000×, where several fire inside a second. */
+.hh-hud__flash {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #5bc0eb;
+  color: #05070d;
+  font-weight: 600;
+}
+
+.hh-hud__controls {
+  display: flex;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.hh-hud__controls button {
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-hud__controls button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.hh-execution__paused {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid #e9c46a;
+}
+
+.hh-execution__transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hh-execution__progress {
+  flex: 1 1 200px;
+  height: 8px;
+  min-width: 120px;
+  background: rgba(127, 127, 127, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.hh-execution__progress-fill {
+  height: 100%;
+  background: #5bc0eb;
+}
+
+/* Five rates at 100 000× wide do not fit a phone in one line, and a transport bar that
+   scrolled the page sideways would fail §8.8's "the layout survives 200% zoom without
+   horizontal scroll". `min-width: 0` is the load-bearing half: without it the group
+   refuses to shrink below its content and wrapping never gets a chance. */
+.hh-execution__speeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hh-execution__speeds button {
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The selected rate, marked by weight and an outline as well as by whatever the palette
+   does — §8.8: no information by colour alone. */
+.hh-execution__speeds button[aria-pressed='true'] {
+  font-weight: 600;
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+/* ── The flight log — §8.3.8, #146 ───────────────────────────────────────── */
+
+.hh-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.hh-log__heading {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+/* Scrollable and focusable: one tab stop for the whole feed rather than one per entry.
+   `overscroll-behavior` keeps a run that has filled the log from scrolling the page once
+   the list reaches its end. */
+.hh-log__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: 40vh;
+  min-height: 6rem;
+}
+
+.hh-log__entry {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A fixed column for the epoch, so the entries read as a table rather than as ragged
+   prose. `ch` rather than `px`: the width is a number of digits, and it should follow the
+   font the player is actually using. */
+.hh-log__met {
+  flex: 0 0 auto;
+  min-width: 11ch;
+  opacity: 0.7;
+}
+
+.hh-log__text {
+  min-width: 0;
+}
+
+/* Burns and the encounter are what a player scans for. Marked by weight, never by colour
+   alone (§8.8). */
+.hh-log__entry[data-kind='burn'] .hh-log__text,
+.hh-log__entry[data-kind='closestApproach'] .hh-log__text,
+.hh-log__entry[data-kind='objectiveMet'] .hh-log__text {
+  font-weight: 600;
+}
+
+.hh-log__entry[data-kind='constraintEnter'] .hh-log__text,
+.hh-log__entry[data-kind='constraintExit'] .hh-log__text {
+  color: #e2503c;
+  font-weight: 600;
+}
+
+.hh-log__empty {
+  margin: 0;
+  opacity: 0.7;
+}
+
+@media (min-width: 1024px) {
+  .hh-execution__stage {
+    flex-direction: row;
+  }
+
+  .hh-log {
+    flex: 0 0 300px;
+  }
+
+  .hh-log__list {
+    max-height: none;
+    flex: 1 1 auto;
+  }
+}
+
+/* ── The debrief — §8.3.9 ────────────────────────────────────────────────── */
+
+.hh-debrief {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 70ch;
+}
+
+.hh-debrief__heading {
+  margin: 0;
+}
+
+/* The medal, by weight and size as well as by whatever colour the palette gives it —
+   §8.8's "medals by shape and label", so the word is always the carrier. */
+.hh-debrief__medal {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hh-debrief__medal[data-medal='bronze'] {
+  color: #c08457;
+}
+.hh-debrief__medal[data-medal='silver'] {
+  color: #b8b8c0;
+}
+.hh-debrief__medal[data-medal='gold'] {
+  color: #e9c46a;
+}
+.hh-debrief__medal[data-medal='clean'] {
+  color: #5bc0eb;
+}
+
+.hh-debrief__missed {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e2503c;
+}
+
+.hh-debrief__table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-debrief__table th,
+.hh-debrief__table td {
+  padding: 4px 12px 4px 0;
+  text-align: start;
+}
+
+.hh-debrief__table thead th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.hh-debrief__miss {
+  margin: 0;
+  padding: 8px 12px;
+  border-inline-start: 3px solid #e2503c;
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-debrief__miss-row {
+  display: flex;
+  gap: 12px;
+}
+
+.hh-debrief__miss dt {
+  flex: 0 0 auto;
+  min-width: 16ch;
+  opacity: 0.7;
+}
+
+.hh-debrief__miss dd {
+  margin: 0;
+}
+
+.hh-debrief__closest {
+  margin: 0;
+}
+
+.hh-debrief__what h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.hh-debrief__what p {
+  margin: 0;
+}
+
+/* D12's block. Framed as a notice rather than a celebration: the player found a better
+   answer than ours, which means ours is wrong. */
+.hh-debrief__beat-par {
+  padding: 8px 12px;
+  border-inline-start: 3px solid #e9c46a;
+}
+
+.hh-debrief__beat-par p {
+  margin: 0 0 4px;
+}
+
+.hh-debrief__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hh-debrief__actions button {
+  padding: 6px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hh-debrief__actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.hh-debrief__note {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}

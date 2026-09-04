@@ -31,10 +31,9 @@
  * so rebuilding the index for it would be work with no result. Zoom, resize, a plan edit
  * and a camera move are layout changes; the scrub head is not.
  */
-import { R_EARTH_EQ, elementsFromState, type Epoch, type State } from '@hh/astro';
+import { R_EARTH_EQ, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
-import { V } from '@hh/math';
-import type { Camera, HitIndex, MarkerSpec, NodeSpec, ScreenPoint, ViewBounds } from '@hh/render';
+import type { Camera, HitIndex, NodeSpec, ScreenPoint, ViewBounds } from '@hh/render';
 import {
   EQUATORIAL_BASIS,
   MAX_ZOOM,
@@ -61,6 +60,15 @@ import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { useReducedMotion } from '../motion.js';
+import {
+  EARTH_ROTATION_ANGLE,
+  MARKER_TRAIL_SECONDS,
+  MAX_RADIUS_M,
+  SUN_DIRECTION,
+  elementsOf,
+  floorShellOf,
+  targetMarkerOf,
+} from '../scene/content.js';
 import { SCENE_COLOURS } from './colours.js';
 import {
   advanceFraming,
@@ -74,18 +82,6 @@ import {
 import { pickEpoch } from './pick.js';
 import { isTypingTarget } from './keys.js';
 import { nodeIdOf } from './store.js';
-
-/** How far past the last drawn orbit the tessellator is allowed to run, in metres. */
-const MAX_RADIUS_M = 80_000_000;
-
-/**
- * DEP-06's fixed Sun.
- *
- * A game-layer decision rather than the renderer's, which is why it is a vector here and
- * a parameter there. The direction is arbitrary and constant for the contract; it exists
- * so the terminator has a side to be on.
- */
-const SUN_DIRECTION = V.normalize({ x: 0.6, y: -0.8, z: 0 });
 
 /**
  * How much a wheel notch zooms — §8.5.2's "scroll / pinch: zoom about the cursor".
@@ -115,10 +111,6 @@ const DRAG_MPS_PER_PX = 0.5;
 
 /** One press of ⊕ or ⊖. Coarser than a wheel notch, because a button is a deliberate act. */
 const BUTTON_ZOOM_FACTOR = 1.4;
-
-/** The orbit a state is on. Spelled once; three call sites need it. */
-const elementsOf = (state: State, mu: number) =>
-  elementsFromState(state.position, state.velocity, mu);
 
 export interface OrbitViewProps {
   readonly t: Catalogue['resolve'];
@@ -259,17 +251,7 @@ export const OrbitView = ({
     if (drawn === null) return;
 
     /** The target orbit, when the contract has one. */
-    const target = scenario.targets[0];
-    const targetSpec: MarkerSpec | undefined =
-      target === undefined
-        ? undefined
-        : {
-            id: target.id,
-            kind: 'target',
-            elements: elementsOf(target.state, scenario.mu),
-            mu: scenario.mu,
-            offsetSeconds: 900,
-          };
+    const targetSpec = targetMarkerOf(scenario);
 
     /**
      * The union the camera frames — #103's first criterion.
@@ -337,24 +319,15 @@ export const OrbitView = ({
         cache,
         maxRadiusMetres: MAX_RADIUS_M,
         earthRadiusMetres: R_EARTH_EQ,
-        // Presentational only (#106). A fixed angle: the simulation does not care which
-        // way the planet is facing, and DEP-06 fixes the Sun for the contract anyway.
-        earthRotationAngle: 0.9,
+        earthRotationAngle: EARTH_ROTATION_ANGLE,
         sunDirection: SUN_DIRECTION,
-        shells: [
-          {
-            id: 'altitude-floor',
-            innerRadiusMetres: R_EARTH_EQ,
-            outerRadiusMetres: R_EARTH_EQ + (scenario.rules.floorAltitudeM ?? 100_000),
-            state: 'clear',
-          },
-        ],
+        shells: [floorShellOf(scenario)],
         ship: {
           id: 'ship',
           kind: 'ship',
           elements: drawn.arcs[0]?.elements ?? elementsOf(scenario.ship.state, scenario.mu),
           mu: scenario.mu,
-          offsetSeconds: 900,
+          offsetSeconds: MARKER_TRAIL_SECONDS,
         },
         ...(targetSpec === undefined ? {} : { targetOrbit: targetSpec }),
         resolve: resolveDynamic,

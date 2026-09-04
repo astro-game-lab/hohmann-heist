@@ -15,7 +15,14 @@ export type {
   SaveV1,
   SettingValue,
 } from './schema.js';
-export { CURRENT_SAVE_VERSION, SAVE_KEY, emptySave, parseSaveV1 } from './schema.js';
+export {
+  CURRENT_SAVE_VERSION,
+  MEDALS,
+  SAVE_KEY,
+  emptySave,
+  medalRank,
+  parseSaveV1,
+} from './schema.js';
 
 export type { Migration, MigrateResult, UnknownSave } from './migrate.js';
 export { MIGRATIONS, isContiguous, migrate } from './migrate.js';

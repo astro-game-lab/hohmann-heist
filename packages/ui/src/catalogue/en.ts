@@ -70,6 +70,27 @@ const signed = (mps: number, fmt: MessageFormatters): string =>
   `${mps > 0 ? '+' : mps < 0 ? '\u2212' : ''}${fmt.decimal(Math.abs(mps), 4)}`;
 
 /**
+ * A constraint's name, from its `ConstraintKind` identifier.
+ *
+ * A total switch rather than a lookup with a fallback: §6.5 has eight constraints and
+ * three are implemented, so the five still to come should be a compile error in this
+ * file — the place their wording has to be decided — rather than a raw `no_fly_shell`
+ * appearing in a player's flight log.
+ */
+const constraintName = (kind: string): string => {
+  switch (kind) {
+    case 'dv_budget':
+      return 'the delta-v budget';
+    case 'deadline':
+      return 'the deadline';
+    case 'altitude_floor':
+      return 'the atmosphere';
+    default:
+      return kind;
+  }
+};
+
+/**
  * FR-406's full-precision reveal.
  *
  * Twenty significant digits is `Intl.NumberFormat`'s maximum and comfortably more than a
@@ -97,6 +118,56 @@ export const en: Messages = {
     `Burn ${fmt.integer(nodeIndex + 1)} cancels the orbit entirely — there is no trajectory after it`,
   'legality.plan.nonConvergent': ({ nodeIndex }, fmt) =>
     `The trajectory after burn ${fmt.integer(nodeIndex + 1)} could not be computed`,
+
+  // ── The flight log (FR-604, §8.3.8) ────────────────────────────────────────
+  //
+  // §8.3.8's feed is two columns — an epoch and a short phrase — and the epoch is drawn
+  // by the component, not built into the sentence. So these are **phrases, not
+  // sentences**: "burn 1", "periapsis 274.2 km". Each still takes its `metSeconds`,
+  // because the same key is also read aloud by the live region, where there is no
+  // column beside it to supply the time. The component asks for the phrase; the
+  // announcer asks for the phrase and reads the epoch it already has.
+  //
+  // Lower case throughout, matching the mock. Capitalising would make the feed read as
+  // a list of headlines rather than a log.
+  'flightLog.ignition': ({ burnCount }, fmt) =>
+    burnCount === 0
+      ? 'ignition — coasting, no burns planned'
+      : `ignition — ${fmt.integer(burnCount)} ${fmt.plural(burnCount) === 'one' ? 'burn' : 'burns'} planned`,
+  // The magnitude and the signed along-track component are both shown because they are
+  // different facts: a 36.2 m/s burn that is −36.2 prograde is a retrograde burn, and a
+  // feed showing only the magnitude would make a brake look like an accelerator. When
+  // the burn is purely along-track the two say the same thing and only the signed one
+  // is printed — repeating it would read as two numbers that happen to match.
+  'flightLog.burn': ({ index, deltaVMps, progradeMps }, fmt) => {
+    const alongTrack = Math.abs(Math.abs(progradeMps) - deltaVMps) < 5e-5;
+    return alongTrack
+      ? `burn ${fmt.integer(index)} — ${signed(progradeMps, fmt)} m/s`
+      : `burn ${fmt.integer(index)} — ${fmt.decimal(deltaVMps, 4)} m/s ` +
+          `(${signed(progradeMps, fmt)} prograde)`;
+  },
+  'flightLog.periapsis': ({ altitudeM }, fmt) => `periapsis — ${kilometres(altitudeM, fmt)} km`,
+  'flightLog.apoapsis': ({ altitudeM }, fmt) => `apoapsis — ${kilometres(altitudeM, fmt)} km`,
+  'flightLog.revolution': ({ index, periodSeconds }, fmt) =>
+    `rev ${fmt.integer(index)} — period ${hoursAndMinutes(periodSeconds, fmt)}`,
+  // The constraint's identifier is not shown; its name is. A `switch` rather than a
+  // lookup keyed by the identifier, so that §6.5's remaining five constraints are a
+  // compile error here when they arrive rather than a raw `no_fly_shell` on screen.
+  'flightLog.constraintEnter': ({ kind }) => `entered ${constraintName(kind)}`,
+  'flightLog.constraintExit': ({ kind, durationSeconds }, fmt) =>
+    `left ${constraintName(kind)} — ${fmt.integer(Math.round(durationSeconds))} s`,
+  'flightLog.closestApproach': ({ rangeM, relativeSpeedMps }, fmt) =>
+    `closest approach — ${range(rangeM, fmt)} at ${fmt.decimal(relativeSpeedMps, 2)} m/s`,
+  'flightLog.objectiveMet': () => 'objective met',
+  'flightLog.end': () => 'end of horizon',
+
+  // ── The debrief's diagnosis (FR-307, §8.3.9) ───────────────────────────────
+  //
+  // One sentence per rule, and the rule set is deliberately small — FR-307 makes bare
+  // numbers the fallback, so a message exists only where the game knows the answer.
+  'debrief.diagnosis.pastDeadline': ({ lateSeconds, deadlineSeconds }, fmt) =>
+    `You reached the target, but ${hoursAndMinutes(lateSeconds, fmt)} after the ` +
+    `${hoursAndMinutes(deadlineSeconds, fmt)} deadline. The intercept was good; the timing was not.`,
 
   // ── Scenario loading (FR-202) ──────────────────────────────────────────────
   'scenario.error.malformedJson': ({ detail }) => `This scenario is not valid JSON: ${detail}`,
@@ -491,4 +562,126 @@ export const en: Messages = {
   'screen.notFound.backToTitle': () => 'Back to the start',
   'screen.notBuiltYet': () =>
     'This screen is not built yet. The vertical slice runs as far as a contract briefing.',
+
+  // ── Execution (§8.3.8) ─────────────────────────────────────────────────────
+  'execution.region.orbitView': () => 'Orbit view — the ship, the target, and the flown path',
+  'execution.region.hud': () => 'Execution status',
+
+  // DEP-05's "the current rate is visible in the HUD". Written as a multiplier because
+  // that is what it is: 1× is real time and the game says so rather than hiding it.
+  'execution.speed.label': () => 'Speed',
+  'execution.speed.option': ({ multiplier }, fmt) => `${fmt.integer(multiplier)}×`,
+  'execution.speed.current': ({ multiplier }, fmt) => `${fmt.integer(multiplier)}× real time`,
+
+  'execution.control.pause': () => 'Pause',
+  'execution.control.resume': () => 'Resume',
+  'execution.control.skip': () => 'Skip to end',
+  'execution.control.abort': () => 'Abort',
+  // §8.3.8's promise, said rather than implied. The plan survives — that is FR-603 —
+  // and the sentence has to make clear that abort is a way back rather than a loss.
+  'execution.paused.notice': () =>
+    'The plan cannot be changed once it is flying. Abort to return to the planner with it intact.',
+
+  'execution.progress.label': () => 'Mission elapsed time',
+  'execution.progress.at': ({ metSeconds, ofSeconds }, fmt) =>
+    `${fmt.met(metSeconds)} of ${fmt.met(ofSeconds)}`,
+
+  'execution.burn.flash': ({ index, deltaVMps }, fmt) =>
+    `Burn ${fmt.integer(index)} — ${fmt.decimal(deltaVMps, 1)} m/s`,
+
+  'execution.log.heading': () => 'Flight log',
+  'execution.log.label': ({ count }, fmt) =>
+    count === 1 ? 'Flight log, 1 entry' : `Flight log, ${fmt.integer(count)} entries`,
+  'execution.log.empty': () => 'Nothing has happened yet.',
+  // Deliberately terse: it is read out in the gap between two frames, and a sentence
+  // would still be being spoken when the next one arrived.
+  'execution.announce.summary': ({ count }, fmt) =>
+    count === 1 ? '1 more event' : `${fmt.integer(count)} more events`,
+  'execution.announce.label': () => 'Flight events',
+
+  // ── Debrief (§8.3.9) ───────────────────────────────────────────────────────
+  'debrief.heading.success': ({ index, title }, fmt) =>
+    `Contract ${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })} ${title} — complete`,
+  'debrief.heading.failure': ({ index, title }, fmt) =>
+    `Contract ${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })} ${title} — not complete`,
+  // A switch rather than a lookup, so §6.7's four medals are exhaustive here and a fifth
+  // would be a compile error in the file where its name has to be chosen.
+  'debrief.medal': ({ medal }) => {
+    switch (medal) {
+      case 'bronze':
+        return 'Bronze';
+      case 'silver':
+        return 'Silver';
+      case 'gold':
+        return 'Gold';
+      case 'clean':
+        return 'Clean Job';
+      default:
+        return medal;
+    }
+  },
+  'debrief.medal.none': () => 'No medal',
+
+  'debrief.table.label': () => 'Your result against par',
+  // §8.3.9 draws this corner cell blank, and a blank `<th>` leaves a screen reader
+  // announcing the row labels under no heading at all. It carries a real word and the
+  // component hides it visually — §8.8's rule that nothing is conveyed by layout alone.
+  'debrief.column.quantity': () => 'Measure',
+  'debrief.column.you': () => 'You',
+  'debrief.column.par': () => 'Par',
+  'debrief.column.best': () => 'Your best',
+  'debrief.column.delta': () => 'vs par',
+
+  'debrief.row.deltaV': () => 'Δv',
+  'debrief.row.time': () => 'Time',
+  'debrief.row.burns': () => 'Burns',
+
+  'debrief.value.deltaV': ({ mps }, fmt) => `${fmt.decimal(mps, 1)} m/s`,
+  'debrief.value.time': ({ seconds }, fmt) => hoursAndMinutes(seconds, fmt),
+  'debrief.value.burns': ({ count }, fmt) => fmt.integer(count),
+  // The sign is the information: "+0.6%" is over par and "−0.1%" is under it, and a
+  // bare "0.6%" reads as neither. The minus is U+2212, which lines up under a digit.
+  'debrief.value.delta': ({ fraction }, fmt) => {
+    const percent = fraction * 100;
+    // Below a tenth of a percent, "+0.0%" reads as a difference that is not there.
+    if (Math.abs(percent) < 0.05) return 'level';
+    return `${percent > 0 ? '+' : '−'}${fmt.decimal(Math.abs(percent), 1)}%`;
+  },
+  'debrief.value.absent': () => '—',
+
+  'debrief.closest': ({ achievedM, neededM, metSeconds }, fmt) =>
+    `${range(achievedM, fmt)} at ${fmt.met(metSeconds)} (needed ${range(neededM, fmt)})`,
+
+  'debrief.whatHappened': () => 'What happened',
+  // FR-307's fallback, stated. A screen showing only numbers reads as one that failed to
+  // load; this says the numbers *are* the answer.
+  'debrief.noDiagnosis': () =>
+    'The numbers above are what happened. This build does not guess at why — a wrong ' +
+    'explanation would be worse than none.',
+
+  'debrief.missed': () => 'Missed',
+  'debrief.miss.label.closest': () => 'Closest approach',
+  'debrief.miss.label.needed': () => 'Needed',
+  'debrief.miss.label.deltaV': () => 'Δv used',
+  'debrief.miss.closest': ({ rangeM, metSeconds }, fmt) =>
+    `${range(rangeM, fmt)} at ${fmt.met(metSeconds)}`,
+  'debrief.miss.needed': ({ rangeM }, fmt) => `${range(rangeM, fmt)} or closer`,
+  'debrief.miss.deltaV': ({ usedMps, budgetMps }, fmt) =>
+    `${fmt.decimal(usedMps, 1)} of ${fmt.decimal(budgetMps, 0)} m/s`,
+
+  // D12. The tone matters: the player found a better answer than ours, and the game says
+  // so plainly rather than congratulating them for breaking it.
+  'debrief.beatPar': ({ byMps }, fmt) =>
+    `You beat our par by ${fmt.decimal(byMps, 1)} m/s. Our optimum was wrong.`,
+  'debrief.beatPar.report': () => 'Tell us',
+
+  'debrief.action.retry': () => 'Retry',
+  'debrief.action.next': () => 'Next contract',
+  'debrief.action.share': () => 'Share',
+  'debrief.action.board': () => 'Contract board',
+  'debrief.next.none': () => 'This is the last contract in this build.',
+  'debrief.share.copied': () => 'Replay code copied.',
+  'debrief.share.failed': () => 'Could not copy — select the code and copy it yourself.',
+  'debrief.share.hint': () =>
+    'A replay code, not a link: the shareable URL arrives with the replay viewer.',
 };

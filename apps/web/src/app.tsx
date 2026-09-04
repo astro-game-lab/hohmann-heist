@@ -23,6 +23,7 @@
  * rendered against a different message set in a test without touching a global.
  */
 import { createCatalogue, type Catalogue } from '@hh/ui';
+import type { Outcome } from '@hh/game';
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
@@ -32,6 +33,7 @@ import { onRouteChange, parseHash, type Route } from './router.js';
 import {
   browserStorage,
   loadSave,
+  medalRank,
   writeSave,
   type LoadOutcome,
   type SaveV1,
@@ -138,6 +140,7 @@ const bodyFor = (
   resolve: Catalogue['resolve'],
   save: SaveV1,
   onAccept: (id: string) => void,
+  onComplete: (id: string, outcome: Outcome, replay: string) => void,
 ): JSX.Element => {
   switch (route.name) {
     case 'notFound':
@@ -157,6 +160,9 @@ const bodyFor = (
           {...(progress === undefined ? {} : { progress })}
           onAccept={() => {
             onAccept(id);
+          }}
+          onComplete={(outcome, replay) => {
+            onComplete(id, outcome, replay);
           }}
         />
       );
@@ -185,6 +191,59 @@ const withAttempt = (save: SaveV1, id: string): SaveV1 => {
   };
 };
 
+/**
+ * The save, with a completed run recorded — FR-302, §11.7.
+ *
+ * > *The system MUST record, per contract: best medal, best Δv, best time, burn count,
+ * > attempt count, and the best run's replay code.*
+ *
+ * **Best, not last.** Every field here improves or stays; a worse second run does not
+ * overwrite a better first one, and the medal follows §6.7's *"cumulative — earning Gold
+ * does not remove Bronze"*. That is why the medal is compared by rank rather than
+ * assigned, and why `bestReplay` moves with the Δv rather than with the most recent run:
+ * a replay code that did not achieve the recorded best would fail its own verification
+ * (§11.11).
+ *
+ * A failed run records nothing but the attempt it already counted. There is no result to
+ * be the best of, and writing a `bestDv_mps` for a run that missed would make the debrief
+ * compare against a number nobody achieved.
+ *
+ * `firstCompletedAt` is the one wall-clock read in this file, and it is a timestamp for
+ * the player rather than an input to anything — §11.4's ban is on the simulation, and
+ * this is a diary entry.
+ */
+const withResult = (save: SaveV1, id: string, outcome: Outcome, replay: string): SaveV1 => {
+  const previous = save.contracts[id];
+  if (!outcome.success || outcome.metSeconds === null) return save;
+
+  const improved = previous?.bestDv_mps === undefined || outcome.dvUsedMps < previous.bestDv_mps;
+  const medal =
+    medalRank(outcome.medal ?? undefined) > medalRank(previous?.medal)
+      ? (outcome.medal ?? previous?.medal)
+      : previous?.medal;
+
+  return {
+    ...save,
+    contracts: {
+      ...save.contracts,
+      [id]: {
+        ...previous,
+        attempts: previous?.attempts ?? 1,
+        ...(medal === undefined ? {} : { medal }),
+        ...(improved
+          ? {
+              bestDv_mps: outcome.dvUsedMps,
+              bestTime_s: outcome.metSeconds,
+              burns: outcome.burns,
+              bestReplay: replay,
+            }
+          : {}),
+        firstCompletedAt: previous?.firstCompletedAt ?? new Date().toISOString(),
+      },
+    },
+  };
+};
+
 export const App = (): JSX.Element => {
   // Resolve the route during the first render rather than in an effect. Effects
   // run after paint, so deferring this would show a placeholder for a frame on
@@ -203,6 +262,13 @@ export const App = (): JSX.Element => {
     const next = withAttempt(saved.save, id);
     // A write that fails is not the player's problem right now — they are on their way to
     // the planner. #167 owns the notice; what matters here is that it cannot throw.
+    writeSave(storage, next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
+
+  const completeContract = (id: string, outcome: Outcome, replay: string): void => {
+    const next = withResult(saved.save, id, outcome, replay);
+    if (next === saved.save) return;
     writeSave(storage, next);
     setSaved({ status: 'loaded', save: next, migrated: false });
   };
@@ -237,7 +303,7 @@ export const App = (): JSX.Element => {
       transitionMs={screenTransitionMs(reducedMotion)}
     >
       {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
-      {bodyFor(route, t, saved.save, acceptContract)}
+      {bodyFor(route, t, saved.save, acceptContract, completeContract)}
     </Screen>
   );
 };

@@ -12,6 +12,62 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **Execution — playback of the solved timeline (#144, #145).** Committing a plan now flies it.
+  Five rates from `1×` to FR-602's `100 000×`, `Space` to pause, `S` to skip to the end and
+  `Esc` to abort back to the planner with the plan, the scrub head and the selection all
+  restored. Playback is a **display** rate over an already-solved timeline: the speed appears in
+  one expression — how far the epoch moves per wall-clock second — and every event comes from an
+  array built before the first frame, so changing rate mid-run cannot change the result. A long
+  frame jumps the epoch and drains every event it passed rather than iterating a fixed timestep,
+  which is what makes a 500 ms stall at 10 000× skip and duplicate nothing. **Skipping to the end
+  is `advance` with an infinite step**, so it is not a second code path that could drift from
+  watching — it is the same one.
+- **The flight log (#146).** Every burn, apsis, revolution, constraint entry and exit and the
+  closest approach, with epochs, built once from the solved timeline by the event finders rather
+  than sampled as the run plays — so it does not depend on the frame rate, the speed, or whether
+  anyone watched. A DOM list, one focus stop, scrollable, and **not** a live region: the record is
+  complete and the *narration* beside it is bounded to at most three entries plus a count per
+  step, which is what keeps a screen reader from being handed forty apsides in one frame at
+  10 000×.
+- **The debrief (#121), in both of §8.3.9's variants.** Success renders §6.7's medal by name as
+  well as by colour, the YOU / PAR / YOUR BEST table with signed percentage deltas, and the
+  encounter against the tolerance it was judged by. Failure replaces the result block with the
+  closest approach achieved, what was needed and the Δv used. RETRY restores the plan, SHARE
+  copies the run's §11.6 replay code, BOARD returns to the contract list, and NEXT is present and
+  disabled with the reason, because this build ships one contract. Beating `par_dv` is treated as
+  D12 says it should be: the debrief says our optimum was wrong and offers a prefilled `physics`
+  report carrying the replay code.
+- **Medals and the outcome (§6.7, FR-301, FR-304).** Bronze, Silver, Gold and Clean Job, evaluated
+  on §11.4's scoring grid — Δv to 0.1 m/s and time to 1 s — so a 1e-9 difference between JavaScript
+  engines can never flip one. Bronze's *"within budget and deadline"* is now actually checked:
+  `L3` caps the last **burn** and `L6` asks about the whole **horizon**, so a run that intercepted
+  twenty minutes after the deadline previously passed both and is now its own failure, with its
+  own explanation.
+- **The playback camera (#147).** Follows the ship with the target framed, as a pure function of
+  the playback epoch — no wall-clock ease, which at 10 000× would spend the run chasing a ship
+  that left before it started moving, and no 20% re-frame threshold, which would jump at whatever
+  rate the speed produced. Smoothing is the *window* the framing is computed over, measured in
+  mission seconds; the window closes continuously as the encounter approaches, so "far apart
+  early" becomes "metres apart at closest approach" with no regime change to be jarred by. Manual
+  pan and zoom suspend it until ⌖, and none of it can touch the outcome.
+- **Completed runs are recorded (FR-302).** Best medal, best Δv, best time, burn count and the
+  best run's replay code, per contract, best-not-last — so the debrief's YOUR BEST column has
+  something to compare against on the second attempt.
+- **`findRevolutions` in `@hh/propagation`.** FR-604 asks the flight log for revolutions and the
+  five existing finders do not provide them; counting periapsis passages would report nothing at
+  all for the near-circular orbits every v1.0 contract flies. Closed-form, anchored to the arc's
+  own start rather than to periapsis, indexed rather than accumulated, and validated against the
+  DOP853 oracle: at a returned epoch an independent integrator started from the arc's state must
+  arrive back at it.
+
+### Changed
+- **A planner restored from a run starts in `EVALUATED`.** Aborting or retrying seeds the planner
+  with the committed plan, and §8.5.1 reaches `COMMITTED` only from `EVALUATED` — so leaving it
+  `IDLE` rendered an enabled Commit button that did nothing. It is also simply the true state: the
+  plan has been evaluated, which is what `EVALUATED` means.
+- **DEP-05 and DEP-12 are implemented**, and move from `planned` to `active` in the departures
+  registry and in `docs/PHYSICS.md`.
+
 - **The planner (#103, #123, #127, #128, #130, #131, #132, #143).** §8.3.4's five regions — HUD
   bar, timeline, plan panel, readouts and assist tray — around the orbit view, in one component
   tree at every width. The wide arrangement is a grid and the narrow one a tab strip, but the

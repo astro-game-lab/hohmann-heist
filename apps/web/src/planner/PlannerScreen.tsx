@@ -36,14 +36,14 @@
  * a reduced feature set"*. Because the panels are the same instances, this is structural:
  * there is no narrow variant of `PlanPanel` that could quietly drop the delete button.
  */
-import { arcAt, type Timeline } from '@hh/sim';
+import { arcAt, type Plan, type Timeline } from '@hh/sim';
 import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
 import { snapToNamedApsis } from '@hh/game';
-import type { Catalogue } from '@hh/ui';
+import type { Catalogue, NodeId } from '@hh/ui';
 import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { AssistTray } from './AssistTray.js';
 import { CommitBar } from './CommitBar.js';
@@ -54,7 +54,8 @@ import { OrbitView } from './OrbitView.js';
 import { PlanPanel } from './PlanPanel.js';
 import { Readouts } from './Readouts.js';
 import { TimelineStrip } from './TimelineStrip.js';
-import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf } from './store.js';
+import type { Evaluation } from './evaluate.js';
+import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf, type PlannerSeed } from './store.js';
 
 /** Which side panel the narrow layout is showing. Ignored above the breakpoint. */
 type Tab = 'plan' | 'readouts' | 'assists';
@@ -63,6 +64,32 @@ export interface PlannerScreenProps {
   readonly t: Catalogue['resolve'];
   readonly resolveDynamic: Catalogue['resolveDynamic'];
   readonly scenario: LoadedScenario;
+  /**
+   * What the planner opens with.
+   *
+   * Empty on a fresh acceptance; the run's plan, scrub head and selection when the
+   * player comes back from an abort (FR-603) or a retry (§6.11).
+   */
+  readonly seed?: PlannerSeed;
+  /**
+   * §8.5.1's exit to EXECUTION.
+   *
+   * Called once, with the plan and the evaluation that gated the commit. Handing the
+   * *evaluation* across rather than the plan alone is FR-601: execution plays back the
+   * timeline the planner already solved, and re-deriving it on the other side of this
+   * call would be the recomputation the requirement forbids.
+   */
+  readonly onCommit: (committed: CommittedRun) => void;
+}
+
+/** What crossing §8.5.1's last edge carries with it. */
+export interface CommittedRun {
+  readonly plan: Plan;
+  readonly evaluation: Evaluation;
+  /** Where the scrub head was, so aborting can put it back (#145). */
+  readonly scrubEpoch: Epoch;
+  /** Which node was selected, likewise. */
+  readonly selectedNodeId: NodeId | null;
 }
 
 /**
@@ -78,8 +105,14 @@ const orbitAtScrub = (timeline: Timeline, at: Epoch, mu: number) => {
   return orbitReadout(arc.elements, mu, R_EARTH_EQ);
 };
 
-export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProps): JSX.Element => {
-  const [state, actions] = usePlanner(scenario);
+export const PlannerScreen = ({
+  t,
+  resolveDynamic,
+  scenario,
+  seed,
+  onCommit,
+}: PlannerScreenProps): JSX.Element => {
+  const [state, actions] = usePlanner(scenario, seed ?? {});
   const [tab, setTab] = useState<Tab>('plan');
   // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
   // screen, or when the plan produced no trajectory to draw it on — see below.
@@ -264,6 +297,39 @@ export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProp
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [actions, model, scenario, state]);
+
+  /**
+   * §8.5.1's exit to EXECUTION.
+   *
+   * An effect rather than a call inside `actions.commit`, because COMMITTED is a state
+   * the machine reaches and leaving the screen is a consequence of having reached it —
+   * doing it inside the action would mean navigating from a state updater, which runs
+   * during render and may run twice.
+   *
+   * The evaluation handed over is the one the commit gate read. `isCommittable` has
+   * already refused a plan with no timeline, so `timeline` here is non-null by the same
+   * check that let the machine move; the guard states that rather than assuming it.
+   */
+  // The selection at the moment of commit, kept because the machine drops it.
+  //
+  // COMMITTED carries the plan and nothing else — §8.5.1 makes it terminal, and a
+  // terminal state remembering which node had a ring around it would be state nobody in
+  // the machine needs. #145 does need it, one layer up: aborting should put the player
+  // back where they were working. So the *screen* remembers, which is the right owner —
+  // "where the player was looking" is a display fact, not a rule.
+  const lastSelected = useRef<NodeId | null>(null);
+  if (selectedNodeId !== null) lastSelected.current = selectedNodeId;
+
+  const committedPlan = model.interaction.phase === 'COMMITTED' ? model.interaction.plan : null;
+  useEffect(() => {
+    if (committedPlan === null || evaluation.timeline === null) return;
+    onCommit({
+      plan: committedPlan,
+      evaluation,
+      scrubEpoch: model.scrub.epoch,
+      selectedNodeId: lastSelected.current,
+    });
+  }, [committedPlan, evaluation, model.scrub.epoch, onCommit]);
 
   const panel = (name: Tab, content: JSX.Element): JSX.Element => (
     <div
@@ -458,16 +524,6 @@ export const PlannerScreen = ({ t, resolveDynamic, scenario }: PlannerScreenProp
         legality={legality}
         onCommit={actions.commit}
       />
-
-      {model.interaction.phase === 'COMMITTED' ? (
-        // §8.5.1's exit to EXECUTION. The execution phase is #121 and PR 6 of this
-        // milestone, so committing currently reaches the same honest placeholder every
-        // unbuilt route does — the machine's terminal edge is real and its destination
-        // is not built yet.
-        <p class="hh-planner__committed" role="status" data-testid="planner-committed">
-          {t('screen.notBuiltYet', {})}
-        </p>
-      ) : null}
 
       {state.lastRefusal === null ? null : (
         <p class="hh-planner__refusal" role="status" data-testid="planner-refusal">

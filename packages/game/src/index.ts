@@ -54,6 +54,25 @@ export { NO_PARAMS, gameMessage } from './messages.js';
 export * from './objectives/index.js';
 export * from './constraints/index.js';
 
+export type { FlightLogEntry, FlightLogInput, FlightLogKind } from './flight-log.js';
+export { buildFlightLog } from './flight-log.js';
+
+export type {
+  Medal,
+  Outcome,
+  OutcomeFailure,
+  OutcomeInput,
+  ParDelta,
+  ParValues,
+} from './outcome.js';
+export {
+  SCORE_DELTA_V_QUANTUM_MPS,
+  SCORE_TIME_QUANTUM_S,
+  evaluateOutcome,
+  toScoreDeltaV,
+  toScoreTime,
+} from './outcome.js';
+
 export type {
   Legality,
   LegalityCode,
