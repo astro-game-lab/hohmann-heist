@@ -190,20 +190,20 @@ export default defineConfig({
           functions: 70,
           lines: 70,
         },
-        // NFR-022 sets no number for `render`, because it was written before the
-        // package held code. It is held to the game layer's bar rather than the core's:
-        // the core's 90% is affordable for pure functions over numbers, and most of
-        // this package is that and clears it comfortably. The part that is not is the
-        // browser wiring — a context that fails to acquire, a media query that re-arms,
-        // a `ResizeObserver` teardown — where the last few percent are branches that
-        // cost more to fake than the bug they would catch. Raising this to 90 later is
-        // a fine thing to want; asserting it today would mean tests written for the
-        // number rather than for the risk.
+        // NFR-022 sets no number for `render`, because it was written before the package
+        // held code. It gets the **core's** bar rather than the game layer's, and that is
+        // a correction rather than an ambition: the first draft of this block set 70 on
+        // the theory that browser wiring — a context that fails to acquire, a media query
+        // that re-arms, a `ResizeObserver` teardown — would have last-few-percent branches
+        // too expensive to fake. Measured, the package comes in at 96% statements and 87%
+        // branches, because those seams take structural types and a test can drive them
+        // with a plain object instead of a browser. A gate twenty-six points below the
+        // real number is not a gate; it would let a genuine regression through in silence.
         'packages/render/src/**': {
-          statements: 70,
-          branches: 60,
-          functions: 70,
-          lines: 70,
+          statements: 90,
+          branches: 80,
+          functions: 90,
+          lines: 90,
         },
       },
     },

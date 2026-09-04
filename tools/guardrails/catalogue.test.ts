@@ -36,8 +36,22 @@ import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-/** Where a key may be used. */
-const SEARCH_ROOTS = ['packages/game/src', 'packages/ui/src', 'apps/web/src'];
+/**
+ * Where a key may be used.
+ *
+ * `packages/render/src` joined this list with the orbit scene (§9.3, D8). The renderer
+ * draws no text — there is no text primitive to draw it with — but it decides *which*
+ * labels a frame needs, so it emits catalogue keys for the apsis altitudes, the
+ * closest-approach readout and the handle axes, and the application resolves them. That
+ * makes it a producer exactly as `@hh/game` is, and leaving it out of the search made the
+ * check below report five live keys as dead.
+ */
+const SEARCH_ROOTS = [
+  'packages/game/src',
+  'packages/ui/src',
+  'packages/render/src',
+  'apps/web/src',
+];
 
 /**
  * Contracts name catalogue keys too, and a key only a contract uses is still in use.
@@ -100,6 +114,9 @@ describe('the search itself', () => {
     expect(sources.length).toBeGreaterThan(10);
     expect(sources.map((file) => file.path)).toContain('apps/web/src/app.tsx');
     expect(sources.map((file) => file.path)).toContain('packages/game/src/legality.ts');
+    // The renderer is a key producer too, and naming a file from it here is what stops
+    // that root being dropped from the search without the rot check going quiet.
+    expect(sources.map((file) => file.path)).toContain('packages/render/src/apsis.ts');
     expect(sources.map((file) => file.path)).not.toContain('packages/game/src/messages.ts');
     // Not a named file: which contracts ship is content, and a canary naming one would
     // have to be edited every time the catalogue of contracts changes.

@@ -12,6 +12,39 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **The orbit scene (#106–#111, #113–#115, #177, §9.3).** Everything the planner draws.
+  Earth to scale with Natural Earth 1:110 m coastlines and a terminator derived from a Sun vector
+  the game layer supplies; hazard shells that serve both the 100 km floor and §6.5's no-fly annulus
+  through one mechanism; the three trajectory styles as **three dash patterns, not three colours**;
+  ship and target markers with fading trails; maneuver nodes with a two-axis handle cross on the
+  RTN basis; and apsis ticks and a closest-approach tie line. **No text is drawn on the canvas** —
+  a DOM label layer positioned by `transform` holds every string, and every string resolves through
+  `@hh/ui`'s catalogue. Plus a pure hit-test index with 32 **CSS**-pixel targets and a documented
+  priority order, and `devicePixelRatio` handling capped at 2 that survives a move between displays.
+- **The planned trajectory's dots are spaced by equal *time*, and that is asserted.** §9.3 asks for
+  it because the density then shows the speed — sparse at periapsis, dense at apoapsis — and a dash
+  array cannot express it, since `setLineDash` spaces marks by arc length and knows nothing about
+  the body traversing the path. The test measures the ratio of dot spacing at periapsis to apoapsis
+  against vis-viva's `(1+e)/(1-e)` at three eccentricities, with a circular orbit as the control.
+- **Natural Earth coastline data and its processing script (#177, §9.6).** `pnpm coastlines:write`
+  fetches the pinned upstream release, verifies its SHA-256, reads the shapefile directly rather
+  than trusting a third party's GeoJSON re-encoding, simplifies on the sphere, and writes
+  delta-encoded rings. Reproducible: the same input gives a byte-identical output.
+- **`#/scene`, a development harness** that draws the full scene against the real `c03-cold-open`
+  contract. Throwaway, on the same terms as the M1 spike, and the place the renderer's visual
+  claims — the DPR cap, greyscale distinguishability, Earth overflowing the viewport — are actually
+  checked rather than asserted.
+
+### Changed
+- **`@hh/render` joins the NFR-022 coverage gate**, its stated condition ("once it holds code and
+  has a browser-environment testing story") now being met. A `render-dom` Vitest project runs
+  `*.dom.test.ts` under jsdom; the rest of the package stays under Node, deliberately.
+- **§9.6's "~15 kB" estimate for the coastline asset does not hold.** At a precision meeting §9.3's
+  0.5 px screen-space standard the data is 47 kB raw and 20.3 kB gzipped delta-encoded — and 74 kB
+  raw, 31 kB gzipped, as literal GeoJSON. The estimate was an estimate; this is the measurement.
+  Well inside NFR-020's 400 kB budget, which the app now spends 59.7 kB of, but the product
+  definition's number should be corrected rather than quietly missed.
+
 - **The par harness (#89, §6.7, DEP-12).** `tools/pars/` computes a contract's `par_dv` and
   `par_time` rather than taking them on trust: a grid over departure epoch and time of flight, every
   Lambert branch at each point, the best of each transfer family refined by a Nelder–Mead simplex,
