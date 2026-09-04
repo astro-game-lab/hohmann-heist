@@ -71,6 +71,19 @@ jobs:
       - name: Generated scenario artefacts (FR-201)
         run: pnpm schema:check
 
+      # Par values are computed by tools/pars/ and committed into the scenario files and
+      # docs/PARS.md. This recomputes every one of them from the scenario alone and fails
+      # when the answer has moved -- the same arrangement `schema:check` has, and for the
+      # same reason: a published number nobody can prove is current is a liability, and
+      # D12 publishes these to players and invites them to beat them.
+      #
+      # Its own step rather than part of `test:all` because it is a *search* -- tens of
+      # thousands of Lambert solves -- where every other project in the suite is an
+      # assertion costing milliseconds. §13.4's seven content checks do run in `test:all`,
+      # as the `content` project; they only replay a stored answer.
+      - name: Par values (#89, §6.7)
+        run: pnpm pars:check
+
       # test:all, not test — the guardrail suite is excluded from the inner-loop
       # `test` script for speed, and CI is where it has to run.
       - name: Test

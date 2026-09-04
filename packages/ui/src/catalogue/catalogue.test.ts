@@ -82,6 +82,8 @@ const samples: AllMessageParams = {
   'nav.codex': {},
   'nav.settings': {},
   'nav.spike': {},
+  'brief.c03': {},
+  'mark.c03.departureWindow': {},
 };
 
 const catalogue = createCatalogue();

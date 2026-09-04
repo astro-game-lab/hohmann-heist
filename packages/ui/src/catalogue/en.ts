@@ -72,6 +72,20 @@ export const en: Messages = {
     `${path} asks for ${fmt.number(requested)}, which is looser than the ${fmt.number(limit)} ` +
     'the departures table promises the player',
 
+  // ── Contract briefs and coach marks (§8.3.3) ───────────────────────────────
+  //
+  // 30–60 words, second person, terse. The hint is flavour rather than instruction —
+  // "Wait for it" is a mood, not a step — because a brief that tells the player what to
+  // do has answered the puzzle for them. Asserted, not merely intended: the content
+  // suite counts the words of every brief it can resolve.
+  'brief.c03': () =>
+    'KESTREL-2 runs a courier loop four hundred kilometres above you, and its cargo does ' +
+    'not stay aboard long. Getting up there is the cheap part — a single push will do it. ' +
+    'Arriving while the thing is still there is not. Wait for it.',
+  'mark.c03.departureWindow': () =>
+    'The target keeps moving while you climb. When you leave decides where it will be ' +
+    'when you get there.',
+
   // ── The application shell ──────────────────────────────────────────────────
   'app.title': () => 'Hohmann Heist',
   'app.skeletonNotice': () =>

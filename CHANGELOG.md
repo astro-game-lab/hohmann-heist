@@ -12,6 +12,53 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **The par harness (#89, §6.7, DEP-12).** `tools/pars/` computes a contract's `par_dv` and
+  `par_time` rather than taking them on trust: a grid over departure epoch and time of flight, every
+  Lambert branch at each point, the best of each transfer family refined by a Nelder–Mead simplex,
+  and the winner then built as a real quantised `Plan` and run through the game's own timeline,
+  objective evaluator and legality check — so a published par is a number the game produced from a
+  plan it would let a player commit. `pnpm pars:write` writes the answer into the scenario file and
+  `docs/PARS.md`; `pnpm pars:check` recomputes it in CI and fails when it has moved, the same
+  arrangement `schema:check` and the goldens have. **The rounding is the tolerance:** values are
+  written at DEP-09's own quanta, 1e-4 m/s and 1e-3 s, and compared exactly, because §11.4 declines
+  to claim bit-identical results across engines and a tolerance bolted on top would be a second
+  number to argue about. C03's search takes about a second and agrees with the closed-form
+  tangential impulse to 3.1e-5 m/s — two code paths that share only the value of μ.
+- **`docs/PARS.md` (§6.7, §11.5).** The derivation for every contract, generated from the solver's
+  own output. §11.5 rules that a par without a reproducible derivation is not mergeable, and D12
+  makes par public and beatable — which makes this a forensic document, the thing a "I beat par"
+  bug report gets checked against. It states the method, the three things the method cannot do,
+  the search statistics, the closed-form comparison, and how to reproduce it in one command. A
+  hand-maintained version would be the first thing to fall out of date, and a stale derivation is
+  worse than none.
+- **`c03-cold-open`, the first shipped contract (#91, FR-204).** An `intercept`: a 400 km circular
+  orbit, KESTREL-2 in an 800 km circular orbit 14° ahead, 300 m/s of budget, a three-hour deadline
+  inside a six-hour horizon. Contracts live in `content/contracts/` — data at the top of the
+  repository where a contributor looks for them, rather than inside the package that owns the
+  *format* and no particular contract. Its brief and its coach mark are catalogue keys, not prose
+  in the scenario file (D14).
+- **The content test suite (#87, §13.4).** One parameterised file over `content/contracts/`, so
+  **adding a contract adds seven tests for free and offers no way to avoid them** — which is what
+  makes G6 safe. Solvability, par accuracy to ±0.5%, budget headroom ×1.15, deadline headroom
+  ×1.10, schema validity, reachability, and every `briefKey` and `coachMarks` entry resolving.
+  Each check is its own `it` inside a `describe` named for the contract, so a failure prints which
+  contract and which check without anyone reading a log. Three assertions ride along that §13.4
+  does not list and nothing else would catch: that a file's name equals the id inside it, that
+  `par.burns` matches the reference solution (§6.7 makes Gold depend on it), and that the replay's
+  own §11.6 claim agrees with the plan beside it.
+- **§6.8's unlock rule, as something a test can ask questions of.** Reachability is a property of
+  the whole content set, not of one file, so `tools/content/reachability.ts` walks the progression
+  graph to a fixpoint — act I open from a cold start, act *k* opening on ⌈2/3⌉ of act *k*−1's
+  shipped contracts, `unlocks` adding explicit edges on top. It gates on what **ships** rather than
+  on §6.8's designed act sizes, because that is what the game would do and because a rule written
+  against a table would be a copy of `docs/PRODUCT.md` living in code. With one contract the
+  content suite's reachability row passes trivially, so the rule is exercised separately against
+  sets that are supposed to fail — a check that can only pass is not a check. Progression proper is
+  #82 in M3, and this moves into `@hh/game` when it lands.
+- **`no-tools-in-shipped-code` (NFR-020).** Nothing under `packages/` or `apps/` may import
+  anything under `tools/`. #89 requires the par harness to be a development tool that is not in the
+  bundle; nothing imports it today, which is a fact about this week rather than a property of the
+  repository. The guardrail suite demonstrates the rule firing, like every other layering rule here.
 - **`@hh/game`'s evaluation surface (FR-106, FR-107, FR-108).** Given a timeline and a contract:
   what did the player achieve, what rules did they break, and may they commit. Objectives are
   `reach_orbit`, `intercept`, `rendezvous` and `soft_rendezvous`; `station` is a separate type and
@@ -239,6 +286,17 @@ they relied on has moved.
 - Initial project scaffold from `astro-game-lab/.repo-template`.
 
 ### Physics
+- **C03's par is 109.1177 m/s and 4 122.965 s, against `docs/PRODUCT.md` §6.8's 217 m/s and
+  48 min.** Nothing in the model moved and no golden changed; §6.8's figure is simply the wrong
+  quantity for this contract. The table quotes a full two-burn Hohmann transfer — which is what
+  C02 costs — and C03 is an `intercept`, where DEP-04 asks for 1 000 m of range and says nothing
+  about relative velocity, so the circularisation burn buys nothing the objective wants. One
+  prograde impulse raising apoapsis to the target's radius is the whole solution. The time is
+  *larger* than 48 min for the matching reason: 48 min is the transfer alone, and the contract's
+  departure phase makes the player wait about twenty minutes for the window — which is the lesson
+  §6.8 itself assigns to C03. §6.8 states of its own numbers that they are indicative and not
+  authoritative, and `docs/PRODUCT.md` is maintained outside this repository, so it is not edited
+  to match; `docs/PARS.md` records the divergence and is the authority here.
 - **DEP-01 is a core row, not a game-layer one.** `docs/PRODUCT.md` §7.5 places impulsive burns in
   `@hh/game/maneuver`; they are in `packages/sim/src/maneuver.ts` and cannot move, because FR-102
   defines a timeline as alternating Keplerian arcs and impulses and `@hh/sim` may not import the

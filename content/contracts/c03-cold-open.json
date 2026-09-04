@@ -1,0 +1,66 @@
+{
+  "$schema": "https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json",
+  "id": "c03-cold-open",
+  "version": 1,
+  "act": 1,
+  "index": 3,
+  "title": "Cold Open",
+  "briefKey": "brief.c03",
+  "epoch": {
+    "scale": "TAI",
+    "j2000Seconds": 0
+  },
+  "horizonSeconds": 21600,
+  "ship": {
+    "state": {
+      "kind": "elements",
+      "a_m": 6778137,
+      "e": 0,
+      "i_rad": 0,
+      "raan_rad": 0,
+      "argp_rad": 0,
+      "nu_rad": 0
+    },
+    "dvBudget_mps": 300
+  },
+  "targets": [
+    {
+      "id": "KESTREL-2",
+      "label": "KESTREL-2",
+      "state": {
+        "kind": "elements",
+        "a_m": 7178137,
+        "e": 0,
+        "i_rad": 0,
+        "raan_rad": 0,
+        "argp_rad": 0,
+        "nu_rad": 0.24434609527920614
+      }
+    }
+  ],
+  "objective": {
+    "kind": "intercept",
+    "targetId": "KESTREL-2",
+    "maxRange_m": 1000
+  },
+  "constraints": [
+    {
+      "kind": "altitude_floor",
+      "min_m": 100000
+    },
+    {
+      "kind": "deadline",
+      "seconds": 10800
+    }
+  ],
+  "par": {
+    "dv_mps": 109.1177,
+    "time_s": 4122.965,
+    "burns": 1,
+    "derivation": "Lambert transfer search over departure epoch and time of flight: 38801 grid points across 9 transfer families, each refined by a Nelder-Mead simplex, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c03-cold-open.",
+    "referenceReplay": "{\"a\":0,\"c\":{\"dv\":1091,\"t\":4123},\"e\":1,\"n\":[[1251681,1091177,42,0]],\"s\":\"c03-cold-open\",\"v\":1}"
+  },
+  "unlocks": [],
+  "assistsAllowed": ["closest_approach", "coach_marks", "constraints", "elements", "snapping"],
+  "coachMarks": ["mark.c03.departureWindow"]
+}

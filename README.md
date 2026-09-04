@@ -20,6 +20,7 @@ the sections below describe what actually exists rather than what is planned.
 | **Simulation** | Constants, time, reference frames, the Kepler solvers, both element sets, the closed-form two-body relations, Lambert, universal-variable propagation with the arc abstraction over it, `@hh/sim` — nodes, quantisation, impulsive Δv, replay codes, and the **timeline**: a plan applied to a state becomes alternating Keplerian arcs and impulses over a horizon, evaluable at any epoch by binary search and re-evaluable from an edited node onward. Plus the five event finders: apsis crossings, closest approach, altitude-shell crossings, ground-station visibility and umbra intervals. |
 | **Rendering** | The `Renderer` seam with a Canvas 2-D implementation behind it, an orthographic camera with pan, zoom and auto-framing, and adaptive orbit tessellation with its cache. Geometry only — no Earth, no markers, no labels yet. |
 | **Game rules** | `@hh/game` — the evaluation surface. Objectives (`reach_orbit`, `intercept`, `rendezvous`, `soft_rendezvous`), the Δv budget, deadline and 100 km altitude floor as *intervals* rather than booleans, and plan legality `L1`–`L6` with a specific, translatable reason for each. Plus the scenario format: a JSON Schema with the TypeScript types generated from it, and a loader that refuses an invalid contract with a field-level error. Every tolerance in it is a numbered departure in [`docs/PHYSICS.md`](docs/PHYSICS.md), and a test fails if the code and that table disagree. |
+| **Content** | One shipped contract — `c03-cold-open`, an intercept — as declarative JSON in `content/contracts/`. Its par is **computed, not authored**: `tools/pars/` searches a grid of Lambert transfers refined by a simplex, evaluates the winner through the game's own timeline, and writes the derivation to [`docs/PARS.md`](docs/PARS.md). Every contract in the directory automatically gets §13.4's seven checks, so adding one adds seven tests and offers no way to avoid them. |
 | **Application** | A skeleton: routing works and imports the simulation packages. No screens. Every string in it comes from `@hh/ui`'s message catalogue, and a lint rule refuses literal text in JSX. |
 | **Quality** | 921 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. Plus three regression layers over plan evaluation: 31 committed golden trajectories gated at 1e-9 relative, a 10 000-plan in-process determinism fuzz asserting bit-identity, and a benchmark suite gated against a committed baseline rather than only against an absolute limit. |
 | **Milestone** | M0 of eight. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
@@ -76,6 +77,7 @@ pnpm dev
 | Coverage | `pnpm coverage` |
 | Benchmarks | `pnpm bench`, then `pnpm bench:check` against the committed baseline |
 | Golden fixtures | `pnpm goldens:write` — regenerate them, deliberately |
+| Par values | `pnpm pars:check` — recompute every contract's par and fail if it moved; `pnpm pars:write` to accept the new answer |
 
 CI runs all of these on every pull request. `pnpm test` is deliberately the fast
 subset for the inner loop; the guardrail suite builds a full type-aware program and
@@ -102,12 +104,16 @@ packages/game          rules, scenarios, and every departure
 packages/render        renderer, camera, orbit tessellation
 packages/ui            message catalogue, components, palettes
 apps/web               the browser application
+content/contracts      the shipped contracts, as declarative JSON
+tools/                 development tooling: the par solver, goldens, benchmarks, guardrails
 ```
 
 Dependencies point one way: `render → game → sim`. The simulation core must not
 import from the layers above it, must not touch the DOM, and must not read the wall
 clock or call `Math.random`. All three are enforced in CI rather than left to
-review — see [`docs/PRODUCT.md`](docs/PRODUCT.md) §11.1.
+review — see [`docs/PRODUCT.md`](docs/PRODUCT.md) §11.1. Nothing under `packages/` or
+`apps/` may import anything under `tools/`, which is what keeps development tooling —
+the par solver especially — out of the bundle.
 
 `packages/render` is the one package below `apps/web` that draws, so it compiles
 against its own TypeScript project with the DOM library; the root project has none, so
@@ -118,6 +124,7 @@ camera and the tessellator are plain geometry and run under Node.
 ## Documentation
 
 - [`docs/PHYSICS.md`](docs/PHYSICS.md) — the simulation model and its validation.
+- [`docs/PARS.md`](docs/PARS.md) — every contract's par, and the search that produced it.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — what the game is and who it is for.
 - [`CHANGELOG.md`](CHANGELOG.md) — notable changes, including physics-model changes.
 - [`CLAUDE.md`](CLAUDE.md) — conventions, for humans and for Claude Code.
