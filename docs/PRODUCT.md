@@ -489,6 +489,7 @@ What the player can do afterwards that they could not before, stated as learning
 | --- | --- |
 | C01 | Predict which side of the orbit a prograde burn raises. |
 | C02 | Describe a Hohmann transfer as two burns half a period apart. |
+| C03 | Explain why *when* you leave decides where the target will be when you arrive. |
 | C04 | State roughly what LEO→GEO costs, and why it is a lot. |
 | C05 | Explain why you burn retrograde to catch something ahead of you. |
 | C07 | Articulate the delta-v/time trade without prompting. |
