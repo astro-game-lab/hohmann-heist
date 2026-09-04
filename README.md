@@ -135,6 +135,9 @@ label layer's boundary was found.
 - [`docs/PHYSICS.md`](docs/PHYSICS.md) — the simulation model and its validation.
 - [`docs/PARS.md`](docs/PARS.md) — every contract's par, and the search that produced it.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — what the game is and who it is for.
+- [`docs/PLAYTEST-M2.md`](docs/PLAYTEST-M2.md) — the M2 playtest round, and
+  [`docs/playtest/`](docs/playtest/) — the protocol, consent form and observation sheet
+  behind it.
 - [`CHANGELOG.md`](CHANGELOG.md) — notable changes, including physics-model changes.
 - [`CLAUDE.md`](CLAUDE.md) — conventions, for humans and for Claude Code.
 
