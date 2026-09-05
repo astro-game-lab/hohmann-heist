@@ -28,6 +28,7 @@
  */
 import { formatMet, met, metAt } from '@hh/astro';
 import type { LoadedScenario, Par } from '@hh/game';
+import { isProximityObjective } from '@hh/game';
 
 import type { ContractFile } from '../content/scenarios.js';
 import type { HohmannReference } from './crosscheck.js';
@@ -230,13 +231,16 @@ const contractSection = (record: ParRecord): string => {
   // The proximity tolerance, where there is one. Read from the *loaded* objective rather
   // than from the document, so it is the limit the evaluator actually applied — which is
   // the departure table's default when the file did not override it.
+  //
+  // Only a proximity objective has one. `reach_orbit` compares element sets and `station`
+  // measures a longitude against a slot (#77), and neither has a range to quote.
   const loaded = scenario.objective;
-  const toleranceRangeM = loaded.kind === 'reach_orbit' ? null : loaded.tolerance.maxRangeM;
+  const toleranceRangeM = isProximityObjective(loaded) ? loaded.tolerance.maxRangeM : null;
 
   const objectiveLine =
-    objective.kind === 'reach_orbit' || toleranceRangeM === null
-      ? 'reach_orbit'
-      : `${objective.kind} ${objective.targetId} within ${group(toleranceRangeM)} m`;
+    isProximityObjective(loaded) && toleranceRangeM !== null && 'targetId' in objective
+      ? `${objective.kind} ${objective.targetId} within ${group(toleranceRangeM)} m`
+      : objective.kind;
 
   const node = solution.plan.nodes[0];
   const burnMet = node === undefined ? 0 : metAt(scenario.startEpoch, node.epoch);

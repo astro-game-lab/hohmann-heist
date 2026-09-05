@@ -131,6 +131,11 @@ const samples: AllMessageParams = {
     rangeMetres: 100,
     relativeSpeedMps: 0.5,
   },
+  'briefing.objective.station': {
+    slotOffsetRad: 0.05236,
+    maxOffsetRad: 8.7266e-4,
+    maxDriftRadPerSec: 2.0202e-9,
+  },
   'briefing.objective.softRendezvous': {
     target: 'KESTREL-2',
     rangeMetres: 100,

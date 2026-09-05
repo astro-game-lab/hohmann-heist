@@ -10,6 +10,7 @@ export type { SchemaError, ScenarioError } from './errors.js';
 export { childPointer, pointer, toScenarioError, toScenarioErrors } from './errors.js';
 
 export type { LoadedObjective, LoadedScenario, LoadedTarget, LoadResult } from './load.js';
+export { isProximityObjective } from './load.js';
 export { SCENARIO_VERSION, loadScenario, parseScenario } from './load.js';
 
 export type {

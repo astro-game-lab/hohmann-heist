@@ -201,6 +201,15 @@ export const Briefing = ({
         apoapsisAltitudeMetres: altitude(apoapsisRadius(objective.goal)),
       });
     }
+    if (objective.kind === 'station') {
+      // No target: a slot is a place, not a thing to be near (#77, §6.4).
+      return t('briefing.objective.station', {
+        slotOffsetRad: objective.goal.slotOffsetRad,
+        maxOffsetRad: objective.goal.maxOffsetRad,
+        maxDriftRadPerSec: objective.goal.maxDriftRadPerSec,
+      });
+    }
+
     const target = targets.find((candidate) => candidate.id === objective.targetId);
     // The loader has already refused a scenario whose objective names a target it does
     // not define, so this is unreachable — the id is the honest fallback if it ever is.

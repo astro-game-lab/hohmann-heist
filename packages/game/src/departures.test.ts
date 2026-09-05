@@ -84,6 +84,7 @@ describe('the departures registry', () => {
       'DEP-09',
       'DEP-12',
       'DEP-13',
+      'DEP-14',
     ]);
   });
 

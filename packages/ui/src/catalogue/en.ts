@@ -13,6 +13,7 @@
  *   message needs a variant, branch on the value inside the function; that is what
  *   makes the branch translatable along with the sentence.
  */
+import { radians, toDegrees } from '@hh/math';
 import type { MessageFormatters, Messages } from './types.js';
 
 /**
@@ -279,6 +280,17 @@ export const en: Messages = {
   'briefing.objective.rendezvous': ({ target, rangeMetres, relativeSpeedMps }, fmt) =>
     `Rendezvous with ${target} within ${range(rangeMetres, fmt)} at ` +
     `${fmt.decimal(relativeSpeedMps, 2)} m/s or less`,
+  'briefing.objective.station': ({ slotOffsetRad, maxOffsetRad, maxDriftRadPerSec }, fmt) => {
+    // Degrees at the boundary, SI inside (§7.2). A drift limit in radians per second is
+    // correct and unreadable; degrees per day is the unit the trade is actually made in.
+    const east = slotOffsetRad >= 0;
+    return (
+      `Hold a slot ${fmt.decimal(Math.abs(toDegrees(radians(slotOffsetRad))), 2)}° ` +
+      `${east ? 'east' : 'west'} of your current longitude, ` +
+      `within ${fmt.decimal(toDegrees(radians(maxOffsetRad)), 2)}°, ` +
+      `drifting no more than ${fmt.decimal(toDegrees(radians(maxDriftRadPerSec * 86_400)), 2)}°/day`
+    );
+  },
   'briefing.objective.softRendezvous': ({ target, rangeMetres, relativeSpeedMps }, fmt) =>
     `Dock with ${target} within ${range(rangeMetres, fmt)} at ` +
     `${fmt.decimal(relativeSpeedMps, 2)} m/s or less`,
