@@ -1,6 +1,6 @@
 {
   "name": "hohmann-heist",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Steal things in orbit. A browser puzzle game where the only weapon is real orbital mechanics.",

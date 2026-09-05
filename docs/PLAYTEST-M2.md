@@ -1,7 +1,8 @@
 # M2 playtest round — the vertical slice
 
 **Issue:** [#208](https://github.com/astro-game-lab/hohmann-heist/issues/208) ·
-**Milestone:** M2 · **Status: prepared, not yet run.** · **Sessions: 0 of 5**
+**Milestone:** M3 *(deferred from M2)* · **Status: prepared, not yet run.** ·
+**Sessions: 0 of 5**
 
 > **This report is a skeleton.** The protocol, the consent form and the observation sheet
 > are ready and the build under test is live and verified; the five sessions have not
@@ -10,6 +11,25 @@
 >
 > The round is finished when every field is filled, every finding links to an issue, and
 > the recordings have been destroyed on the date this report names.
+
+> ### `v0.1.0` shipped without this round
+>
+> On **2026-09-05** `v0.1.0` was released with **0 of 5** sessions run — a deliberate
+> waiver by the owner, recorded in §14.1's M2 row and in `CHANGELOG.md`. The round is
+> **deferred, not cancelled**, and #208 is re-opened against M3.
+>
+> Two things follow, and they change how this round is run rather than whether it is.
+>
+> **It is no longer a pre-release gate, so what it protects has changed.** Its findings
+> were meant to shape the slice before anyone else saw it; they will now arrive against a
+> build that is already public. That is a worse position to learn from — a first
+> impression cannot be re-taken — and it is the actual cost of the waiver.
+>
+> **The build under test will not be `v0.1.0`.** By the time these sessions run, M3 will
+> have moved the planner underneath them. Record what the debrief's `Build` line says and
+> compare findings against *that*, not against this document's original intent. A finding
+> from a session on M3's build is not evidence about `v0.1.0`, and this report must not be
+> read as though it were.
 
 M2's exit criteria (§14.1) ask for "5 playtest sessions run and reported". §13.6 is the
 protocol; `docs/playtest/PROTOCOL.md` is how it gets executed and

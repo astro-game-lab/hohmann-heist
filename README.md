@@ -6,9 +6,12 @@ An [astro-game-lab](https://github.com/astro-game-lab) game — real orbital mec
 
 ## Play
 
-**Not deployed yet.** The build pipeline is issue
-[#29](https://github.com/astro-game-lab/hohmann-heist/issues/29); this line becomes
-a link the day it lands. To run it locally, see [Development](#development) below.
+**<https://astro-game-lab.github.io/hohmann-heist/>** — no install, no account.
+
+`v0.1.0`, the vertical slice: **one** contract, playable start to finish. It is not yet
+a game — there is no contract board, no title screen and no Codex — but the contract in
+it is real, and so is every number it prints. To run it locally, see
+[Development](#development) below.
 
 ## Status
 
@@ -27,7 +30,7 @@ actually exists rather than what is planned.
 | **Content** | One shipped contract — `c03-cold-open`, an intercept — as declarative JSON in `content/contracts/`. Its par is **computed, not authored**: `tools/pars/` searches a grid of Lambert transfers refined by a simplex, evaluates the winner through the game's own timeline, and writes the derivation to [`docs/PARS.md`](docs/PARS.md). Every contract in the directory automatically gets §13.4's seven checks, so adding one adds seven tests and offers no way to avoid them. |
 | **Application** | Hash routing over §8.2's whole table, with focus moved to the new screen's heading on every route change and transitions that collapse under `prefers-reduced-motion`. The **contract briefing** renders `c03-cold-open` from its own JSON — objective, Δv budget, deadline, par, constraints and the ship/target setup — in display units, each value carrying its SI value in a tooltip and in the DOM. Accepting it goes straight to the **planner**: §8.3.4's five regions around the orbit view, in one component tree that becomes a grid above 1024 px and a tab strip below without unmounting a panel, so no plan state survives the switch by accident. §8.5.1's state machine sits under it, with illegal transitions that fail to compile rather than being merely unreachable. Committing flies the plan: **execution** plays back the already-solved timeline at rates from 1× to 100 000×, pausable, skippable and abortable back to the planner with the plan and the player's place in it restored, with a camera that follows the ship and closes in on the encounter without a scale jump, and a flight log that is complete and identical whether the run was watched or skipped. It ends in the **debrief** — the medal, the result against par, and on a miss the closest approach achieved against what was needed. Progress persists under a single versioned `localStorage` key with an explicit migration chain, and a save from a newer build is refused rather than partially read. The remaining routes resolve to a placeholder inside the real frame. `#/scene` remains a development harness for the renderer's visual claims. Every string comes from `@hh/ui`'s message catalogue, and a lint rule refuses literal text in JSX. |
 | **Quality** | 1 900 tests, CI on every pull request, a layering rule and determinism guardrails that are themselves tested. Plus three regression layers over plan evaluation: 31 committed golden trajectories gated at 1e-9 relative, a 10 000-plan in-process determinism fuzz asserting bit-identity, and a benchmark suite gated against a committed baseline rather than only against an absolute limit. |
-| **Milestone** | M2 of eight — the vertical slice, in progress. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
+| **Milestone** | **M2 of eight — the vertical slice, released as `v0.1.0`.** One exit criterion, the five playtest sessions, was waived rather than met and is deferred; §14.1's M2 row records it. See [`docs/PRODUCT.md`](docs/PRODUCT.md) §14 for the plan. |
 
 [`docs/PHYSICS.md`](docs/PHYSICS.md) is the honest account of what the simulation
 currently claims — including where a stated requirement turns out not to be
