@@ -200,10 +200,10 @@ export const en: Messages = {
     const angular = element === 'inclination' || element === 'raan' || element === 'argp';
     const off = angular
       ? `${fmt.decimal(toDegrees(radians(Math.abs(difference))), 3)}°`
-      : kilometres(Math.abs(difference), fmt);
+      : `${kilometres(Math.abs(difference), fmt)} km`;
     const allowed = angular
       ? `${fmt.decimal(toDegrees(radians(tolerance)), 3)}°`
-      : kilometres(tolerance, fmt);
+      : `${kilometres(tolerance, fmt)} km`;
     return `Your ${ELEMENT_NAMES[element] ?? element} was ${off} out, against ${allowed} allowed.`;
   },
   'debrief.diagnosis.tooFast': ({ relativeSpeedMps, maxRelativeSpeedMps }, fmt) =>
@@ -211,16 +211,16 @@ export const en: Messages = {
     `${fmt.decimal(maxRelativeSpeedMps, 2)} m/s is the limit. Getting there is not the same ` +
     `as matching velocity.`,
   'debrief.diagnosis.arrivedLate': ({ alongTrackM }, fmt) =>
-    `You arrived behind the target — ${kilometres(alongTrackM, fmt)} of it, along the orbit. ` +
+    `You arrived behind the target — ${kilometres(alongTrackM, fmt)} km of it, along the orbit. ` +
     `The path was right; you left too late for it.`,
   'debrief.diagnosis.arrivedEarly': ({ alongTrackM }, fmt) =>
-    `You got there first, by ${kilometres(alongTrackM, fmt)} along the orbit. ` +
+    `You got there first, by ${kilometres(alongTrackM, fmt)} km along the orbit. ` +
     `The path was right; you left too early for it.`,
   'debrief.diagnosis.undershot': ({ radialM }, fmt) =>
-    `You passed ${kilometres(radialM, fmt)} below the target. This is an altitude miss, ` +
+    `You passed ${kilometres(radialM, fmt)} km below the target. This is an altitude miss, ` +
     `not a timing one — the transfer did not reach.`,
   'debrief.diagnosis.overshot': ({ radialM }, fmt) =>
-    `You passed ${kilometres(radialM, fmt)} above the target. This is an altitude miss, ` +
+    `You passed ${kilometres(radialM, fmt)} km above the target. This is an altitude miss, ` +
     `not a timing one — the transfer went too far.`,
 
   // ── Scenario loading (FR-202) ──────────────────────────────────────────────
