@@ -40,6 +40,8 @@ import type { Catalogue, DebriefRow, MissRow, PersonalBest } from '@hh/ui';
 import { approachSummary, missRows, resultRows } from '@hh/ui';
 import type { JSX } from 'preact';
 
+import { Icon } from '../icons/index.js';
+
 import { BUILD_ID } from '../version.js';
 
 export interface DebriefScreenProps {
@@ -249,6 +251,7 @@ export const DebriefScreen = ({
 
       <div class="hh-debrief__actions">
         <button type="button" data-testid="debrief-retry" onClick={onRetry}>
+          <Icon name="retry" />
           {t('debrief.action.retry', {})}
         </button>
         {/*
@@ -266,6 +269,7 @@ export const DebriefScreen = ({
           {t('debrief.action.next', {})}
         </button>
         <button type="button" data-testid="debrief-share" onClick={onShare}>
+          <Icon name="share" />
           {t('debrief.action.share', {})}
         </button>
         <button type="button" data-testid="debrief-board" onClick={onBoard}>

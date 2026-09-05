@@ -69,6 +69,7 @@ import {
   shipMarkerOf,
   targetMarkerOf,
 } from '../scene/content.js';
+import { Icon } from '../icons/index.js';
 import { useSceneColours } from './colours.js';
 import {
   advanceFraming,
@@ -734,7 +735,7 @@ export const OrbitView = ({
             zoomRef.current?.(BUTTON_ZOOM_FACTOR);
           }}
         >
-          {t('planner.camera.zoomIn', {})}
+          <Icon name="zoom-in" label={t('planner.camera.zoomIn', {})} />
         </button>
         <button
           type="button"
@@ -744,7 +745,7 @@ export const OrbitView = ({
             zoomRef.current?.(1 / BUTTON_ZOOM_FACTOR);
           }}
         >
-          {t('planner.camera.zoomOut', {})}
+          <Icon name="zoom-out" label={t('planner.camera.zoomOut', {})} />
         </button>
         <button
           type="button"
@@ -758,7 +759,7 @@ export const OrbitView = ({
             setRecentreRequested((n) => n + 1);
           }}
         >
-          {t('planner.camera.recentre', {})}
+          <Icon name="recentre" label={t('planner.camera.recentre', {})} />
         </button>
       </div>
     </div>

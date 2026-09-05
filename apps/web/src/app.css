@@ -187,20 +187,63 @@ body {
   gap: 8px;
 }
 
+/* ── The icon set (#176) ─────────────────────────────────────────────────── */
+
 /*
- * `currentColor` and `stroke`, so the icon inherits whatever palette #99 lands on and
- * survives a high-contrast mode. `fill: none` because these are line drawings; without it
- * the browser fills every path black by default and the altitude-floor glyph becomes a
- * solid block.
+ * One rule for every glyph, which is what "one grid, one stroke weight" buys.
+ *
+ * A glyph takes its colour from whatever it sits in (`currentColor`) and its size from
+ * the text beside it (`1em`), so an icon in a heading is heading-sized and an icon in a
+ * dense control is control-sized, without a rule per site. This replaced a per-component
+ * rule that predated the set and had already drifted to a different stroke weight.
+ *
+ * `fill: none` is load-bearing, not tidiness: without it the browser fills every path
+ * black by default and the altitude-floor glyph becomes a solid block.
+ *
+ * `flex: none` because these sit in flex rows beside labels that are allowed to shrink.
+ * Without it the glyph is what gets squashed on a narrow layout, which is the wrong
+ * choice — a wrapped word is still readable and a squashed icon is a smear.
  */
-.hh-constraint__icon {
-  width: 16px;
-  height: 16px;
+.hh-icon {
   flex: none;
+  width: 1em;
+  height: 1em;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.75;
   stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.125em;
+}
+
+/*
+ * A control whose only content is a glyph still has to meet §8.8's target size — ≥ 32 px
+ * with a pointer, ≥ 44 px on touch. So the *button* is sized rather than the icon:
+ * growing the glyph would make the mark heavier instead of the target bigger, which is
+ * the opposite of what the rule is for.
+ */
+.hh-orbit__control,
+.hh-plan__control,
+.hh-editor__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (pointer: coarse) {
+  .hh-orbit__control,
+  .hh-plan__control,
+  .hh-editor__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* A glyph beside a word wants the word to breathe. */
+.hh-icon + * {
+  margin-inline-start: 6px;
 }
 
 /*
