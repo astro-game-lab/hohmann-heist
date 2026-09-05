@@ -40,6 +40,9 @@ import type { Catalogue, DebriefRow, MissRow, PersonalBest } from '@hh/ui';
 import { approachSummary, missRows, resultRows } from '@hh/ui';
 import type { JSX } from 'preact';
 
+import { Icon } from '../icons/index.js';
+import { medalReveal, useReducedMotion } from '../motion.js';
+
 import { BUILD_ID } from '../version.js';
 
 export interface DebriefScreenProps {
@@ -127,6 +130,12 @@ export const DebriefScreen = ({
   onBoard,
   reportHref,
 }: DebriefScreenProps): JSX.Element => {
+  // §9.4's one flourish. `medalReveal` decides both how long it runs and which animation
+  // it is, because under reduced motion the reveal does not shorten — it is replaced by a
+  // cross-fade, and a component handed only a duration would have to make that call
+  // itself.
+  const reveal = medalReveal(useReducedMotion());
+
   const heading = outcome.success
     ? t('debrief.heading.success', {
         index: scenario.document.index,
@@ -154,6 +163,8 @@ export const DebriefScreen = ({
         <p
           class="hh-debrief__medal"
           data-medal={outcome.medal ?? 'none'}
+          data-reveal={reveal.kind}
+          style={`--hh-medal-duration:${String(reveal.ms)}ms`}
           data-testid="debrief-medal"
         >
           {outcome.medal === null
@@ -249,6 +260,7 @@ export const DebriefScreen = ({
 
       <div class="hh-debrief__actions">
         <button type="button" data-testid="debrief-retry" onClick={onRetry}>
+          <Icon name="retry" />
           {t('debrief.action.retry', {})}
         </button>
         {/*
@@ -266,6 +278,7 @@ export const DebriefScreen = ({
           {t('debrief.action.next', {})}
         </button>
         <button type="button" data-testid="debrief-share" onClick={onShare}>
+          <Icon name="share" />
           {t('debrief.action.share', {})}
         </button>
         <button type="button" data-testid="debrief-board" onClick={onBoard}>

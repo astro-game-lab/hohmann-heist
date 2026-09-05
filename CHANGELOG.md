@@ -11,6 +11,44 @@ they relied on has moved.
 
 ## [Unreleased]
 
+### Added
+- **§9.2's design tokens, in five palettes (#116).** Thirteen tokens — ground, text, the
+  five meaning colours, Earth, hazard, grid — defined once in `@hh/ui` for the default,
+  deuteranopia, protanopia, tritanopia and high-contrast palettes, and resolved by
+  `apps/web` for the DOM *and* the canvas from the same source. Before this there were two
+  palettes: some thirty hex codes in `app.css` and fourteen more in `planner/colours.ts`,
+  with nothing making them agree. The scene needs fourteen inks from thirteen roles —
+  Earth's disc, its coastline and its night side are all `--earth` — so the extra ones are
+  **derived** rather than hand-written per palette, which is what keeps a sixth palette a
+  thirteen-value change. Contrast is checked in CI over an explicit list of the pairs the
+  interface actually draws, at §8.8's 4.5:1 for text and 3:1 for lines, in all five.
+- **The icon set (#176).** Fifteen hand-drawn inline SVG glyphs on one 24-unit grid, in
+  `currentColor`, with no icon font and no third-party source. Every glyph has a consumer:
+  the ones §8.3 implies for screens that do not exist yet arrive with those screens, because
+  a glyph nothing renders has no test that can tell it from a broken one. An icon is
+  `aria-hidden` by default and an image only when given a label, so being the *only* thing
+  a control says takes a deliberate act — and the planner sweeps every button to prove none
+  of them is.
+- **`prefers-reduced-motion` resolved from three states (#173).** `system`, `on` or `off`,
+  because §8.3.12's setting has to override the system query in both directions. The
+  debrief's medal reveal is the one row of §9.4's table that does not collapse to zero: it
+  becomes a cross-fade, since it is the game's only moment of ceremony and removing it
+  would take away a signal rather than an ornament.
+
+### Changed
+- **Maneuver nodes are drawn in `--plan`, and selection is a ring in `--accent`.** §9.2
+  assigns *"planned trajectory, nodes"* to one token and §9.3 separates a node from the
+  path it sits on by shape — a diamond with a handle cross against a run of dots — rather
+  than by hue. The amber node and the second amber for selection were M2 placeholders that
+  predated the palette.
+- **Panel borders are visible.** §9.2 describes `--grid` as *"20%"*, which measures about
+  1.2:1 against the console ground; §8.8 requires 3:1 on UI boundaries. Where a descriptive
+  column and a numbered requirement disagree, the requirement wins.
+- **The orbit-scene harness draws what the planner draws**, and gained a palette selector.
+  It had been carrying a stale copy of the M2 colours and a hand-mixed grey ramp; its
+  greyscale toggle is now derived by luminance from whichever palette is selected, so
+  §8.3.4's fifth principle is checkable in all five rather than in one.
+
 ## [0.1.0] — 2026-09-05
 
 **The vertical slice.** One contract, `c03-cold-open`, playable end to end: briefing →

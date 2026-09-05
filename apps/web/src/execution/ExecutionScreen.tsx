@@ -37,6 +37,8 @@ import type { Timeline } from '@hh/sim';
 import type { Catalogue, PlaybackSpeed } from '@hh/ui';
 import { PLAYBACK_SPEEDS, elapsedSeconds, progressOf } from '@hh/ui';
 import type { JSX } from 'preact';
+
+import { Icon } from '../icons/index.js';
 import { useEffect } from 'preact/hooks';
 
 import { useReducedMotion } from '../motion.js';
@@ -199,6 +201,7 @@ export const ExecutionScreen = ({
             disabled={ended}
             onClick={actions.togglePause}
           >
+            <Icon name={playback.status === 'paused' ? 'play' : 'pause'} />
             {playback.status === 'paused'
               ? t('execution.control.resume', {})
               : t('execution.control.pause', {})}
@@ -214,6 +217,7 @@ export const ExecutionScreen = ({
             disabled={ended}
             onClick={actions.skipToEnd}
           >
+            <Icon name="skip" />
             {t('execution.control.skip', {})}
           </button>
           <button type="button" data-testid="execution-abort" onClick={onAbort}>

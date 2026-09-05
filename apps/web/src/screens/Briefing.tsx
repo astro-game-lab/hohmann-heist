@@ -52,6 +52,7 @@ import type { Catalogue } from '@hh/ui';
 import { Fragment, type JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
 
+import { Icon, type IconName } from '../icons/index.js';
 import type { ContractProgress } from '../save/index.js';
 import { hrefFor } from '../router.js';
 
@@ -112,22 +113,22 @@ const Quantity = ({
 /**
  * §8.3.3's "a row with an icon and one line".
  *
- * Geometry rather than a glyph font or an image: the art direction and the icon set are
- * #99 and E15, and a placeholder that pulled in an asset would have to be unpicked. These
- * are `aria-hidden` because the line beside them says the same thing — §8.8's rule that
- * nothing is carried by one channel alone applies to shape as much as to colour.
+ * The geometry that stood in for the icon set until #176 is gone; these are the set's
+ * glyphs. `aria-hidden`, because the line beside them says the same thing — §8.8's rule
+ * that nothing is carried by one channel alone applies to shape as much as to colour.
+ *
+ * An unrecognised constraint kind gets the warning glyph rather than nothing: a
+ * complication the briefing cannot name is still a complication, and §6.5 is explicit
+ * that a player never discovers one by failing it.
  */
+const CONSTRAINT_ICONS: Readonly<Record<string, IconName>> = {
+  altitude_floor: 'altitude-floor',
+  deadline: 'deadline',
+  burn_count: 'burn-count',
+};
+
 const ConstraintIcon = ({ kind }: { readonly kind: string }): JSX.Element => (
-  <svg class="hh-constraint__icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-    {kind === 'altitude_floor' ? (
-      <>
-        <path d="M1 11h14" />
-        <path d="M4 5v4M8 3v6M12 5v4" />
-      </>
-    ) : (
-      <circle cx="8" cy="8" r="6" />
-    )}
-  </svg>
+  <Icon class="hh-constraint__icon" name={CONSTRAINT_ICONS[kind] ?? 'warning'} />
 );
 
 export const Briefing = ({

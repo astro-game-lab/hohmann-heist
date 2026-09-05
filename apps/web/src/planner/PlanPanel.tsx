@@ -40,6 +40,8 @@ import { fromDeltaVCounts, type Plan } from '@hh/sim';
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 
+import { Icon } from '../icons/index.js';
+
 export interface PlanPanelProps {
   readonly t: Catalogue['resolve'];
   readonly plan: Plan;
@@ -121,7 +123,7 @@ export const PlanPanel = ({
                     onDelete(index);
                   }}
                 >
-                  {t('planner.plan.delete', { index: index + 1 })}
+                  <Icon name="delete" label={t('planner.plan.delete', { index: index + 1 })} />
                 </button>
                 <button
                   type="button"
@@ -131,7 +133,7 @@ export const PlanPanel = ({
                     onExpand(index);
                   }}
                 >
-                  {t('planner.plan.expand', { index: index + 1 })}
+                  <Icon name="expand" label={t('planner.plan.expand', { index: index + 1 })} />
                 </button>
               </span>
             </li>

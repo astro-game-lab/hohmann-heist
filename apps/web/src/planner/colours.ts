@@ -1,31 +1,10 @@
 /**
- * The scene's colours, until #116 brings the five palettes in M3.
+ * The scene's colours — now derived, not declared.
  *
- * `@hh/render` owns the *slots* — `SceneColours` names every ink the scene can use — and
- * this owns the values. That split is why this file is small and why replacing it later
- * is a one-file change: nothing in the renderer or the planner names a hex code.
- *
- * These are **not** the design tokens. #116 defines the palettes, including the
- * high-contrast and colour-blind-safe ones §8.8 requires, and this is deliberately not a
- * head start on that work — it is the smallest set that makes §9.3's rendering language
- * legible, chosen so that the three trajectory styles stay distinguishable in greyscale
- * (§8.3.4's fifth principle), which the scene harness exists to check.
+ * This file used to hold fourteen hex codes and say that #116 would replace them. It has.
+ * `@hh/ui` owns §9.2's thirteen roles in five palettes, `../palette.ts` maps them onto the
+ * renderer's inks, and this re-export is all that is left — kept so that the two scene
+ * consumers go on importing "the scene's colours" from one place rather than each reaching
+ * into the palette module for a different part of it.
  */
-import type { SceneColours } from '@hh/render';
-
-export const SCENE_COLOURS: SceneColours = {
-  background: '#05070d',
-  earthFill: '#12233f',
-  earthCoastline: '#4d7ba8',
-  earthNight: 'rgba(2, 4, 10, 0.55)',
-  hazard: '#b4643c',
-  hazardViolated: '#e2503c',
-  current: '#5bc0eb',
-  planned: '#a8bcd2',
-  target: '#d8a657',
-  ship: '#f2f6fb',
-  targetMarker: '#d8a657',
-  node: '#f5a623',
-  nodeSelected: '#ffd479',
-  annotation: '#8fa3bb',
-};
+export { useSceneColours } from '../palette.js';

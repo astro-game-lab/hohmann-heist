@@ -10,7 +10,7 @@ Art, audio, models, fonts, and other authored media.
 
 | File / directory | Source | Author | Licence | Notes |
 | --- | --- | --- | --- | --- |
-| _none yet_ | | | | |
+| `apps/web/src/icons/index.tsx` | This repository | Hohmann Heist contributors | [CC BY 4.0](LICENSE-ASSETS.md) | §9.6's icon set: hand-drawn inline SVG on a 24-unit grid, no icon font and no third-party glyph source. Listed because §9.6 asks for a row per asset, not because anything here is borrowed. |
 
 ## Data
 

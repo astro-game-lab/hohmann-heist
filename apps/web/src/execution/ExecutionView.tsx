@@ -58,7 +58,7 @@ import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
-import { SCENE_COLOURS } from '../planner/colours.js';
+import { useSceneColours } from '../planner/colours.js';
 import {
   EARTH_ROTATION_ANGLE,
   MAX_RADIUS_M,
@@ -107,6 +107,8 @@ export const ExecutionView = ({
   epoch,
   encounterEpoch,
 }: ExecutionViewProps): JSX.Element => {
+  const colours = useSceneColours();
+
   const frameRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const labelHostRef = useRef<HTMLDivElement | null>(null);
@@ -209,7 +211,7 @@ export const ExecutionView = ({
 
       const built = buildScene({
         camera,
-        colours: SCENE_COLOURS,
+        colours,
         timeline,
         scrubEpoch: at,
         // No node markers. A burn that has already fired is in the flight log, and a
@@ -333,7 +335,7 @@ export const ExecutionView = ({
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
     };
-  }, [scenario, timeline, encounterEpoch, resolveDynamic]);
+  }, [scenario, timeline, encounterEpoch, resolveDynamic, colours]);
 
   // After every render, including the sixty a second playback produces. Deliberately
   // without a dependency array: the epoch is the dependency, and listing it would be the

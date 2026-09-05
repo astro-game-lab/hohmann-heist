@@ -297,6 +297,31 @@ describe('the assist tray (#133’s toggle only)', () => {
   });
 });
 
+describe('every control says what it is (#176, NFR-019, §8.8)', () => {
+  // The way an icon set breaks §8.8 is not by being drawn badly — it is by ending up as
+  // the *only* content of a control, so a screen-reader user hears "button" and nothing
+  // else. That is invisible in review, because the reviewer can see the glyph. The
+  // planner is where the icon-only controls are, so this is where the sweep belongs.
+  //
+  // #170's axe gate covers every route in M3; this covers the one screen that has these
+  // controls today, on the day they land, rather than waiting for it.
+  it('gives every button an accessible name, glyph or not', async () => {
+    await mount();
+
+    const nameless = [...container.querySelectorAll('button')]
+      .filter((button) => {
+        const own = (button.getAttribute('aria-label') ?? button.textContent).trim();
+        if (own !== '') return false;
+        // An icon-only control is named by the glyph inside it.
+        const inner = button.querySelector('[aria-label]');
+        return (inner?.getAttribute('aria-label') ?? '').trim() === '';
+      })
+      .map((button) => button.getAttribute('data-testid') ?? button.outerHTML.slice(0, 80));
+
+    expect(nameless, `controls with no accessible name: ${nameless.join(', ')}`).toEqual([]);
+  });
+});
+
 describe('the camera control (#103)', () => {
   it('offers ⌖ recentre', async () => {
     await mount();

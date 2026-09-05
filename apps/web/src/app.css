@@ -1,8 +1,9 @@
 /*
  * Structure, motion, and the four colours it takes to make those legible.
  *
- * §9.2's colour and type — the thirteen tokens, the five palettes, the contrast work — is
- * #116, and this is deliberately not a head start on it. What is here is the **ground**:
+ * §9.2's colour and type — the thirteen tokens, the five palettes, the contrast work —
+ * landed with #116, and this file now carries no colour of its own. What follows is the
+ * ground:
  * a page has to have a background and a foreground before anything drawn on it can be
  * read, and until this file declared one the app borrowed the browser's. That was not a
  * neutral default. The scene is dark by design (`SCENE_COLOURS.background` is `#05070d`),
@@ -30,33 +31,52 @@
    * §9.4: a screen change takes 160 ms, ease-out.
    *
    * `Screen` sets this same property inline from `motion.ts`, which is what lets
-   * §8.3.12's "reduce motion" setting (#169) override the system preference in either
-   * direction once it exists. The declarations here are the value before any script has
-   * run, and the media query below is the system preference honoured without JavaScript
-   * at all — belt and braces, agreeing today, and the reason the duration is a custom
-   * property rather than a literal in the rule.
+   * §8.3.12's "reduce motion" setting override the system preference in either direction.
+   * The declarations here are the value before any script has run, and the media query
+   * below is the system preference honoured without JavaScript at all — belt and braces,
+   * agreeing today, and the reason the duration is a custom property rather than a
+   * literal in the rule.
    */
   --hh-screen-in-duration: 160ms;
 
   /*
-   * §9.2's ground, and only the four roles that were actually missing.
+   * §9.2's thirteen tokens and §8.3.2's medal ramp, in the default palette.
    *
-   * `--bg` matches `SCENE_COLOURS.background` exactly, so the canvas has no seam against
-   * the page around it — the orbit view fills its frame and the difference would show as
-   * a rectangle. `--bg-panel` is §9.2's "one step up from ground", and is the value the
-   * node editor already used. `--fg` is the off-white §9.2 asks for; `--fg-dim` is the
-   * annotation grey the scene already uses for the same job.
+   * **These are duplicates, and a test keeps them honest.** `@hh/ui`'s palette module is
+   * the source; `applyPalette` publishes the chosen one onto this element at runtime, and
+   * every rule below resolves against whatever it set. But a script runs after the first
+   * paint, and a stylesheet whose only ground was a custom property nobody had set yet
+   * would paint the browser's white for a frame before going dark.
    *
-   * `color-scheme: dark` is not decoration. Without it a browser renders `<input>`,
-   * `<button>` and the range thumb in their light-mode skin — white fill, black text —
-   * regardless of what this file says, which is what put white boxes inside the dark node
-   * editor. It also makes the scrollbars and focus rings match.
+   * So the default palette is written out here as well, and `app.css.test.ts` asserts
+   * this block is exactly `cssVariablesFor('default')` — the same arrangement the scenario
+   * validator and the golden fixtures have, and for the same reason: a committed copy of
+   * a generated thing is fine as long as something fails when it stops matching.
+   *
+   * Nothing below this block may contain a colour literal. That is the other half of the
+   * same test, and it is what makes a fifth palette a thirteen-value change rather than a
+   * search through a thousand lines of stylesheet.
    */
   color-scheme: dark;
+
   --bg: #05070d;
-  --bg-panel: #0a0e17;
+  --bg-panel: #0f1622;
   --fg: #e8ecf4;
-  --fg-dim: #8fa3bb;
+  --fg-dim: #9fb3c8;
+  --accent: #5bc0eb;
+  --target: #e0a94f;
+  --plan: #c3d2e2;
+  --ok: #79c96d;
+  --warn: #edc76a;
+  --bad: #f4705c;
+  --earth: #16294a;
+  --hazard: #f4705c40;
+  --grid: #8fa3bb99;
+
+  --medal-bronze: #d9955f;
+  --medal-silver: #c6c8d0;
+  --medal-gold: #edc76a;
+  --medal-clean: #5bc0eb;
 }
 
 /*
@@ -167,20 +187,63 @@ body {
   gap: 8px;
 }
 
+/* ── The icon set (#176) ─────────────────────────────────────────────────── */
+
 /*
- * `currentColor` and `stroke`, so the icon inherits whatever palette #99 lands on and
- * survives a high-contrast mode. `fill: none` because these are line drawings; without it
- * the browser fills every path black by default and the altitude-floor glyph becomes a
- * solid block.
+ * One rule for every glyph, which is what "one grid, one stroke weight" buys.
+ *
+ * A glyph takes its colour from whatever it sits in (`currentColor`) and its size from
+ * the text beside it (`1em`), so an icon in a heading is heading-sized and an icon in a
+ * dense control is control-sized, without a rule per site. This replaced a per-component
+ * rule that predated the set and had already drifted to a different stroke weight.
+ *
+ * `fill: none` is load-bearing, not tidiness: without it the browser fills every path
+ * black by default and the altitude-floor glyph becomes a solid block.
+ *
+ * `flex: none` because these sit in flex rows beside labels that are allowed to shrink.
+ * Without it the glyph is what gets squashed on a narrow layout, which is the wrong
+ * choice — a wrapped word is still readable and a squashed icon is a smear.
  */
-.hh-constraint__icon {
-  width: 16px;
-  height: 16px;
+.hh-icon {
   flex: none;
+  width: 1em;
+  height: 1em;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 1.75;
   stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.125em;
+}
+
+/*
+ * A control whose only content is a glyph still has to meet §8.8's target size — ≥ 32 px
+ * with a pointer, ≥ 44 px on touch. So the *button* is sized rather than the icon:
+ * growing the glyph would make the mark heavier instead of the target bigger, which is
+ * the opposite of what the rule is for.
+ */
+.hh-orbit__control,
+.hh-plan__control,
+.hh-editor__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+@media (pointer: coarse) {
+  .hh-orbit__control,
+  .hh-plan__control,
+  .hh-editor__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* A glyph beside a word wants the word to breathe. */
+.hh-icon + * {
+  margin-inline-start: 6px;
 }
 
 /*
@@ -278,7 +341,7 @@ body {
 .hh-planner__refusal {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid #e2503c;
+  border-left: 3px solid var(--bad);
 }
 
 @media (min-width: 1024px) {
@@ -308,7 +371,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 45vh;
-  background: #05070d;
+  background: var(--bg);
   border-radius: 6px;
   overflow: hidden;
   /* The canvas handles its own wheel events for zoom; without this the page scrolls too
@@ -337,20 +400,20 @@ body {
     Menlo,
     Consolas,
     monospace;
-  color: #cfe0f0;
+  color: var(--fg);
   white-space: nowrap;
   text-shadow:
-    0 0 3px #05070d,
-    0 0 6px #05070d;
+    0 0 3px var(--bg),
+    0 0 6px var(--bg);
   pointer-events: auto;
   user-select: text;
 }
 
 .hh-orbit__labels .hh-label--handle {
-  color: #ffd479;
+  color: var(--accent);
 }
 .hh-orbit__labels .hh-label--approach {
-  color: #8fa3bb;
+  color: var(--fg-dim);
 }
 
 .hh-orbit__controls {
@@ -392,24 +455,24 @@ body {
 .hh-dv-bar {
   width: 120px;
   height: 8px;
-  background: rgba(127, 127, 127, 0.3);
+  background: var(--grid);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .hh-dv-bar__fill {
   height: 100%;
-  background: #5bc0eb;
+  background: var(--accent);
 }
 
 /* §8.3.4's amber at 90%, red above 100%. The word is in the bar's accessible name — see
    `HudBar.tsx`; this only reinforces it, per §8.8's rule that colour carries nothing on
    its own. */
 .hh-dv-bar[data-level='warning'] .hh-dv-bar__fill {
-  background: #d8a657;
+  background: var(--warn);
 }
 .hh-dv-bar[data-level='exceeded'] .hh-dv-bar__fill {
-  background: #e2503c;
+  background: var(--bad);
 }
 
 /* ── The timeline (#128) ─────────────────────────────────────────────────── */
@@ -417,7 +480,7 @@ body {
 .hh-timeline__track {
   position: relative;
   height: 34px;
-  border: 1px solid rgba(127, 127, 127, 0.4);
+  border: 1px solid var(--grid);
   border-radius: 3px;
 }
 
@@ -425,7 +488,7 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  background: repeating-linear-gradient(45deg, rgba(226, 80, 60, 0.35) 0 4px, transparent 4px 8px);
+  background: repeating-linear-gradient(45deg, var(--hazard) 0 4px, transparent 4px 8px);
 }
 
 .hh-timeline__deadline {
@@ -433,7 +496,7 @@ body {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #e2503c;
+  background: var(--bad);
 }
 
 .hh-timeline__objective {
@@ -441,7 +504,7 @@ body {
   top: 2px;
   width: 8px;
   height: 8px;
-  background: #7fbf6a;
+  background: var(--ok);
   border-radius: 50%;
 }
 
@@ -452,14 +515,14 @@ body {
   height: 12px;
   padding: 0;
   transform: translateX(-50%) rotate(45deg);
-  background: #f5a623;
-  border: 1px solid #05070d;
+  background: var(--plan);
+  border: 1px solid var(--bg);
   cursor: pointer;
 }
 
 .hh-timeline__node[aria-pressed='true'] {
-  background: #ffd479;
-  outline: 2px solid #ffd479;
+  background: var(--accent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -487,14 +550,14 @@ body {
 }
 
 .hh-plan__row {
-  border: 1px solid rgba(127, 127, 127, 0.35);
+  border: 1px solid var(--grid);
   border-radius: 3px;
   padding: 4px 6px;
 }
 
 .hh-plan__row[data-selected='true'] {
-  border-color: #ffd479;
-  outline: 1px solid #ffd479;
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
 }
 
 .hh-plan__select {
@@ -551,10 +614,10 @@ body {
 }
 
 .hh-approach__verdict[data-met='true'] {
-  color: #7fbf6a;
+  color: var(--ok);
 }
 .hh-approach__verdict[data-met='false'] {
-  color: #d8a657;
+  color: var(--warn);
 }
 
 /* ── FR-406's precision reveal ───────────────────────────────────────────── *
@@ -583,7 +646,7 @@ body {
   white-space: nowrap;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid rgba(127, 127, 127, 0.5);
+  border: 1px solid var(--grid);
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -621,10 +684,10 @@ body {
 }
 
 .hh-commit__reason[data-blocking='true'] {
-  color: #e2503c;
+  color: var(--bad);
 }
 .hh-commit__reason[data-blocking='false'] {
-  color: #d8a657;
+  color: var(--warn);
 }
 
 .hh-commit__button {
@@ -685,7 +748,7 @@ body {
  */
 
 .hh-editor {
-  border: 1px solid rgba(127, 127, 127, 0.5);
+  border: 1px solid var(--grid);
   border-radius: 4px;
   padding: 8px 10px;
   display: flex;
@@ -831,7 +894,7 @@ body {
 .hh-planner__committed {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid #7fbf6a;
+  border-left: 3px solid var(--ok);
 }
 
 .hh-orbit__control {
@@ -878,8 +941,8 @@ body {
 .hh-hud__flash {
   padding: 2px 8px;
   border-radius: 4px;
-  background: #5bc0eb;
-  color: #05070d;
+  background: var(--accent);
+  color: var(--bg);
   font-weight: 600;
 }
 
@@ -903,7 +966,7 @@ body {
 .hh-execution__paused {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid #e9c46a;
+  border-left: 3px solid var(--warn);
 }
 
 .hh-execution__transport {
@@ -917,14 +980,14 @@ body {
   flex: 1 1 200px;
   height: 8px;
   min-width: 120px;
-  background: rgba(127, 127, 127, 0.3);
+  background: var(--grid);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .hh-execution__progress-fill {
   height: 100%;
-  background: #5bc0eb;
+  background: var(--accent);
 }
 
 /* Five rates at 100 000× wide do not fit a phone in one line, and a transport bar that
@@ -1013,7 +1076,7 @@ body {
 
 .hh-log__entry[data-kind='constraintEnter'] .hh-log__text,
 .hh-log__entry[data-kind='constraintExit'] .hh-log__text {
-  color: #e2503c;
+  color: var(--bad);
   font-weight: 600;
 }
 
@@ -1052,6 +1115,41 @@ body {
 
 /* The medal, by weight and size as well as by whatever colour the palette gives it —
    §8.8's "medals by shape and label", so the word is always the carrier. */
+/*
+ * §9.4's medal reveal — *"one deliberate flourish, the only one in the game"*.
+ *
+ * The duration and which animation runs both come from `motion.ts` through
+ * `--hh-medal-duration` and `data-reveal`, because §9.4 does not collapse this row to
+ * 0 ms the way it collapses the others: it becomes a **cross-fade**. Every other
+ * animation in the game moves between two states the player can already see, so removing
+ * it costs nothing; this is the game's only moment of ceremony, and deleting it would
+ * take away a signal rather than an ornament.
+ *
+ * `will-change` is deliberately absent. The element animates once, on mount, and hinting
+ * a permanent compositor layer for a one-shot transform is how a static page ends up
+ * holding a layer for the rest of the session.
+ */
+.hh-debrief__medal[data-reveal='reveal'] {
+  animation: hh-medal-reveal var(--hh-medal-duration, 600ms) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hh-debrief__medal[data-reveal='crossfade'] {
+  animation: hh-medal-fade var(--hh-medal-duration, 200ms) ease-out;
+}
+
+@keyframes hh-medal-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes hh-medal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
 .hh-debrief__medal {
   margin: 0;
   font-size: 1.4rem;
@@ -1061,16 +1159,16 @@ body {
 }
 
 .hh-debrief__medal[data-medal='bronze'] {
-  color: #c08457;
+  color: var(--medal-bronze);
 }
 .hh-debrief__medal[data-medal='silver'] {
-  color: #b8b8c0;
+  color: var(--medal-silver);
 }
 .hh-debrief__medal[data-medal='gold'] {
-  color: #e9c46a;
+  color: var(--medal-gold);
 }
 .hh-debrief__medal[data-medal='clean'] {
-  color: #5bc0eb;
+  color: var(--medal-clean);
 }
 
 .hh-debrief__missed {
@@ -1079,7 +1177,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #e2503c;
+  color: var(--bad);
 }
 
 .hh-debrief__table {
@@ -1103,7 +1201,7 @@ body {
 .hh-debrief__miss {
   margin: 0;
   padding: 8px 12px;
-  border-inline-start: 3px solid #e2503c;
+  border-inline-start: 3px solid var(--bad);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1142,7 +1240,7 @@ body {
    answer than ours, which means ours is wrong. */
 .hh-debrief__beat-par {
   padding: 8px 12px;
-  border-inline-start: 3px solid #e9c46a;
+  border-inline-start: 3px solid var(--warn);
 }
 
 .hh-debrief__beat-par p {

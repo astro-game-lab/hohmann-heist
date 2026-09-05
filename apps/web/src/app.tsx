@@ -29,6 +29,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 
 import { contractById } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
+import { applyPalette, usePalette } from './palette.js';
 import { onRouteChange, parseHash, type Route } from './router.js';
 import {
   browserStorage,
@@ -252,6 +253,16 @@ export const App = (): JSX.Element => {
   useEffect(() => onRouteChange(setRoute), []);
 
   const reducedMotion = useReducedMotion();
+
+  // §9.2's palette, published onto the document element so every rule and every canvas
+  // below resolves against the same thirteen values (#116). An effect rather than a render
+  // -time write because it touches the document outside this tree; the stylesheet already
+  // carries the default palette, so the first paint is correct before this runs and this
+  // only ever changes it.
+  const palette = usePalette();
+  useEffect(() => {
+    applyPalette(document.documentElement, palette);
+  }, [palette]);
 
   // Read once, on the first render rather than in an effect: the briefing needs the
   // attempt count in the markup it first paints, and a save that arrived a frame later

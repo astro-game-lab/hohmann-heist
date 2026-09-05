@@ -45,6 +45,8 @@ import { fromDeltaVCounts, type ManeuverNode } from '@hh/sim';
 import type { Catalogue } from '@hh/ui';
 import { DELTA_V_STEP_MPS, burnResult, deltaVStep, metFromParts, metParts } from '@hh/ui';
 import type { JSX } from 'preact';
+
+import { Icon } from '../icons/index.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 /** Which axis a stepper drives. The index the catalogue's `step` message reads. */
@@ -196,7 +198,7 @@ export const NodeEditor = ({
           {t('planner.editor.heading', { index: index + 1 })}
         </h3>
         <button type="button" class="hh-editor__close" data-testid="editor-close" onClick={onClose}>
-          {t('planner.editor.close', {})}
+          <Icon name="close" label={t('planner.editor.close', {})} />
         </button>
       </header>
 
@@ -415,6 +417,7 @@ export const NodeEditor = ({
 
       <footer class="hh-editor__footer">
         <button type="button" data-testid="editor-delete" onClick={onDelete}>
+          <Icon name="delete" />
           {t('planner.editor.delete', {})}
         </button>
         <button type="button" data-testid="editor-done" onClick={onClose}>

@@ -69,7 +69,8 @@ import {
   shipMarkerOf,
   targetMarkerOf,
 } from '../scene/content.js';
-import { SCENE_COLOURS } from './colours.js';
+import { Icon } from '../icons/index.js';
+import { useSceneColours } from './colours.js';
 import {
   advanceFraming,
   contentChanged,
@@ -184,6 +185,7 @@ export const OrbitView = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const labelHostRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
+  const colours = useSceneColours();
 
   // Everything the render loop needs that must not re-run it. Props change often — the
   // scrub head moves on every input event — and the renderer, the cache and the framing
@@ -323,7 +325,7 @@ export const OrbitView = ({
 
       const built = buildScene({
         camera,
-        colours: SCENE_COLOURS,
+        colours,
         timeline: drawn,
         scrubEpoch,
         nodes,
@@ -695,6 +697,7 @@ export const OrbitView = ({
     scrubEpoch,
     selectedNodeId,
     reducedMotion,
+    colours,
     recentreRequested,
     t,
     onSelectNode,
@@ -732,7 +735,7 @@ export const OrbitView = ({
             zoomRef.current?.(BUTTON_ZOOM_FACTOR);
           }}
         >
-          {t('planner.camera.zoomIn', {})}
+          <Icon name="zoom-in" label={t('planner.camera.zoomIn', {})} />
         </button>
         <button
           type="button"
@@ -742,7 +745,7 @@ export const OrbitView = ({
             zoomRef.current?.(1 / BUTTON_ZOOM_FACTOR);
           }}
         >
-          {t('planner.camera.zoomOut', {})}
+          <Icon name="zoom-out" label={t('planner.camera.zoomOut', {})} />
         </button>
         <button
           type="button"
@@ -756,7 +759,7 @@ export const OrbitView = ({
             setRecentreRequested((n) => n + 1);
           }}
         >
-          {t('planner.camera.recentre', {})}
+          <Icon name="recentre" label={t('planner.camera.recentre', {})} />
         </button>
       </div>
     </div>
