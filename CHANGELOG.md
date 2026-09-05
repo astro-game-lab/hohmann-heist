@@ -103,6 +103,21 @@ they relied on has moved.
   outside the panel.
 
 ### Changed
+- **D9 is decided, and amended: Preact stays, `@preact/signals` is dropped (#248).** M2's last
+  exit criterion besides the playtest round. The HUD was measured in a browser during execution
+  playback — the case D9's claim is actually about — at **0.285 ms/frame at 1× and 0.420 ms at
+  10 000×**, against §16 R11's 2 ms trigger, with zero frames dropped at any speed and the whole
+  frame using 8% of a 60 Hz budget at its worst. R11 does not fire and `preact/compat` is not
+  needed. The measurement also settled a question that had to come first: **`@preact/signals` was
+  a declared dependency that nothing imported and the bundle never contained** — the slice holds
+  its run state in a root `useState` and re-renders the whole subtree every frame, which is the
+  opposite of the "without re-rendering panels" the dependency was carried for. It is removed;
+  no shipped byte changes, because it was already tree-shaken out. The claim it existed to serve
+  is false here — re-rendering the whole subtree costs a fifth of a millisecond. `docs/DECISION-D9.md`
+  records the numbers, the probe, and what is still unmeasured; §5's D9 row, §14.1's M2 row and
+  §16's R11 are updated. The tail is the part to keep watching: the worst frame at 10 000× is
+  1.30 ms, 65% of the trigger, and M3 stacks the board, settings and medals on top of it.
+
 - **The application declares its own ground.** `app.css` described itself as "structure and motion,
   not the look" while carrying some thirty hex codes chosen against a dark field — but never set a
   background or a foreground, so the page took the browser's white ground and black text and every

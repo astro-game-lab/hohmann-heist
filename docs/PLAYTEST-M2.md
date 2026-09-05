@@ -204,3 +204,9 @@ That decision is not this round's. It is
 round for the reason #239 opened #238 — an exit criterion with no issue behind it is an
 exit criterion nobody is holding. §16's R11 sets the trigger: HUD re-render cost above
 2 ms/frame means switch, and `preact/compat` makes React a drop-in if it does.
+
+**Settled, 2026-09-05.** #248 measured it: HUD re-render costs 0.285 ms/frame at 1× and
+0.420 ms at 10 000×, against R11's 2 ms trigger, with no frames dropped. Preact is a go;
+`@preact/signals` turned out to be a declared dependency that nothing imported and the
+bundle never contained, and is dropped. `docs/DECISION-D9.md` records it. **The five
+sessions are therefore the only M2 exit criterion still open.**
