@@ -96,6 +96,15 @@ export type {
 } from './legality.js';
 export { evaluateLegality } from './legality.js';
 
+export type {
+  ActProgress,
+  ContractRecord,
+  LockReason,
+  Progression,
+  ProgressionContract,
+} from './progression.js';
+export { bronzeThreshold, hasBronze, isUnlocked, progression } from './progression.js';
+
 export type { PlanEdit } from './plan-edits.js';
 export { addNode, componentsOf, deleteNode, moveNode, setNodeDeltaV } from './plan-edits.js';
 
