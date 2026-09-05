@@ -131,6 +131,21 @@ const samples: AllMessageParams = {
     rangeMetres: 100,
     relativeSpeedMps: 0.5,
   },
+  'debrief.diagnosis.wrongOrbit': {
+    element: 'periapsisRadius',
+    difference: 42_000,
+    tolerance: 10_000,
+  },
+  'debrief.diagnosis.tooFast': { relativeSpeedMps: 1.4, maxRelativeSpeedMps: 0.5, rangeM: 80 },
+  'debrief.diagnosis.arrivedLate': { alongTrackM: 12_400, rangeM: 12_500 },
+  'debrief.diagnosis.arrivedEarly': { alongTrackM: 12_400, rangeM: 12_500 },
+  'debrief.diagnosis.undershot': { radialM: 4_100, rangeM: 4_200 },
+  'debrief.diagnosis.overshot': { radialM: 4_100, rangeM: 4_200 },
+  'briefing.objective.station': {
+    slotOffsetRad: 0.05236,
+    maxOffsetRad: 8.7266e-4,
+    maxDriftRadPerSec: 2.0202e-9,
+  },
   'briefing.objective.softRendezvous': {
     target: 'KESTREL-2',
     rangeMetres: 100,
@@ -379,6 +394,48 @@ describe('resolving what the rules emit', () => {
   it('can be pulled off the catalogue and used on its own', () => {
     const t = catalogue.resolve;
     expect(t('app.title', {})).toBe('Hohmann Heist');
+  });
+});
+
+describe('a quantity is never rendered without its unit (#83)', () => {
+  // Found by looking at the running debrief, not by a test: "You passed 400 below the
+  // target" shipped past typecheck, lint and 2013 tests, because `kilometres()` returns
+  // the number and every call site is responsible for the "km" after it. A number with no
+  // unit is not a smaller mistake than a wrong number — at a glance it reads as metres.
+  //
+  // Asserted for the diagnosis family specifically rather than for every message: the
+  // general rule ("anything taking a distance renders a unit") is not true, since some
+  // messages take a distance to decide a branch and never print it.
+  const distanceBearing: readonly (readonly [string, Record<string, number | string>])[] = [
+    ['debrief.diagnosis.arrivedLate', { alongTrackM: 12_400, rangeM: 12_500 }],
+    ['debrief.diagnosis.arrivedEarly', { alongTrackM: 12_400, rangeM: 12_500 }],
+    ['debrief.diagnosis.undershot', { radialM: 4_100, rangeM: 4_200 }],
+    ['debrief.diagnosis.overshot', { radialM: 4_100, rangeM: 4_200 }],
+    [
+      'debrief.diagnosis.wrongOrbit',
+      { element: 'periapsisRadius', difference: 42_000, tolerance: 10_000 },
+    ],
+  ];
+
+  it.each(distanceBearing)('%s states a unit beside every number', (key, params) => {
+    const catalogue = createCatalogue();
+    const text = catalogue.resolve(key as never, params as never);
+
+    // Every run of digits must be followed by a unit, a percent, or sentence punctuation —
+    // never by a bare space and a word.
+    const bareNumber = /\d(?![\d.,])(?!\s*(?:km|m\b|m\/s|s\b|°|%|,|\.|$))/u;
+    expect(text, text).not.toMatch(bareNumber);
+    expect(text, text).toMatch(/\d/u);
+  });
+
+  it('renders the speed rule in m/s', () => {
+    const catalogue = createCatalogue();
+    const text = catalogue.resolve('debrief.diagnosis.tooFast', {
+      relativeSpeedMps: 1.4,
+      maxRelativeSpeedMps: 0.5,
+      rangeM: 80,
+    });
+    expect(text).toContain('m/s');
   });
 });
 

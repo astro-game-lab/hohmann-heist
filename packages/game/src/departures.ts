@@ -243,6 +243,15 @@ export const DEPARTURES: readonly Departure[] = Object.freeze([
     status: 'active',
     visibility: 'player-visible',
   },
+  {
+    id: 'DEP-14',
+    summary:
+      'station tolerance — mean longitude within ±0.05° of a slot, secular drift within 0.01°/day',
+    module: '@hh/game/objectives/tolerances',
+    layer: 'above-core',
+    status: 'active',
+    visibility: 'player-visible',
+  },
 ] satisfies readonly Departure[]);
 
 /** Look one up. `undefined` for an identifier that is not in §7.5. */

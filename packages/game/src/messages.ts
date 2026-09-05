@@ -156,6 +156,50 @@ export interface GameMessageParams {
     readonly lateSeconds: number;
   };
 
+  /**
+   * A `reach_orbit` goal was not reached, and one element was the worst offender.
+   *
+   * `element` is the name the comparison used, not a sentence — the catalogue turns it
+   * into one, so the rule never builds prose (FR-910).
+   */
+  readonly 'debrief.diagnosis.wrongOrbit': {
+    readonly element: string;
+    readonly difference: number;
+    readonly tolerance: number;
+  };
+
+  /** Close enough, and still moving too fast for the objective to count. */
+  readonly 'debrief.diagnosis.tooFast': {
+    readonly relativeSpeedMps: number;
+    readonly maxRelativeSpeedMps: number;
+    readonly rangeM: number;
+  };
+
+  // The along-track pair. Two keys rather than one with a flag: the sentences differ by
+  // more than a word in most languages, and §8.9 forbids assembling one from parts.
+  /** The miss was mostly along-track, with the target still ahead. */
+  readonly 'debrief.diagnosis.arrivedLate': {
+    readonly alongTrackM: number;
+    readonly rangeM: number;
+  };
+  /** The miss was mostly along-track, with the ship there first. */
+  readonly 'debrief.diagnosis.arrivedEarly': {
+    readonly alongTrackM: number;
+    readonly rangeM: number;
+  };
+
+  // The radial pair.
+  /** The miss was mostly radial, with the ship below the target. */
+  readonly 'debrief.diagnosis.undershot': {
+    readonly radialM: number;
+    readonly rangeM: number;
+  };
+  /** The miss was mostly radial, with the ship above the target. */
+  readonly 'debrief.diagnosis.overshot': {
+    readonly radialM: number;
+    readonly rangeM: number;
+  };
+
   // ── Plans that have no timeline at all ────────────────────────────────────
   /** A burn left position and velocity parallel; there is no orbital plane to continue on. */
   readonly 'legality.plan.rectilinear': { readonly nodeIndex: number };

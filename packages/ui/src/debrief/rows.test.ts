@@ -9,9 +9,9 @@
  * that read "72.4 m/s" out of this module would be recording a bug, because the unit,
  * the separator and the decimal are all locale decisions that happen later.
  */
-import { epoch } from '@hh/astro';
+import { epoch, rtn } from '@hh/astro';
 import type { Outcome, ProximityEvaluation } from '@hh/game';
-import { metres, metresPerSec } from '@hh/math';
+import { V, metres, metresPerSec } from '@hh/math';
 import { describe, expect, it } from 'vitest';
 
 import { approachSummary, missRows, resultRows } from './rows.js';
@@ -26,6 +26,8 @@ const proximity = (met: boolean, rangeM: number): ProximityEvaluation => ({
     epoch: epoch(START_SECONDS + 4123),
     rangeM: metres(rangeM),
     relativeSpeedMps: metresPerSec(42.7),
+    // Not what this fixture is about; #83's decomposition has its own tests.
+    missRtn: rtn(V.vec3(metres(0), metres(0), metres(0))),
   },
   candidates: [],
   tolerance: { maxRangeM: metres(1000), maxRelativeSpeedMps: null },
@@ -34,6 +36,9 @@ const proximity = (met: boolean, rangeM: number): ProximityEvaluation => ({
 const outcomeOf = (over: Partial<Outcome> = {}): Outcome => ({
   success: true,
   failure: null,
+  medalCap: 'clean',
+  cappedBy: [],
+  codex: null,
   dvUsedMps: 109.1177,
   dvBudgetMps: 300,
   metSeconds: 4123,

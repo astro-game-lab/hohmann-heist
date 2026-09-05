@@ -41,6 +41,7 @@ import {
   evaluateLegality,
   evaluateProximity,
   evaluateReachOrbit,
+  evaluateStation,
   targetArc,
   type Legality,
   type ObjectiveEvaluation,
@@ -74,6 +75,12 @@ const judgeObjective = (
   const { objective } = scenario;
   if (objective.kind === 'reach_orbit') {
     return evaluateReachOrbit(timeline, objective.goal, objective.tolerance);
+  }
+
+  // `station` has no second body to be near: it asks where the ship sits in the rotating
+  // frame and how fast it is sliding through the slot (#77, §6.4).
+  if (objective.kind === 'station') {
+    return evaluateStation(timeline, objective.goal);
   }
 
   const target = scenario.targets.find((candidate) => candidate.id === objective.targetId);

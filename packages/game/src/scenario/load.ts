@@ -52,11 +52,18 @@ import { V, metres, metresPerSec, radians, seconds } from '@hh/math';
 
 import type { LegalityRules } from '../legality.js';
 import { gameMessage } from '../messages.js';
-import type { OrbitTolerance, ProximityKind, ProximityTolerance } from '../objectives/index.js';
+import type {
+  OrbitTolerance,
+  ProximityKind,
+  ProximityTolerance,
+  StationGoal,
+} from '../objectives/index.js';
 import {
   ALTITUDE_FLOOR_M,
   INTERCEPT_MAX_RANGE_M,
   REACH_ORBIT_TOLERANCE,
+  STATION_MAX_DRIFT_RAD_PER_SEC,
+  STATION_MAX_OFFSET_RAD,
   RENDEZVOUS_MAX_RANGE_M,
   RENDEZVOUS_MAX_REL_SPEED_MPS,
   SOFT_RENDEZVOUS_MAX_REL_SPEED_MPS,
@@ -83,7 +90,31 @@ export type LoadedObjective =
       readonly kind: ProximityKind;
       readonly targetId: string;
       readonly tolerance: ProximityTolerance;
-    };
+    }
+  // `station` names no target: it is a condition on where the ship sits in the rotating
+  // frame, not on its separation from a second body (#77, §6.4).
+  | { readonly kind: 'station'; readonly goal: StationGoal };
+
+/**
+ * Whether a loaded objective is an encounter with a second body.
+ *
+ * The scenario-side twin of `isProximityEvaluation`. Three shapes live in this union and
+ * only one of them has a target and a range — `reach_orbit` compares element sets, and
+ * `station` measures a longitude against a slot.
+ *
+ * A named predicate rather than `kind !== 'reach_orbit'` at each call site, which is what
+ * every consumer wrote while the union had two members. That test silently became wrong
+ * when §6.4's fifth objective type landed (#77), in six places across the application, the
+ * par documenter and the content tools — none of which any test would have caught, since
+ * no `station` contract exists yet. The compiler catches it now, and the next member of
+ * this union will be caught the same way.
+ */
+export const isProximityObjective = (
+  objective: LoadedObjective,
+): objective is Extract<LoadedObjective, { readonly targetId: string }> =>
+  objective.kind === 'intercept' ||
+  objective.kind === 'rendezvous' ||
+  objective.kind === 'soft_rendezvous';
 
 /** A contract, ready to evaluate against. */
 export interface LoadedScenario {
@@ -249,6 +280,29 @@ const interpret = (document: Scenario): LoadResult => {
               '/objective/tolerance/angle_rad',
               errors,
             ),
+          ),
+        },
+      };
+    }
+
+    if (raw.kind === 'station') {
+      return {
+        kind: 'station',
+        goal: {
+          slotOffsetRad: radians(raw.slotOffset_rad),
+          maxOffsetRad: radians(
+            boundedTolerance(
+              raw.maxOffset_rad,
+              STATION_MAX_OFFSET_RAD,
+              '/objective/maxOffset_rad',
+              errors,
+            ),
+          ),
+          maxDriftRadPerSec: boundedTolerance(
+            raw.maxDrift_radPerSec,
+            STATION_MAX_DRIFT_RAD_PER_SEC,
+            '/objective/maxDrift_radPerSec',
+            errors,
           ),
         },
       };

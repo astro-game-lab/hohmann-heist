@@ -40,8 +40,14 @@
  * question of what happens if the two ever got out of step.
  */
 import { R_EARTH_EQ } from '@hh/astro';
-import type { LoadedScenario, Outcome } from '@hh/game';
-import { buildFlightLog, evaluateOutcome } from '@hh/game';
+import type { AssistState, LoadedScenario, Outcome } from '@hh/game';
+import {
+  buildFlightLog,
+  defaultAssistState,
+  encodeAssists,
+  evaluateOutcome,
+  restrictToAllowed,
+} from '@hh/game';
 import { canonicalJson, replayFromPlan } from '@hh/sim';
 import type { PersonalBest } from '@hh/ui';
 import type { Catalogue } from '@hh/ui';
@@ -81,14 +87,17 @@ export interface ContractScreenProps {
 const ENGINE_MAJOR = 1;
 
 /**
- * The assist bitmask §11.6's replay code records.
+ * The assists this run used, as §6.6's model states them.
  *
- * Zero until §6.6's assist model lands with #81. DEP-07's apsis snap is the only assist
- * this build has and it is marked `internal` in the departures registry — it does not
- * affect medal eligibility, so it does not belong in a mask whose only consumers are
- * medal eligibility and leaderboard segregation.
+ * The planner does not yet own a full assist tray — that is #140, which renders this same
+ * model — so what a run uses today is the contract's permitted set at its defaults. When
+ * the tray lands it supplies the player's own state and nothing here changes shape.
+ *
+ * `restrictToAllowed` is what keeps that honest: a contract that does not list an assist
+ * cannot have used it, whatever the defaults say.
  */
-const ASSISTS_USED = 0;
+const assistsFor = (scenario: LoadedScenario): AssistState =>
+  restrictToAllowed(defaultAssistState(), scenario.document.assistsAllowed);
 
 /**
  * §11.6's replay, as text.
@@ -102,13 +111,18 @@ const ASSISTS_USED = 0;
  * suite already replays it, and it round-trips through `parseReplay` today. When #149
  * lands it wraps this same object; nothing about the button changes but the payload.
  */
-const replayCodeFor = (run: CommittedRun, scenario: LoadedScenario, outcome: Outcome): string =>
+const replayCodeFor = (
+  run: CommittedRun,
+  scenario: LoadedScenario,
+  outcome: Outcome,
+  assists: AssistState,
+): string =>
   canonicalJson(
     replayFromPlan(run.plan, {
       scenarioId: scenario.id,
       startEpoch: scenario.startEpoch,
       engineMajor: ENGINE_MAJOR,
-      assists: ASSISTS_USED,
+      assists: encodeAssists(assists),
       claim: {
         // The scoring grid, which is the unit §11.6's claim is defined in and the unit a
         // verifier compares. `outcome.ts` owns the conversion.
@@ -166,6 +180,10 @@ export const ContractScreen = ({
     // assumed, because the alternative is a crash on the screen after the commit.
     if (timeline === null || !legality.evaluable) return null;
 
+    // §6.6's set for this contract, used by the scoring and recorded in the replay.
+
+    const assists = assistsFor(scenario);
+
     const outcome = evaluateOutcome({
       timeline,
       objective,
@@ -176,9 +194,11 @@ export const ContractScreen = ({
         timeSeconds: scenario.document.par.time_s,
         burns: scenario.document.par.burns,
       },
-      // §6.6's assist model is #81's. DEP-07's snap is `internal` and does not affect
-      // eligibility, so no assist this build offers costs a Clean Job.
-      cleanEligible: true,
+      // §6.6's set, restricted to what this contract offers. Eligibility and the cap are
+      // derived from it inside `evaluateOutcome` — FR-301 is that a medal must reflect the
+      // assists actually enabled, and a flag passed in from here is exactly the shape that
+      // let this hard-code `true`.
+      assists,
     });
 
     const entries = buildFlightLog(timeline, {
@@ -191,7 +211,7 @@ export const ContractScreen = ({
       referenceRadiusM: R_EARTH_EQ,
     });
 
-    return { timeline, outcome, entries, replay: replayCodeFor(run, scenario, outcome) };
+    return { timeline, outcome, entries, replay: replayCodeFor(run, scenario, outcome, assists) };
   }, [run, scenario]);
 
   if (phase === 'briefing') {
