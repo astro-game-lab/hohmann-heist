@@ -69,6 +69,12 @@ import type { Timeline } from '@hh/sim';
 import type { LegalityConstraints, LegalityRules } from './legality.js';
 import type { GameMessage } from './messages.js';
 import { gameMessage } from './messages.js';
+import type { AssistId, AssistState, MedalCap } from './assists.js';
+import {
+  cappingAssists,
+  cleanEligible as cleanEligibleFor,
+  medalCap as medalCapFor,
+} from './assists.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
 
 /**
@@ -138,16 +144,22 @@ export interface OutcomeInput {
   readonly rules: LegalityRules;
   readonly par: ParValues;
   /**
-   * Whether the run is eligible for §6.7's **Clean Job** — Gold with no medal-affecting
-   * assists enabled.
+   * Which assists were on for this run.
    *
-   * A parameter rather than something derived here, and deliberately so: which assists
-   * affect eligibility is §6.6's model and is owned by #81 (M3), which also carries
-   * FR-411's per-contract cap. This module knows only §6.7's *arithmetic*, and taking
-   * the eligibility as a fact keeps the two separable — #81 replaces the argument's
-   * source without touching a threshold.
+   * §6.6's model decides two things from it — whether the run is Clean Job eligible, and
+   * what medal it is capped at — and both are derived here rather than passed in. FR-301:
+   * *"MUST NOT award a medal the player did not earn under the assists actually
+   * enabled."* An eligibility flag supplied by a caller is exactly the shape that lets a
+   * call site hard-code `true`, which is what `apps/web` did until #81.
    */
-  readonly cleanEligible: boolean;
+  readonly assists: AssistState;
+  /**
+   * Assists this contract is designed around, which therefore do not cap it (§6.6, Act V).
+   *
+   * Empty for every contract in M3. `assists.ts` says why this is separate from the
+   * scenario's `assistsAllowed`.
+   */
+  readonly designedAround?: readonly AssistId[];
 }
 
 /** The debrief's numeric content. */
@@ -164,6 +176,17 @@ export interface Outcome {
   readonly burns: number;
   /** `null` when no medal was earned — which includes every failed run. */
   readonly medal: Medal | null;
+  /**
+   * The medal this run could have reached given its assists, before its own performance
+   * was considered. `clean` when nothing capped it.
+   *
+   * Reported whether or not it bit, because FR-411 asks the planner to show the cap
+   * *while planning* — a player needs to know what they are giving up before they commit,
+   * not after.
+   */
+  readonly medalCap: MedalCap;
+  /** Which assists capped the run. Empty when nothing did. */
+  readonly cappedBy: readonly AssistId[];
   readonly par: ParValues;
   /** `null` on a failed run: there is no time to compare, so there is no comparison. */
   readonly parDelta: ParDelta | null;
@@ -222,12 +245,17 @@ const medalFor = (
   score: { readonly dv: number; readonly time: number; readonly burns: number },
   par: { readonly dv: number; readonly time: number; readonly burns: number },
   cleanEligible: boolean,
+  cap: MedalCap,
 ): Medal | null => {
   if (!bronze) return null;
 
   const silver =
     score.dv <= toScoreDeltaV(par.dv * 1.1) && score.time <= toScoreTime(par.time * 1.25);
   if (!silver) return 'bronze';
+
+  // The cap is applied *here* rather than to the finished medal, so a capped run never
+  // briefly computes a Gold that something downstream has to take away.
+  if (cap === 'silver') return 'silver';
 
   const gold =
     score.dv <= toScoreDeltaV(par.dv * 1.02) &&
@@ -247,7 +275,9 @@ const medalFor = (
  * and the objective-met flag specifically.
  */
 export const evaluateOutcome = (input: OutcomeInput): Outcome => {
-  const { timeline, objective, constraints, rules, par, cleanEligible } = input;
+  const { timeline, objective, constraints, rules, par, assists } = input;
+  const designedAround = input.designedAround ?? [];
+  const cap = medalCapFor(assists, designedAround);
 
   const dvUsedMps = constraints.budget.usedMps;
   const burns = timeline.plan.nodes.length;
@@ -295,8 +325,11 @@ export const evaluateOutcome = (input: OutcomeInput): Outcome => {
       success,
       score,
       { dv: par.dvMps, time: par.timeSeconds, burns: par.burns },
-      cleanEligible,
+      cleanEligibleFor(assists),
+      cap,
     ),
+    medalCap: cap,
+    cappedBy: cappingAssists(assists, designedAround),
     par,
     parDelta:
       metSeconds === null

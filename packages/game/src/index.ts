@@ -51,6 +51,20 @@ export type {
 } from './messages.js';
 export { NO_PARAMS, gameMessage } from './messages.js';
 
+export type { AssistEffect, AssistId, AssistSpec, AssistState, MedalCap } from './assists.js';
+export {
+  ASSISTS,
+  ASSIST_IDS,
+  blindModifier,
+  cappingAssists,
+  cleanEligible,
+  decodeAssists,
+  defaultAssistState,
+  encodeAssists,
+  medalCap,
+  restrictToAllowed,
+} from './assists.js';
+
 export * from './objectives/index.js';
 export * from './constraints/index.js';
 

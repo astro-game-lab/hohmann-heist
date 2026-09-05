@@ -45,6 +45,8 @@ const proximity = (met: boolean, rangeM: number): ProximityEvaluation => ({
 const outcomeOf = (over: Partial<Outcome> = {}): Outcome => ({
   success: true,
   failure: null,
+  medalCap: 'clean',
+  cappedBy: [],
   dvUsedMps: 109.1177,
   dvBudgetMps: 300,
   metSeconds: 4123,
