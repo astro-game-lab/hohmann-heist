@@ -69,7 +69,7 @@ import {
   shipMarkerOf,
   targetMarkerOf,
 } from '../scene/content.js';
-import { SCENE_COLOURS } from './colours.js';
+import { useSceneColours } from './colours.js';
 import {
   advanceFraming,
   contentChanged,
@@ -184,6 +184,7 @@ export const OrbitView = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const labelHostRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
+  const colours = useSceneColours();
 
   // Everything the render loop needs that must not re-run it. Props change often — the
   // scrub head moves on every input event — and the renderer, the cache and the framing
@@ -323,7 +324,7 @@ export const OrbitView = ({
 
       const built = buildScene({
         camera,
-        colours: SCENE_COLOURS,
+        colours,
         timeline: drawn,
         scrubEpoch,
         nodes,
@@ -695,6 +696,7 @@ export const OrbitView = ({
     scrubEpoch,
     selectedNodeId,
     reducedMotion,
+    colours,
     recentreRequested,
     t,
     onSelectNode,
