@@ -1115,6 +1115,41 @@ body {
 
 /* The medal, by weight and size as well as by whatever colour the palette gives it —
    §8.8's "medals by shape and label", so the word is always the carrier. */
+/*
+ * §9.4's medal reveal — *"one deliberate flourish, the only one in the game"*.
+ *
+ * The duration and which animation runs both come from `motion.ts` through
+ * `--hh-medal-duration` and `data-reveal`, because §9.4 does not collapse this row to
+ * 0 ms the way it collapses the others: it becomes a **cross-fade**. Every other
+ * animation in the game moves between two states the player can already see, so removing
+ * it costs nothing; this is the game's only moment of ceremony, and deleting it would
+ * take away a signal rather than an ornament.
+ *
+ * `will-change` is deliberately absent. The element animates once, on mount, and hinting
+ * a permanent compositor layer for a one-shot transform is how a static page ends up
+ * holding a layer for the rest of the session.
+ */
+.hh-debrief__medal[data-reveal='reveal'] {
+  animation: hh-medal-reveal var(--hh-medal-duration, 600ms) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hh-debrief__medal[data-reveal='crossfade'] {
+  animation: hh-medal-fade var(--hh-medal-duration, 200ms) ease-out;
+}
+
+@keyframes hh-medal-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes hh-medal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
 .hh-debrief__medal {
   margin: 0;
   font-size: 1.4rem;

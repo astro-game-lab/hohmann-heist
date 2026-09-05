@@ -16,6 +16,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { contractById } from '../contracts/registry.js';
+import { MEDAL_REVEAL_MS } from '../motion.js';
 import { DebriefScreen } from './DebriefScreen.js';
 
 const catalogue = createCatalogue({ onMissingKey: 'throw' });
@@ -297,5 +298,20 @@ describe('the actions', () => {
       outcomeOf({ success: false, failure: 'objectiveMissed', medal: null, parDelta: null }),
     );
     expect(text('debrief-build')).toContain('0.0.0 (unknown)');
+  });
+});
+
+describe('§9.4’s medal reveal (#173)', () => {
+  // jsdom's `matchMedia` answers `false` to everything, so this is the un-reduced branch.
+  // The reduced one is covered in `motion.test.ts`, where the host is a parameter and both
+  // branches can actually be driven — see that module's note on why the platform is
+  // injected rather than reached for.
+  it('runs the reveal, and carries its duration from motion.ts', async () => {
+    await mount(outcomeOf({ medal: 'gold' }));
+
+    const medal = el('debrief-medal');
+    expect(medal?.dataset['reveal']).toBe('reveal');
+    expect(medal?.getAttribute('style')).toContain('--hh-medal-duration');
+    expect(medal?.getAttribute('style')).toContain(`${String(MEDAL_REVEAL_MS)}ms`);
   });
 });

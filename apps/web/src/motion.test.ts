@@ -4,7 +4,13 @@ import {
   REDUCED_MOTION_QUERY,
   SCREEN_TRANSITION_MS,
   observeReducedMotion,
+  DEFAULT_MOTION_PREFERENCE,
+  MEDAL_REVEAL_MS,
+  PANEL_TRANSITION_MS,
+  medalReveal,
+  panelTransitionMs,
   prefersReducedMotion,
+  resolveReducedMotion,
   screenTransitionMs,
   type MotionHost,
   type MotionMediaQuery,
@@ -53,6 +59,46 @@ describe('screenTransitionMs', () => {
     expect(screenTransitionMs(false)).toBe(SCREEN_TRANSITION_MS);
     expect(SCREEN_TRANSITION_MS).toBe(160);
     expect(screenTransitionMs(true)).toBe(0);
+  });
+});
+
+describe('resolveReducedMotion — the three states §8.3.12 offers', () => {
+  // A boolean can only express "off despite the system", and only by lying about which
+  // source it came from. These four cases are why the setting has three values: the two
+  // overrides have to work in *both* directions.
+  it('follows the system when the preference is `system`', () => {
+    expect(resolveReducedMotion('system', true)).toBe(true);
+    expect(resolveReducedMotion('system', false)).toBe(false);
+  });
+
+  it('reduces motion on request even when the system does not ask for it', () => {
+    expect(resolveReducedMotion('on', false)).toBe(true);
+  });
+
+  it('allows motion on request even when the system asks to reduce it', () => {
+    // A preference set once for an operating system is not consent for every page in it.
+    expect(resolveReducedMotion('off', true)).toBe(false);
+  });
+
+  it('defaults to following the system', () => {
+    expect(DEFAULT_MOTION_PREFERENCE).toBe('system');
+  });
+});
+
+describe('§9.4’s table', () => {
+  it('collapses the panel transition like the screen transition', () => {
+    expect(panelTransitionMs(false)).toBe(PANEL_TRANSITION_MS);
+    expect(panelTransitionMs(true)).toBe(0);
+  });
+
+  // The one row that does not become 0 ms. §9.4: it "becomes a cross-fade".
+  it('replaces the medal reveal with a cross-fade rather than removing it', () => {
+    expect(medalReveal(false)).toEqual({ ms: MEDAL_REVEAL_MS, kind: 'reveal' });
+
+    const reduced = medalReveal(true);
+    expect(reduced.kind).toBe('crossfade');
+    expect(reduced.ms).toBeGreaterThan(0);
+    expect(reduced.ms).toBeLessThan(MEDAL_REVEAL_MS);
   });
 });
 
