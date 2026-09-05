@@ -54,7 +54,7 @@ import { metAt } from '@hh/astro';
 import type { Timeline } from '@hh/sim';
 
 import type { LegalityConstraints, LegalityRules } from './legality.js';
-import type { CodexSlug } from './diagnosis.js';
+import type { CodexSlug, OutcomeFailure } from './diagnosis.js';
 import { diagnose } from './diagnosis.js';
 import type { GameMessage } from './messages.js';
 import type { AssistId, AssistState, MedalCap } from './assists.js';
@@ -93,19 +93,11 @@ export type Medal = 'bronze' | 'silver' | 'gold' | 'clean';
 /**
  * Why a run failed.
  *
- * A named reason rather than a boolean, because the debrief's failure block says
- * different things for each and because `pastDeadline` is a genuinely different event
- * from `objectiveMissed` — see the docstring.
+ * Defined by `./diagnosis.ts` and re-exported here, because that is the module which
+ * dispatches on it — and because the reverse arrangement was a cycle: the rule set needs
+ * the vocabulary, and the outcome needs the rule set. Callers import it from either.
  */
-export type OutcomeFailure =
-  /** The objective was never satisfied anywhere in the horizon. `L6`, after the fact. */
-  | 'objectiveMissed'
-  /** The objective was satisfied, but after the contract's deadline (§6.4, §6.7). */
-  | 'pastDeadline'
-  /** `Σ∣Δv∣` exceeded the contract's budget. Unreachable from a committed plan. */
-  | 'overBudget'
-  /** The scenario's objective was not judged, so there is nothing to report. */
-  | 'notEvaluated';
+export type { OutcomeFailure } from './diagnosis.js';
 
 /** A contract's published par (§6.7), in SI. */
 export interface ParValues {

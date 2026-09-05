@@ -47,7 +47,6 @@ import type { GameMessage } from './messages.js';
 import { gameMessage } from './messages.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
 import { isProximityEvaluation } from './objectives/index.js';
-import type { OutcomeFailure } from './outcome.js';
 
 /**
  * How much one axis must exceed the other before the miss is called by its name.
@@ -62,6 +61,28 @@ import type { OutcomeFailure } from './outcome.js';
  * the wrong axis, not staying quiet on a miss that was both.
  */
 export const DOMINANCE_RATIO = 2;
+
+/**
+ * Why a run failed.
+ *
+ * Lives here rather than in `./outcome.ts` because this is the module that dispatches on
+ * it, and because the other arrangement is a cycle — `outcome.ts` needs the rule set and
+ * the rule set needs the vocabulary. `outcome.ts` re-exports it, so nothing outside the
+ * package has to know which file it came from.
+ *
+ * A named reason rather than a boolean, because the debrief's failure block says
+ * different things for each and because `pastDeadline` is a genuinely different event
+ * from `objectiveMissed` — see the docstring.
+ */
+export type OutcomeFailure =
+  /** The objective was never satisfied anywhere in the horizon. `L6`, after the fact. */
+  | 'objectiveMissed'
+  /** The objective was satisfied, but after the contract's deadline (§6.4, §6.7). */
+  | 'pastDeadline'
+  /** `Σ∣Δv∣` exceeded the contract's budget. Unreachable from a committed plan. */
+  | 'overBudget'
+  /** The scenario's objective was not judged, so there is nothing to report. */
+  | 'notEvaluated';
 
 /** The Codex entry a rule points at (§8.3.9: "one sentence and one Codex link"). */
 export type CodexSlug =
