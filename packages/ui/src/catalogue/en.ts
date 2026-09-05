@@ -59,14 +59,29 @@ const kilometres = (metres: number, fmt: MessageFormatters): string => {
 const range = (metres: number, fmt: MessageFormatters): string =>
   metres < 1000 ? `${fmt.integer(metres)} m` : `${fmt.decimal(metres / 1000, 1)} km`;
 
-/** §8.3.3's `h:mm`. Whole minutes: a deadline is not a stopwatch. */
+/**
+ * §8.3.3's `h:mm`, with a day field once there are days.
+ *
+ * Whole minutes: a deadline is not a stopwatch. Days appear above 24 h and not below,
+ * which is `@hh/astro`'s `formatMet` rule for a mission elapsed time — the same span
+ * should not read as `11d 23:00` on the timeline and `287 h 01 m` in the briefing.
+ *
+ * The threshold exists because C07 crossed it. Every contract before it ran for hours, so
+ * "288 h 00 m" was a rendering nothing had produced; it is the deadline of a twelve-day
+ * contract, and twelve days is a fact about the job that a reader should not have to do
+ * arithmetic to recover.
+ */
 const hoursAndMinutes = (seconds: number, fmt: MessageFormatters): string => {
   const totalMinutes = Math.round(seconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  return (
-    `${fmt.integer(hours)} h ` +
-    `${fmt.number(totalMinutes % 60, { minimumIntegerDigits: 2, useGrouping: false })} m`
-  );
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = fmt.number(totalMinutes % 60, {
+    minimumIntegerDigits: 2,
+    useGrouping: false,
+  });
+  return days === 0
+    ? `${fmt.integer(Math.floor(totalMinutes / 60))} h ${minutes} m`
+    : `${fmt.integer(days)} d ${fmt.integer(hours)} h ${minutes} m`;
 };
 
 /** Radians in, degrees out — the conversion happens at this boundary and nowhere else. */
@@ -381,8 +396,15 @@ export const en: Messages = {
     `${fmt.decimal(dvMps, 1)} m/s · ${hoursAndMinutes(timeSeconds, fmt)} · ` +
     `${fmt.integer(burns)} ${fmt.plural(burns) === 'one' ? 'burn' : 'burns'}`,
 
+  // A circular goal reads as one number, not the same number twice. The message decides
+  // that rather than the screen, for the reason the whole catalogue exists: "800 km
+  // circular" and "400 × 800 km" are different sentences, not one sentence with a
+  // different value in it, and a language that builds them differently should be able to.
+  // The threshold is the same one `briefing.setup.circular` uses on a state.
   'briefing.objective.reachOrbit': ({ periapsisAltitudeMetres, apoapsisAltitudeMetres }, fmt) =>
-    `Reach a ${kilometres(periapsisAltitudeMetres, fmt)} × ${kilometres(apoapsisAltitudeMetres, fmt)} km orbit`,
+    Math.abs(apoapsisAltitudeMetres - periapsisAltitudeMetres) < 1000
+      ? `Reach a ${kilometres(apoapsisAltitudeMetres, fmt)} km circular orbit`
+      : `Reach a ${kilometres(periapsisAltitudeMetres, fmt)} × ${kilometres(apoapsisAltitudeMetres, fmt)} km orbit`,
   'briefing.objective.intercept': ({ target, rangeMetres }, fmt) =>
     `Intercept ${target} within ${range(rangeMetres, fmt)}`,
   'briefing.objective.rendezvous': ({ target, rangeMetres, relativeSpeedMps }, fmt) =>
@@ -489,8 +511,17 @@ export const en: Messages = {
 
   'planner.timeline.label': () => 'Mission timeline',
   'planner.timeline.scrubAt': ({ metSeconds }, fmt) => `Scrub head at ${fmt.met(metSeconds)}`,
-  'planner.timeline.stepHint': ({ stepSeconds }, fmt) =>
-    `Arrow keys move the scrub head by ${fmt.integer(stepSeconds)} s; hold Shift for a tenth, Ctrl for a minute`,
+  // The step is derived from the mission window, so this reads it rather than naming a
+  // constant — and says it in the unit a player would: "40 min", not "2400 s".
+  'planner.timeline.stepHint': ({ stepSeconds }, fmt) => {
+    const step =
+      stepSeconds < 60
+        ? `${fmt.integer(stepSeconds)} s`
+        : stepSeconds < 3600
+          ? `${fmt.integer(stepSeconds / 60)} min`
+          : `${fmt.decimal(stepSeconds / 3600, 1)} h`;
+    return `Arrow keys move the scrub head by ${step}; hold Shift for a tenth, Ctrl for a minute`;
+  },
   'planner.timeline.deadline': ({ metSeconds }, fmt) => `Deadline ${fmt.met(metSeconds)}`,
   'planner.timeline.node': ({ index, metSeconds }, fmt) =>
     `Node ${fmt.integer(index)} at ${fmt.met(metSeconds)}`,

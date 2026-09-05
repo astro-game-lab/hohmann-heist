@@ -130,6 +130,41 @@ describe('the §8.3.3 layout', () => {
    * out it exists, and "soft" is the part that makes them weigh the trade rather than
    * treat it as a wall. §6.5: *"A player never discovers a constraint by failing it."*
    */
+  /**
+   * A circular goal is one number, not the same number twice.
+   *
+   * §13.4's suite cannot catch this: "35 786 × 35 786 km" is a correct rendering of a
+   * correct goal and passes every check there is. It was caught by looking at the built
+   * page, which is why C02 and C04 — the first circular `reach_orbit` goals to ship — are
+   * the contracts that surfaced it.
+   */
+  /**
+   * A twelve-day contract says twelve days — #94.
+   *
+   * Every contract before C07 ran for hours, so "288 h 00 m" was a rendering nothing had
+   * ever produced. It is also inconsistent with the timeline beside it, which has always
+   * rendered a MET past a day as `11d 23:00:51` through `@hh/astro`'s `formatMet`.
+   */
+  it('renders a multi-day deadline in days', async () => {
+    await mount({ scenario: shipped('c07-slot-machine') });
+    expect(visible('value-deadline')).toBe('12 d 0 h 00 m');
+  });
+
+  it('still renders a contract of hours in hours', async () => {
+    await mount({ scenario: shipped('c01-shakedown') });
+    expect(visible('value-deadline')).toBe('1 h 30 m');
+  });
+
+  it('states a circular goal once', async () => {
+    await mount({ scenario: shipped('c02-round-trip') });
+    expect(text('objective')).toBe('Reach a 800 km circular orbit');
+  });
+
+  it('states an eccentric goal as both apsides', async () => {
+    await mount({ scenario: shipped('c01-shakedown') });
+    expect(text('objective')).toBe('Reach a 400 × 800 km orbit');
+  });
+
   it('shows C04’s burn-count cap, and says that it is soft', async () => {
     await mount({ scenario: shipped('c04-long-haul') });
     const row = el('constraint-burn_count');

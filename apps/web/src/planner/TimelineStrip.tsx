@@ -24,9 +24,10 @@
  * assistive technology expects, which is a stronger guarantee than a bespoke widget that
  * happens to handle `ArrowLeft`.
  *
- * The step is `SCRUB_STEP_SECONDS`, stated in the hint the input is described by, so the
- * "documented" half of that criterion is documented *to the player* rather than only in
- * this docstring.
+ * The step comes from {@link scrubStepFor} and is stated in the hint the input is
+ * described by, so the "documented" half of that criterion is documented *to the player*
+ * rather than only in this docstring — and it stays documented when it changes, because
+ * the hint reads the same number the input does.
  *
  * ## Everything else is positioned, not interactive
  *
@@ -43,13 +44,57 @@ import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 
 /**
- * §8.5.3's `[` and `]` move the scrub head by a minute; this is the timeline's own step.
+ * The scrub step, as a fraction of the mission window — about a fifth of a percent.
  *
- * A minute over a 14 h window is a little under a fifth of a percent, which is fine for
- * an arrow key and far too coarse for finding an encounter — that is what `Shift` (×0.1)
- * is for in §8.5.3's table, and the range input applies it through the same `step`.
+ * This used to be a flat 60 s, and its docstring gave the reason: *"a minute over a 14 h
+ * window is a little under a fifth of a percent, which is fine for an arrow key and far
+ * too coarse for finding an encounter — that is what `Shift` (×0.1) is for."* Every word
+ * of that is still right, and every word of it is about a **fourteen-hour** window.
+ *
+ * C07 runs for fourteen days. A minute there is a fifth of a *hundredth* of a percent and
+ * crossing the timeline takes twenty thousand key presses, which is not "keyboard operable
+ * with a documented step size" (#128) in any useful sense however accurately it is
+ * documented. So the fraction is the invariant and the step follows from it: 0.2% of 14 h
+ * is 60 s, which is where the original constant came from, and a fourteen-hour contract
+ * still gets exactly that.
+ *
+ * Shorter contracts do move. C03's six-hour window gets 30 s rather than 60, because 60 s
+ * was already twice the intended fraction for it — the flat constant was right for one
+ * window and approximately wrong for every other, which is only visible now that the
+ * shipped windows span three hours to fourteen days.
  */
-export const SCRUB_STEP_SECONDS = 60;
+const SCRUB_STEP_FRACTION = 60 / (14 * 3600);
+
+/**
+ * Steps a person can hold in their head, coarsest last.
+ *
+ * The derived fraction is snapped to one of these rather than used raw, because "moves by
+ * 2 419 s" is a true sentence that tells a player nothing.
+ */
+const SCRUB_STEPS_SECONDS = [1, 5, 15, 30, 60, 300, 900, 1800, 3600, 7200, 21_600, 43_200];
+
+/**
+ * The arrow-key step for a mission window, in seconds.
+ *
+ * Snapped to the **nearest** listed step rather than rounded down, because the quantity
+ * being held fixed is how many presses it takes to cross the timeline — a constant
+ * fraction means a constant press count, and rounding always downward would nearly double
+ * it wherever the target fell just above a listed value. Nearest keeps every shipped
+ * contract between about 670 and 960 presses end to end; rounding down would have put a
+ * three-hour contract at 2 160, which is a worse instrument than the flat minute it
+ * replaced.
+ *
+ * Never zero: a contract shorter than the smallest step still gets one, because an
+ * `<input type="range">` with `step={0}` does not move at all.
+ */
+export const scrubStepFor = (windowSeconds: number): number => {
+  const target = windowSeconds * SCRUB_STEP_FRACTION;
+  const first = SCRUB_STEPS_SECONDS[0] ?? 1;
+  return SCRUB_STEPS_SECONDS.reduce(
+    (best, step) => (Math.abs(step - target) < Math.abs(best - target) ? step : best),
+    first,
+  );
+};
 
 /**
  * Where a constraint band came from, so its label can name the constraint.
@@ -102,6 +147,7 @@ export const TimelineStrip = ({
   onSelectNode,
 }: TimelineStripProps): JSX.Element => {
   const windowSeconds = metAt(startEpoch, horizon);
+  const scrubStep = scrubStepFor(windowSeconds);
   const scrubMet = metAt(startEpoch, scrubEpoch);
   const at = (metSeconds: number): number => positionPercent(metSeconds, windowSeconds);
 
@@ -201,7 +247,7 @@ export const TimelineStrip = ({
         class="hh-timeline__scrub"
         min={0}
         max={windowSeconds}
-        step={SCRUB_STEP_SECONDS}
+        step={scrubStep}
         value={scrubMet}
         aria-label={t('planner.timeline.scrubAt', { metSeconds: scrubMet })}
         aria-describedby="hh-timeline-step-hint"
@@ -215,7 +261,7 @@ export const TimelineStrip = ({
         }}
       />
       <p class="hh-sr-only" id="hh-timeline-step-hint">
-        {t('planner.timeline.stepHint', { stepSeconds: SCRUB_STEP_SECONDS })}
+        {t('planner.timeline.stepHint', { stepSeconds: scrubStep })}
       </p>
     </section>
   );
