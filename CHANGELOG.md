@@ -11,6 +11,19 @@ they relied on has moved.
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-09-05
+
+**The vertical slice.** One contract, `c03-cold-open`, playable end to end: briefing →
+planner → commit → execution → debrief, on real two-body physics validated against
+Curtis, Vallado and a `hapsira` fixture.
+
+> **M2's exit criteria are met except one, and it was waived rather than satisfied.**
+> §14.1 asks for "5 playtest sessions run and reported"; **0 of 5 have been run.** The
+> round is prepared — protocol, consent form and observation sheet are written and the
+> build under test reports its own identity — and it is deferred rather than cancelled.
+> Recorded here because a release that quietly drops an exit criterion teaches the next
+> milestone that criteria are optional. See §14.1's M2 row and `docs/PLAYTEST-M2.md`.
+
 ### Added
 - **Execution — playback of the solved timeline (#144, #145).** Committing a plan now flies it.
   Five rates from `1×` to FR-602's `100 000×`, `Space` to pause, `S` to skip to the end and

@@ -2182,12 +2182,27 @@ Effort is expressed in **issues** and **weeks at ~10 h/week**, not in dates, bec
 | --- | --- | --- | --- | --- | --- | --- |
 | **M0** | **Foundations** | — | Repo bootstrapped from template; pnpm workspace; CI green with typecheck, lint, layering, tests; `@hh/math` and `@hh/astro` complete with Tier 1 + Tier 2 validation passing; constants documented and sourced; `docs/PHYSICS.md` §7 transcribed | ~24 | 4 | Oct 2026 |
 | **M1** | **Propagator & spike** | — | `@hh/propagation` and `@hh/sim` complete; Lambert solving and validated; event finding working; a throwaway page renders an orbit and drags one node at 60 fps (#238). **Go/no-go on D5** — decided **go**, `docs/SPIKE-M1.md`. D9 is *not* decided here — see the M2 row and §16 R11. | ~22 | 4 | Nov 2026 |
-| **M2** | **Vertical slice** | `v0.1.0` | C03 playable end to end: briefing → planner → commit → execution → debrief. Deployed to Pages. Save works. 5 playtest sessions run and reported. **Go/no-go on D9** (#248) — decided **go on Preact**, with `@preact/signals` dropped as unused; `docs/DECISION-D9.md`. | ~26 | 5 | Dec 2026 |
+| **M2** | **Vertical slice** | `v0.1.0` | C03 playable end to end: briefing → planner → commit → execution → debrief. Deployed to Pages. Save works. ~~5 playtest sessions run and reported~~ — **waived at release, 0 of 5 run; see below.** **Go/no-go on D9** (#248) — decided **go on Preact**, with `@preact/signals` dropped as unused; `docs/DECISION-D9.md`. | ~26 | 5 | Dec 2026 |
 | **M3** | **Alpha: Acts I–II** | `v0.2.0` | Contracts 01–07; contract board; medals and par; settings; two colour palettes; keyboard-complete planner; Codex entries for Acts I–II; axe clean. **Public alpha announced.** | ~28 | 5 | Feb 2027 |
 | **M4** | **Rendezvous** | `v0.3.0` | Act III; closest-approach tooling; terminal fine-adjust; audio; coach marks; narrow-layout complete; PWA offline | ~24 | 5 | Mar 2027 |
 | **M5** | **Targeting** | `v0.4.0` | Acts IV–V; Lambert targeting computer; porkchop on a Worker; multi-rev; 8 playtest sessions | ~26 | 5 | May 2027 |
 | **M6** | **Beta** | `v0.9.0` | Act VI; all 18 contracts with pars and reference solutions; full Codex; replay share; all five palettes; screen-reader pass; performance pass on reference devices; cross-runtime determinism job green | ~26 | 5 | Jun 2027 |
 | **M7** | **Launch** | `v1.0.0` | Daily challenge; leaderboard Worker + D1 deployed with verification; telemetry; privacy note; README/README assets; launch post | ~24 | 5 | Aug 2027 |
+
+> **M2 shipped one exit criterion short, on 2026-09-05.** `v0.1.0` was released with **0 of 5**
+> playtest sessions run. This is a deliberate waiver by the owner, not an oversight and not a
+> criterion quietly satisfied, and it is recorded here rather than only in the changelog because
+> §14.1 is where the claim "M2 is done" is made.
+>
+> What that costs: §13.6's round is the only evidence in the plan about whether the slice is
+> *legible to someone who has not built it*. Every other M2 criterion is a thing the repository
+> can check about itself. Shipping without it means `v0.1.0`'s usability is unmeasured — not
+> good, not bad, unmeasured — and the first external signal will arrive as whatever a player
+> volunteers.
+>
+> The round is **deferred, not cancelled**: it is prepared in full (`docs/PLAYTEST-M2.md`,
+> `docs/playtest/`) and re-opened as #208 against M3, where it runs against Acts I–II alongside
+> M3's own round (#209). M3's exit criteria are unchanged and are not waivable by this precedent.
 
 **Total: ~200 issues, ~38 weeks of part-time work.** Contingency is built in by treating Acts IV–VI content as the compressible scope — the game is shippable at M4 with 10 contracts if the schedule slips.
 
