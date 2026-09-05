@@ -143,3 +143,44 @@ export const composite = (source: Rgba, ground: Rgba): Rgba => ({
   ...mixRgba(ground, source, source.a),
   a: 1,
 });
+
+/**
+ * The sRGB transfer function, forward.
+ *
+ * The inverse of `./contrast.ts`'s `linearise`, and it uses that module's threshold in
+ * the direction the specification states it: 0.0031308 in linear light is 0.03928 encoded
+ * (near enough — see the note there on WCAG's published erratum, which this deliberately
+ * mirrors rather than corrects).
+ */
+const encode = (linear: number): number =>
+  linear <= 0.0031308 ? linear * 12.92 : 1.055 * linear ** (1 / 2.4) - 0.055;
+
+/** WCAG relative luminance, duplicated here so `./contrast.ts` may depend on this file. */
+const luminance = (colour: Rgba): number => {
+  const lin = (channel: number): number =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  return 0.2126 * lin(colour.r) + 0.7152 * lin(colour.g) + 0.0722 * lin(colour.b);
+};
+
+/**
+ * The same colour with its hue removed, at the lightness a viewer actually perceives.
+ *
+ * §8.3.4's fifth principle and NFR-019: *no information conveyed by colour alone*. The
+ * way to check that is to look at the scene with the hue taken out and see whether the
+ * three trajectories, the two markers and the hazard states are still tellable apart —
+ * which is what the scene harness's greyscale toggle is for.
+ *
+ * The grey is the colour's **relative luminance**, re-encoded, not the average of its
+ * channels. Averaging is the intuitive implementation and it is wrong in the direction
+ * that matters here: it makes a saturated blue and a saturated yellow the same grey when
+ * a viewer sees the yellow as far lighter, so an averaged check would report a collision
+ * the eye does not have and hide ones it does.
+ *
+ * Alpha is carried through unchanged — a translucent wash stays translucent.
+ */
+export const greyscale = (colour: string): string | undefined => {
+  const parsed = parseColour(colour);
+  if (parsed === undefined) return undefined;
+  const grey = encode(luminance(parsed));
+  return toHex({ r: grey, g: grey, b: grey, a: parsed.a });
+};

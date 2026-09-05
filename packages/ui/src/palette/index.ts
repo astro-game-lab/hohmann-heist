@@ -24,6 +24,7 @@ export { PALETTES, paletteSet } from './palettes.js';
 export type { Rgba } from './colour.js';
 export {
   composite as compositeColour,
+  greyscale,
   mix as mixColour,
   mixRgba,
   parseColour,

@@ -208,6 +208,52 @@ export default defineConfig([
     },
   },
 
+  // ── No colour literals outside the palette (#116, FR-907, NFR-018) ─────────
+  //
+  // FR-907 ships five palettes. A component holding `#5bc0eb` is a component four of
+  // them cannot restyle, and it is invisible in review because the default palette
+  // makes it look right -- the bug only appears for the player who most needed the
+  // palette. §9.2 states the rule as "tokens, not hex codes in components".
+  //
+  // ## This is half of the check, and the other half is a test
+  //
+  // ESLint sees TypeScript, not CSS, so `app.css.test.ts` covers the stylesheet by
+  // reading it. Two mechanisms because there are two languages, not because one of
+  // them is untrusted; between them, a colour can only be written in @hh/ui's palette
+  // module.
+  //
+  // ## What is exempt, and why
+  //
+  // The palette module itself, which is where the values live. And tests, which have
+  // to be able to name a colour in order to assert anything about one -- including the
+  // guardrail test that demonstrates this rule firing. A test that hard-codes a colour
+  // is making a claim about the palette, which is exactly what it should be doing.
+  {
+    files: ['apps/web/**/*.{ts,tsx}', 'packages/ui/**/*.{ts,tsx}'],
+    ignores: ['packages/ui/src/palette/**', '**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          // `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa` -- CSS's four hex forms, and the
+          // only ones the palette's own parser accepts.
+          selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]',
+          message:
+            "A colour belongs in @hh/ui's palette module, not in a component. " +
+            'Read a token instead — see docs/PRODUCT.md §9.2 (FR-907, NFR-018).',
+        },
+        {
+          // The functional notations, which a template or a concatenation would reach
+          // for. Anchored at the start so a sentence mentioning `rgb` is not a colour.
+          selector: 'Literal[value=/^(?:rgba?|hsla?|color-mix|oklch|oklab|lab|lch)\\(/]',
+          message:
+            "A colour belongs in @hh/ui's palette module, not in a component. " +
+            'Read a token instead — see docs/PRODUCT.md §9.2 (FR-907, NFR-018).',
+        },
+      ],
+    },
+  },
+
   // ── Core determinism and portability guardrails ────────────────────────────
   //
   // NFR-005: the core references no browser or Node globals.

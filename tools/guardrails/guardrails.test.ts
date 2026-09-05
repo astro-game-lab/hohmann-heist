@@ -389,3 +389,78 @@ describe('no literal user-facing text in JSX (NFR-028)', () => {
     expect(offences).toEqual([]);
   }, 120_000);
 });
+
+describe('no colour literals outside the palette (#116, FR-907)', () => {
+  // Same arrangement as the JSX-text rule above, and for the same reason: a rule that has
+  // never been seen to fire is a rule nobody knows is wired up. These lint text against
+  // real paths so the actual `eslint.config.js` globs and `ignores` are exercised.
+  //
+  // The silent cases carry as much weight as the loud ones here, because the selector is
+  // a regular expression over *every* string literal in the application. A rule that also
+  // fired on a route path, a testid or a catalogue key would be turned off in a day.
+  const APP_FILE = 'apps/web/src/app.tsx';
+  const PALETTE_FILE = 'packages/ui/src/palette/palettes.ts';
+
+  beforeAll(async () => {
+    await ruleIdsFor('export const warmup = 1;\n', APP_FILE);
+    await ruleIdsFor('export const warmup = 1;\n', PALETTE_FILE);
+  }, 180_000);
+
+  const fires: readonly (readonly [label: string, code: string])[] = [
+    ['a six-digit hex', "export const a = '#5bc0eb';\n"],
+    ['a short hex', "export const b = '#abc';\n"],
+    ['a hex with alpha', "export const c = '#f4705c40';\n"],
+    ['an rgba() string', "export const d = 'rgba(127, 127, 127, 0.4)';\n"],
+    ['an hsl() string', "export const e = 'hsl(200 70% 60%)';\n"],
+    ['a color-mix() string', "export const f = 'color-mix(in srgb, red, blue)';\n"],
+  ];
+
+  it.each(fires)(
+    'fires on %s',
+    async (_label, code) => {
+      expect(await ruleIdsFor(code, APP_FILE)).toContain('no-restricted-syntax');
+    },
+    30_000,
+  );
+
+  const silent: readonly (readonly [label: string, code: string])[] = [
+    ['a token reference', "export const g = 'var(--accent)';\n"],
+    ['a route path', "export const h = '/contract/c03-cold-open';\n"],
+    ['a catalogue key', "export const i = 'planner.assists.heading';\n"],
+    ['an element id', "export const j = '#hh-assist-snap-hint';\n"],
+    ['prose that mentions rgb', "export const k = 'the rgb channels are linearised';\n"],
+    ['a CSS custom property name', "export const l = '--medal-gold';\n"],
+  ];
+
+  it.each(silent)(
+    'stays silent on %s',
+    async (_label, code) => {
+      expect(await ruleIdsFor(code, APP_FILE)).not.toContain('no-restricted-syntax');
+    },
+    30_000,
+  );
+
+  // The palette module is where the values live, so it is exempt by construction. Asserted
+  // rather than assumed: the `ignores` entry and the module's location have to move
+  // together, and a silent exemption that outlived its directory would let a colour back
+  // in through the one file nobody would think to check.
+  it('exempts the palette module, which is where colours are declared', async () => {
+    expect(await ruleIdsFor("export const m = '#5bc0eb';\n", PALETTE_FILE)).not.toContain(
+      'no-restricted-syntax',
+    );
+  }, 30_000);
+
+  // The rule is only worth having if the codebase satisfies it on the day it lands.
+  it('passes on the application and on @hh/ui as they stand', async () => {
+    const results = await eslint.lintFiles([
+      'apps/web/src/**/*.{ts,tsx}',
+      'packages/ui/src/**/*.{ts,tsx}',
+    ]);
+    const offences = results.flatMap((result) =>
+      result.messages
+        .filter((message) => message.ruleId === 'no-restricted-syntax')
+        .map((message) => `${result.filePath}:${String(message.line)}`),
+    );
+    expect(offences).toEqual([]);
+  }, 120_000);
+});

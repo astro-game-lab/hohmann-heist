@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { composite, mix, parseColour, toHex, withAlpha } from './colour.js';
+import { composite, greyscale, mix, parseColour, toHex, withAlpha } from './colour.js';
 import { contrastRatio, contrastRatioOf } from './contrast.js';
 import { CONTRAST_PAIRS, minimumFor, type ContrastSubject } from './pairs.js';
 import { PALETTES, paletteSet, type PaletteSet } from './palettes.js';
@@ -125,9 +125,33 @@ describe('colour algebra', () => {
     expect(toHex(composite(translucent, ground))).toBe(mix('#05070d', '#f4705c', 102 / 255));
   });
 
+  it('greys a colour by its perceived lightness, not by averaging its channels', () => {
+    // A saturated yellow is far lighter than a saturated blue of the same channel sum.
+    // Averaging would call them the same grey; luminance does not, and that difference is
+    // the whole reason the greyscale check is worth running.
+    const yellow = greyscale('#ffff00');
+    const blue = greyscale('#0000ff');
+    expect(yellow).not.toBe(blue);
+    expect(Number.parseInt((yellow ?? '#000').slice(1, 3), 16)).toBeGreaterThan(
+      Number.parseInt((blue ?? '#fff').slice(1, 3), 16),
+    );
+
+    // Greys are unchanged, which is what makes the transform idempotent on its output.
+    expect(greyscale('#808080')).toBe('#808080');
+    expect(greyscale(greyscale('#5bc0eb') ?? '')).toBe(greyscale('#5bc0eb'));
+
+    // Black and white are fixed points, so the transfer function round-trips at the ends.
+    expect(greyscale('#000000')).toBe('#000000');
+    expect(greyscale('#ffffff')).toBe('#ffffff');
+
+    // A translucent wash stays translucent.
+    expect(greyscale('#f4705c40')?.slice(7)).toBe('40');
+  });
+
   it('refuses to blend something that is not a colour', () => {
     expect(mix('#000000', 'chartreuse', 0.5)).toBeUndefined();
     expect(withAlpha('nope', 0.5)).toBeUndefined();
+    expect(greyscale('nope')).toBeUndefined();
   });
 });
 

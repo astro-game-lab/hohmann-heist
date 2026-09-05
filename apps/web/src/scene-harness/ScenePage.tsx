@@ -52,49 +52,52 @@ import { createCatalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { PALETTE_IDS, greyscale, type PaletteId } from '@hh/ui';
+import { sceneColoursFor } from '../palette.js';
+
 import { MU_EARTH, loadContract, shapeOf, timelineFor } from './contract.js';
 
 /**
- * The minimal token set §9.3 names, as flat colours.
+ * The scene's inks, from whichever of §9.2's five palettes is selected.
  *
- * **Not design tokens.** #116 brings the five palettes in M3, and this is deliberately not
- * a head start on them — it is the smallest thing that lets the scene be drawn, hard-coded
- * here so the harness owns nothing the real planner will want to inherit. The slots are
- * `@hh/render`'s; only these values are the harness's.
+ * This file used to carry two hand-written sets — a copy of the M2 colours and a
+ * hand-mixed grey ramp — with a note saying #116 would bring the palettes. It has, and
+ * copies of a palette are exactly what #116 exists to delete: a harness showing colours
+ * the game no longer draws is worse than no harness, because it is the thing people look
+ * at to decide whether the scene is right.
+ *
+ * So the harness now draws what the planner draws, and gains the control the planner does
+ * not have yet: a palette selector. Until §8.3.12's settings screen lands (#122), this is
+ * the only place all five can be compared side by side, which is what makes FR-907
+ * something a person can check rather than something a test asserts.
  */
-const COLOURS: SceneColours = {
-  background: '#05070d',
-  earthFill: '#12233f',
-  earthCoastline: '#4d7ba8',
-  earthNight: 'rgba(2, 4, 10, 0.55)',
-  hazard: '#b4643c',
-  hazardViolated: '#e2503c',
-  current: '#5bc0eb',
-  planned: '#a8bcd2',
-  target: '#d8a657',
-  ship: '#f2f6fb',
-  targetMarker: '#d8a657',
-  node: '#f5a623',
-  nodeSelected: '#ffd479',
-  annotation: '#8fa3bb',
-};
+const sceneColoursOf = (palette: PaletteId, grey: boolean): SceneColours => {
+  const colours = sceneColoursFor(palette);
+  if (!grey) return colours;
 
-/** The same set with every hue removed, for checking §8.3.4's fifth principle. */
-const GREYSCALE: SceneColours = {
-  background: '#0b0b0b',
-  earthFill: '#242424',
-  earthCoastline: '#8a8a8a',
-  earthNight: 'rgba(0, 0, 0, 0.55)',
-  hazard: '#767676',
-  hazardViolated: '#c8c8c8',
-  current: '#e8e8e8',
-  planned: '#a0a0a0',
-  target: '#c0c0c0',
-  ship: '#ffffff',
-  targetMarker: '#c8c8c8',
-  node: '#d0d0d0',
-  nodeSelected: '#ffffff',
-  annotation: '#9a9a9a',
+  // §8.3.4's fifth principle, checkable: strip the hue and see whether the three
+  // trajectories, the two markers and the two hazard states are still tellable apart.
+  // Derived rather than hand-mixed, so it works for all five palettes rather than for the
+  // one somebody wrote a grey ramp for — and by luminance rather than by channel average,
+  // for the reason `greyscale` gives.
+  const grey_ = (value: string): string => greyscale(value) ?? value;
+  return {
+    ...colours,
+    background: grey_(colours.background ?? ''),
+    earthFill: grey_(colours.earthFill),
+    earthCoastline: grey_(colours.earthCoastline),
+    earthNight: grey_(colours.earthNight),
+    hazard: grey_(colours.hazard),
+    hazardViolated: grey_(colours.hazardViolated),
+    current: grey_(colours.current),
+    planned: grey_(colours.planned),
+    target: grey_(colours.target),
+    ship: grey_(colours.ship),
+    targetMarker: grey_(colours.targetMarker),
+    node: grey_(colours.node),
+    nodeSelected: grey_(colours.nodeSelected),
+    annotation: grey_(colours.annotation),
+  };
 };
 
 const scenario = loadContract();
@@ -141,7 +144,8 @@ export const ScenePage = (): JSX.Element => {
   const frameRef = useRef<HTMLDivElement | null>(null);
 
   const [zoom, setZoom] = useState(1);
-  const [greyscale, setGreyscale] = useState(false);
+  const [grey, setGrey] = useState(false);
+  const [palette, setPalette] = useState<PaletteId>('default');
   const [dpr, setDpr] = useState(0);
   const [departure, setDeparture] = useState(1200);
   const [dv, setDv] = useState(55);
@@ -178,7 +182,7 @@ export const ScenePage = (): JSX.Element => {
 
       const built = buildScene({
         camera,
-        colours: greyscale ? GREYSCALE : COLOURS,
+        colours: sceneColoursOf(palette, grey),
         timeline,
         scrubEpoch: timeline.startEpoch,
         cache,
@@ -277,7 +281,7 @@ export const ScenePage = (): JSX.Element => {
       labels.destroy();
       canvas.removeEventListener('pointermove', onPointerMove);
     };
-  }, [zoom, greyscale, dpr, departure, dv, selected]);
+  }, [zoom, grey, palette, dpr, departure, dv, selected]);
 
   return (
     <main class="scene-harness">
@@ -357,12 +361,28 @@ export const ScenePage = (): JSX.Element => {
         <label class="scene-harness__toggle">
           <input
             type="checkbox"
-            checked={greyscale}
+            checked={grey}
             onChange={(e) => {
-              setGreyscale((e.target as HTMLInputElement).checked);
+              setGrey((e.target as HTMLInputElement).checked);
             }}
           />
           <span>greyscale</span>
+        </label>
+        <label>
+          <span>palette</span>
+          <select
+            data-testid="scene-palette"
+            value={palette}
+            onChange={(e) => {
+              setPalette((e.target as HTMLSelectElement).value as PaletteId);
+            }}
+          >
+            {PALETTE_IDS.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
         </label>
 
         <dl class="scene-harness__readout">
