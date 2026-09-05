@@ -59,7 +59,7 @@
     "dv_mps": 109.1177,
     "time_s": 4122.965,
     "burns": 1,
-    "derivation": "Lambert transfer search over departure epoch and time of flight: 38801 grid points across 9 transfer families, each refined by a Nelder-Mead simplex, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c03-cold-open.",
+    "derivation": "Lambert transfer search over departure epoch and time of flight: 38801 grid points across 9 transfer families, revolutions capped at 4 (derived from this contract's horizon), each refined by a Nelder-Mead simplex, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c03-cold-open.",
     "referenceReplay": "{\"a\":0,\"c\":{\"dv\":1091,\"t\":4123},\"e\":1,\"n\":[[1251681,1091177,42,0]],\"s\":\"c03-cold-open\",\"v\":1}"
   },
   "unlocks": [],

@@ -40,7 +40,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { replayTextFor, requireContract } from '../content/evaluate.js';
 import type { ContractFile } from '../content/scenarios.js';
 import { REPO_ROOT, contractFiles } from '../content/scenarios.js';
-import { hohmannReference } from './crosscheck.js';
+import { closedFormFor } from './crosscheck.js';
 import type { ParRecord } from './document.js';
 import { parBlockFor, parsDocument } from './document.js';
 import { solvePar } from './solve.js';
@@ -48,17 +48,6 @@ import { solvePar } from './solve.js';
 const PARS_DOCUMENT = join(REPO_ROOT, 'docs', 'PARS.md');
 
 const WRITING = env['HH_WRITE_PARS'] === '1';
-
-/**
- * How far the search may sit from the closed form, m/s.
- *
- * Set by **quantisation, not by the search**. DEP-09 rounds each Δv component to
- * 1e-4 m/s, so the magnitude of a quantised three-component impulse can differ from the
- * exact one by up to about 1.7e-4 m/s however good the search was. A millimetre-per-
- * second — 1e-3 m/s, about six quanta — leaves room for that and for nothing else: a
- * search that had genuinely found the wrong minimum would miss by whole m/s.
- */
-const CLOSED_FORM_TOLERANCE_MPS = 1e-3;
 
 const files = contractFiles();
 const solved = new Map<string, ParRecord>();
@@ -86,12 +75,21 @@ beforeAll(() => {
   // unconditionally: on the check path it is the only sign the work happened at all.
   for (const file of files) {
     const { solution } = recordFor(file.stem);
+    const { search } = solution;
+    // Each family did different work, so each says what it did rather than all three
+    // being described in the terms of the one that happened to be written first.
+    const effort =
+      search.kind === 'lambert'
+        ? `${String(search.gridPoints)} grid points and ` +
+          `${String(search.refinementIterations)} simplex iterations`
+        : search.kind === 'transfer'
+          ? `${String(search.departureSamples)} departure samples and ` +
+            `${String(search.refinementIterations)} simplex iterations`
+          : `${String(search.family.length)} drift-family members`;
     stdout.write(
       `${file.stem}: ${solution.outcome.dvMps.toFixed(4)} m/s in ` +
         `${String(solution.outcome.burns)} burn(s) at MET ` +
-        `${(solution.outcome.metSeconds ?? 0).toFixed(3)} s, from ` +
-        `${String(solution.gridPoints)} grid points and ` +
-        `${String(solution.refinementIterations)} simplex iterations\n`,
+        `${(solution.outcome.metSeconds ?? 0).toFixed(3)} s, from ${effort}\n`,
     );
   }
 }, 600_000);
@@ -167,24 +165,55 @@ if (WRITING) {
   );
 
   describe('independent cross-check (§7.6)', () => {
+    /**
+     * Each contract against the closed form its own geometry admits, at that form's own
+     * tolerance.
+     *
+     * The tolerance travels with the reference rather than being one constant here,
+     * because the four forms are not equally exact: three are algebraic identities and are
+     * held to DEP-09's quantisation noise, while the drift relation is a first-order
+     * expansion and is held to its own second-order term. `crosscheck.ts` carries the
+     * reasoning for each; asserting them all to a quantum would mean asserting that a
+     * linearisation is exact.
+     */
     it('agrees with the closed form on every contract whose geometry admits one', () => {
       const checked: string[] = [];
       for (const file of files) {
         const record = recordFor(file.stem);
-        const reference = hohmannReference(record.scenario);
+        const reference = closedFormFor(record.scenario, record.solution.outcome.metSeconds ?? 0);
         // A contract with an eccentric target or an arrival burn has no one-line closed
         // form; `docs/PARS.md` says so in its entry rather than implying a check happened.
         if (reference === null) continue;
         checked.push(file.stem);
-        const difference = Math.abs(record.solution.outcome.dvMps - reference.firstBurnMps);
+        const difference = Math.abs(record.solution.outcome.dvMps - reference.expectedMps);
         expect(
           difference,
-          `${file.stem}: the search found ${String(record.solution.outcome.dvMps)} m/s and the ` +
-            `closed form gives ${String(reference.firstBurnMps)} m/s`,
-        ).toBeLessThan(CLOSED_FORM_TOLERANCE_MPS);
+          `${file.stem}: the search found ${String(record.solution.outcome.dvMps)} m/s and ` +
+            `${reference.method} gives ${String(reference.expectedMps)} m/s`,
+        ).toBeLessThan(reference.toleranceMps);
       }
       // Vacuous otherwise: a suite that checked nothing must not report success.
       expect(checked).not.toEqual([]);
+    });
+
+    /**
+     * Every shipped contract has a cross-check, and the suite says so out loud.
+     *
+     * `closedFormFor` returning `null` is a legitimate answer — an eccentric target has no
+     * one-line form — but at M3 every contract is coplanar, circular and equatorial, so a
+     * `null` here means the geometry test stopped recognising something rather than that
+     * the contract is genuinely unreachable by a closed form. Without this, a refactor that
+     * broke the recognition would make the check above pass by checking nothing.
+     */
+    it('finds a closed form for every contract that ships today', () => {
+      const missing = files
+        .map((file) => recordFor(file.stem))
+        .filter(
+          (record) =>
+            closedFormFor(record.scenario, record.solution.outcome.metSeconds ?? 0) === null,
+        )
+        .map((record) => record.file.stem);
+      expect(missing).toEqual([]);
     });
   });
 

@@ -19,8 +19,13 @@ the answer.
 
 ## The method
 
-For each contract the solver enumerates a family of Lambert transfers, parameterised by
-**departure epoch** and **time of flight**, and searches it in two stages.
+There is no general trajectory optimiser here. Each objective kind names a **family** of
+solutions that is the right shape for it, and the solver searches that family and nothing
+else.
+
+### `intercept` — Lambert transfers between two epochs
+
+Parameterised by **departure epoch** and **time of flight**, and searched in two stages.
 
 1. **A grid.** Departure epoch is sampled across the interval from mission start to the
    deadline; arrival epoch across the interval from the earliest admissible transfer to
@@ -32,6 +37,48 @@ For each contract the solver enumerates a family of Lambert transfers, parameter
    per family because the cheapest family changes across the search space and a simplex
    on a discontinuous objective converges to the discontinuity.
 
+The **revolution ceiling is derived from the contract's own horizon** rather than fixed or
+overridden per contract: a transfer cannot complete more revolutions than fit in the
+planning horizon, so the horizon divided by the ship's orbital period is an upper bound
+that is a property of the scenario rather than of a lookup table. Each entry below reports
+the ceiling its contract reached.
+
+### `reach_orbit` — tangential two-body transfers
+
+The Δv is **not searched for**. Between two coplanar circular orbits the minimum-Δv
+two-impulse transfer is the Hohmann transfer; searching a grid for it would be pretending
+not to know a textbook result, and would publish a number slightly worse than the one that
+can be written down. Where the radius ratio exceeds 11.94 the bi-elliptic branch is
+searched over its one free parameter as well, because above that ratio the answer depends
+on the intermediate radius; below it, Hohmann wins for every intermediate radius and the
+branch is skipped rather than searched and discarded.
+
+What *is* searched is **when to depart**. A goal that is circular and equatorial pins
+nothing and the answer is to leave immediately. A goal with an apse line pins the burn to
+the point that becomes its periapsis — half an orbit from the apsis being raised, which is
+the lesson C01 exists to teach. The departure epoch is swept across one revolution, scored
+by how far the resulting orbit sits from the goal in units of its own tolerance, and
+refined to the **centre** of the tolerance band rather than an edge of it.
+
+### `station` — drift orbits
+
+Not a transfer between two positions, so the Lambert family would not find it at all.
+Leave the geostationary radius so the period no longer matches Earth's rotation, let the
+longitude slide, and burn again to stop. The free parameter is an **integer**: how many
+complete drift revolutions to fly. That is what makes the construction exact — a drift
+orbit is eccentric, so the burn that stops the drift is the first one reversed only at the
+apsis the ship departed from, which comes round once per revolution. Everything else
+follows from
+
+```
+T' = T_geo − slot / (k · omega_earth)
+```
+
+and vis-viva at the departure radius. Δv falls as `k` rises, so the cheapest admissible
+member is the largest `k` whose second burn still lands inside the deadline: **the
+deadline, not the budget, is what sets par for a station contract.** The whole family is
+tabulated in the entry rather than only its winner, because the trade is the contract.
+
 The winner is then built as a real `Plan` — quantised at entry to DEP-09's 1e-4 m/s and
 1/1024 s, exactly as a player's plan would be (FR-105) — and run through the game's own
 timeline, objective evaluator and legality check. **The published numbers are what that
@@ -40,10 +87,13 @@ produce is a par nobody can reproduce.
 
 How many impulses the resulting plan carries follows from the objective. An `intercept`
 needs only the departure impulse — DEP-04 asks for 1 000 m of range and says nothing about
-relative velocity — so its plan has one burn. An objective that must match velocity takes
-the arrival impulse too, and gets its own strategy with the contract that first needs one;
-the solver refuses an objective it has no strategy for rather than answering a different
-question.
+relative velocity — so its plan has one burn, whether the transfer is a climb or a phasing
+loop. A `reach_orbit` takes one impulse when the goal's near apsis is already where the
+ship is and two when it must circularise elsewhere. A `station` takes two: start the
+drift, stop the drift. An objective that must match **velocity** takes an arrival impulse
+none of these families buys, and gets its own strategy with the contract that first needs
+one; the solver refuses an objective it has no strategy for rather than answering a
+different question.
 
 Δv is the sum of the burn magnitudes, which is the quantity the budget caps (DEP-02).
 Time is the epoch at which the objective evaluator says the objective was met — for a
@@ -55,21 +105,30 @@ horizon.
 DEP-12 is explicit that par is a fine grid refined by local optimisation and **not a
 proven optimum**, and there are three specific reasons it is not:
 
-- **The search family is Lambert transfers between two epochs.** A cheaper solution outside
-  that family — an extra mid-course burn, a bi-elliptic detour, a drift-and-catch — is not
-  found, because it is not looked for.
+- **The family is chosen per objective kind, and nothing outside it is looked for.** An
+  `intercept` solved by a drift-and-catch, a `reach_orbit` reached by a three-burn detour
+  outside the bi-elliptic branch, a `station` slot acquired on a transfer rather than a
+  drift — none of these is searched.
 - **A grid can step over a narrow minimum.** The simplex finds the bottom of a valley it
   started in; it cannot find one the grid never entered.
-- **The revolution count is capped.** The ceiling below is a bound on the work, not on the
-  physics. A contract needing more revolutions than the ceiling must raise it, and its
-  entry says so.
+- **The revolution count is capped.** The ceiling is derived from each contract's horizon
+  and is a bound on the work, not on the physics. Every entry reports the ceiling it got.
 
 Where the geometry admits a closed form, each entry reports it beside the search's answer.
-That comparison is evidence about the **search**: the two paths share only the value of μ,
-so agreement means the grid, the simplex, the Lambert solver, the quantiser and the
+That comparison is evidence about the **search**: the two paths share only the values of μ
+and ω⊕, so agreement means the grid, the simplex, the Lambert solver, the quantiser and the
 timeline did not conspire. It is *not* evidence about the physics, which is checked
 independently in `docs/PHYSICS.md` — Tier 1 against closed forms, Tier 3 against Vallado,
 Curtis and a poliastro-lineage fixture.
+
+Four geometries, four forms: the apoapsis raise for an `intercept` between circular orbits
+of different radii; the **phasing orbit** for one between orbits of the *same* radius,
+where a Hohmann check would compare against zero and call it agreement; the Hohmann pair
+or its first burn alone for a `reach_orbit`; and the first-order drift relation
+`λ̇ = −3Δv/a` for a `station`. The first three are exact and are held to DEP-09's
+quantisation noise. The fourth is a linearisation and is held to its own second-order term
+instead, because asserting a first-order expansion to a quantum would be asserting
+something false.
 
 ## Reproducing a par
 
@@ -122,8 +181,8 @@ here. `docs/PRODUCT.md` is maintained outside this repository and is not edited 
 | Budget headroom | 2.75× (§13.4 asks for ≥ 1.15×) |
 | Horizon headroom | 5.24× (§13.4 asks for ≥ 1.10×) |
 
-**Solution.** A single impulse at MET T+00:20:22 (1222.345 s), RTN [0.0042, 109.1177, 0.0000] m/s — prograde, and nothing else.
+**Solution.** A single impulse — at MET T+00:20:22 (1222.345 s), RTN [0.0042, 109.1177, 0.0000] m/s prograde.
 
-**Search.** 38 801 grid points (0 with no admissible transfer), 9 transfer families found and 7 of them feasible, 1 055 simplex iterations in total; every refinement stopped on its tolerance. Grid: 241 departure samples × 161 arrival samples, revolutions capped at 4, shortest transfer considered 60 s. The winning family is the direct, zero-revolution transfer.
+**Search.** 38 801 grid points (0 with no admissible transfer), 9 transfer families found and 7 of them feasible, 1 055 simplex iterations in total; every refinement stopped on its tolerance. Grid: 241 departure samples × 161 arrival samples, revolutions capped at 4 — derived from this contract's horizon, not set for it — shortest transfer considered 60 s. The winning family is the direct, zero-revolution transfer.
 
-**Independent check.** The closed-form tangential impulse that raises apoapsis from 6 778 137 m to 7 178 137 m is **109.1177 m/s** over 2900.616 s. The search found 109.1177 m/s, a difference of 0.000031 m/s (0.00003%). The two share only the value of μ. A full two-burn Hohmann — what a *rendezvous* would cost here — is 216.6823 m/s.
+**Independent check.** Against the tangential impulse that raises apoapsis to the target radius: **109.1177 m/s**. The search found 109.1177 m/s, a difference of 0.000031 m/s (0.00003%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕. A full two-burn Hohmann — what a *rendezvous* would cost here — is 216.6823 m/s.
