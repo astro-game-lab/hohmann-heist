@@ -42,33 +42,21 @@
  * player who flew a perfect intercept twenty minutes late deserves to be told that,
  * not "you missed".
  *
- * ## FR-307, and the one rule this milestone can honestly apply
+ * ## FR-307's diagnosis lives in `diagnosis.ts`
  *
- * > *The debrief MUST produce a diagnosis from the rule set in §8.3.9, and MUST fall
- * > back to bare numbers rather than speculate.*
- *
- * §8.3.9 lists seven candidate rules. Six of them cannot fire on a committed plan and
- * saying why is more useful than a table of dead branches: *ran out of budget*, *hit
- * the floor* and *violated a constraint* are `L1`, `L2` and the constraint checks, all
- * of which **block commit** — a run that reached execution has none of them. *Arrived
- * early/late*, *over/under-shot* and *too fast* each need a comparison against where
- * the target was and when, which is the outcome-diagnosis rule set of #83 (M3).
- *
- * The seventh — *missed the deadline* — is computable now, exactly and without
- * speculation, and is precisely the gap described above. So it is the one rule here.
- * Everything else returns `null`, and `null` is FR-307's stated fallback rather than a
- * placeholder: the debrief then shows the closest approach achieved, what was needed
- * and the Δv used, and says nothing about why. **A confident wrong explanation is worse
- * than none**, which is the requirement's own reasoning.
- *
- * When #83 lands it adds rules to {@link diagnose} and changes nothing else.
+ * This module owns §6.7's arithmetic — the medal ladder, the par comparison, the failure
+ * classification. *Why* a run failed is a separate rule set over those facts (#83), and it
+ * is a separate file because its failure mode is different: getting a threshold wrong
+ * costs a medal, and getting an explanation wrong teaches the player something false at
+ * the moment they are most willing to believe it.
  */
 import { metAt } from '@hh/astro';
 import type { Timeline } from '@hh/sim';
 
 import type { LegalityConstraints, LegalityRules } from './legality.js';
+import type { CodexSlug } from './diagnosis.js';
+import { diagnose } from './diagnosis.js';
 import type { GameMessage } from './messages.js';
-import { gameMessage } from './messages.js';
 import type { AssistId, AssistState, MedalCap } from './assists.js';
 import {
   cappingAssists,
@@ -200,33 +188,11 @@ export interface Outcome {
   readonly beatParDv: boolean;
   /** FR-307's diagnosis, or `null` when no rule matched. See the docstring. */
   readonly diagnosis: GameMessage | null;
+  /** The Codex entry that diagnosis points at (§8.3.9), or `null` when there is none. */
+  readonly codex: CodexSlug | null;
   /** Carried through so the debrief quotes the encounter without re-deriving it. */
   readonly objective: ObjectiveEvaluation | null;
 }
-
-/**
- * FR-307's rule set, over the facts the outcome already holds.
- *
- * One rule this milestone; #83 (M3) adds the rest. Returns `null` — bare numbers, no
- * explanation — for everything else, which is the requirement's own fallback and not a
- * gap in it. See the docstring.
- */
-const diagnose = (
-  failure: OutcomeFailure | null,
-  facts: {
-    readonly metSeconds: number | null;
-    readonly deadlineSeconds: number;
-  },
-): GameMessage | null => {
-  if (failure === 'pastDeadline' && facts.metSeconds !== null) {
-    return gameMessage('debrief.diagnosis.pastDeadline', {
-      metSeconds: facts.metSeconds,
-      deadlineSeconds: facts.deadlineSeconds,
-      lateSeconds: facts.metSeconds - facts.deadlineSeconds,
-    });
-  }
-  return null;
-};
 
 /** A signed fraction against par, or `null` for a par of zero. */
 const fractionOf = (value: number, par: number): number | null =>
@@ -307,6 +273,11 @@ export const evaluateOutcome = (input: OutcomeInput): Outcome => {
 
   const success = failure === null;
 
+  // FR-307's rule set (#83). `null` is its stated fallback rather than a gap: the debrief
+  // then shows the closest approach, what was needed and the Δv used, and says nothing
+  // about why. A confident wrong explanation is worse than none.
+  const diagnosed = diagnose({ failure, objective, metSeconds, deadlineSeconds });
+
   const score = {
     dv: toScoreDeltaV(dvUsedMps),
     time: metSeconds === null ? Number.POSITIVE_INFINITY : toScoreTime(metSeconds),
@@ -341,7 +312,8 @@ export const evaluateOutcome = (input: OutcomeInput): Outcome => {
     // Strictly below par on the scoring grid. Equalling par is matching our answer, not
     // beating it, and only beating it is a report about our optimum being wrong.
     beatParDv: success && score.dv < toScoreDeltaV(par.dvMps),
-    diagnosis: diagnose(failure, { metSeconds, deadlineSeconds }),
+    diagnosis: diagnosed?.message ?? null,
+    codex: diagnosed?.codex ?? null,
     objective,
   });
 };

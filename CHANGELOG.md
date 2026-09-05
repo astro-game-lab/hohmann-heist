@@ -12,6 +12,30 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **§6.4's fifth objective type, `station` (#77).** Mean longitude within a slot and secular
+  drift within a limit, both at once. The slot is stated as an offset from the ship's own
+  starting longitude, because Earth's absolute orientation is not modelled — the sidereal
+  angle at J2000 is an ephemeris fact this game does not claim to know, and the unknown
+  constant cancels in a difference. Drift comes from the orbit's mean motion against
+  Earth's rotation rate, never from differencing longitude samples: a slightly eccentric
+  geostationary orbit librates by about `2e` radians, which at `e = 1e-4` is larger than
+  the entire drift budget and would be read as drift.
+- **§6.6's assist model (#81).** The seven toggleable assists, what each does to a medal,
+  and the two things §6.7 derives from them — Clean Job eligibility and the medal cap. The
+  effects are deliberately asymmetric: two assists affect a medal by being *enabled* and
+  two by being *disabled*, so the direction is part of the effect rather than a uniform
+  "affects medals" flag. §11.6's assist bitmask now records what a run actually used, with
+  a frozen bit order and an unknown high bit refused rather than ignored.
+- **§6.8's progression (#82).** Which contracts are open, act completion counts, and
+  §8.3.2's `NEXT` marker. The threshold counts the contracts *shipped*, so releasing Acts
+  I–II cannot lock Act III behind contracts that do not exist; Bronze is a floor rather
+  than an equality, so a save full of Golds unlocks everything.
+- **§8.3.9's diagnosis rule set (#83).** The debrief now says *why* a run missed, from five
+  ordered rules over the outcome — and says nothing when the evidence is ambiguous, which
+  is §8.3.9's own rule. Telling the two geometric cases apart needed the miss decomposed in
+  the ship's RTN frame: the same 12 km is either a ship on the right path arriving ninety
+  seconds late, or a ship at the right moment twelve kilometres too high, and those want
+  opposite advice.
 - **§9.2's design tokens, in five palettes (#116).** Thirteen tokens — ground, text, the
   five meaning colours, Earth, hazard, grid — defined once in `@hh/ui` for the default,
   deuteranopia, protanopia, tritanopia and high-contrast palettes, and resolved by
@@ -36,6 +60,10 @@ they relied on has moved.
   would take away a signal rather than an ornament.
 
 ### Changed
+- **Medals now reflect the assists actually enabled (FR-301).** `v0.1.0` passed a
+  hard-coded eligibility flag and an assist mask of zero, because the model behind them did
+  not exist yet. With §6.6's defaults a Gold run is a Clean Job; enabling a capping assist
+  caps the run at Silver and the debrief can say which one.
 - **Maneuver nodes are drawn in `--plan`, and selection is a ring in `--accent`.** §9.2
   assigns *"planned trajectory, nodes"* to one token and §9.3 separates a node from the
   path it sits on by shape — a diamond with a handle cross against a run of dots — rather

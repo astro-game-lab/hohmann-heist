@@ -26,8 +26,8 @@ import {
   type ParValues,
 } from './outcome.js';
 import { HORIZON, START, messageOf, planOf, timelineFor } from './test-support.js';
-import { epoch } from '@hh/astro';
-import { metres, metresPerSec } from '@hh/math';
+import { epoch, rtn } from '@hh/astro';
+import { V, metres, metresPerSec } from '@hh/math';
 
 const RULES: LegalityRules = { budgetMps: 300, deadlineSeconds: 10_800 };
 
@@ -42,6 +42,8 @@ const proximity = (met: boolean, atSeconds: number | null): ObjectiveEvaluation 
     epoch: epoch(START + (atSeconds ?? 5000)),
     rangeM: metres(met ? 310 : 12_400),
     relativeSpeedMps: metresPerSec(42.7),
+    // Not what this fixture is about; #83's decomposition has its own tests.
+    missRtn: rtn(V.vec3(metres(0), metres(0), metres(0))),
   },
   candidates: [],
   tolerance: { maxRangeM: metres(1000), maxRelativeSpeedMps: null },

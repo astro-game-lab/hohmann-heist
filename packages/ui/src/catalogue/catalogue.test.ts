@@ -131,6 +131,16 @@ const samples: AllMessageParams = {
     rangeMetres: 100,
     relativeSpeedMps: 0.5,
   },
+  'debrief.diagnosis.wrongOrbit': {
+    element: 'periapsisRadius',
+    difference: 42_000,
+    tolerance: 10_000,
+  },
+  'debrief.diagnosis.tooFast': { relativeSpeedMps: 1.4, maxRelativeSpeedMps: 0.5, rangeM: 80 },
+  'debrief.diagnosis.arrivedLate': { alongTrackM: 12_400, rangeM: 12_500 },
+  'debrief.diagnosis.arrivedEarly': { alongTrackM: 12_400, rangeM: 12_500 },
+  'debrief.diagnosis.undershot': { radialM: 4_100, rangeM: 4_200 },
+  'debrief.diagnosis.overshot': { radialM: 4_100, rangeM: 4_200 },
   'briefing.objective.station': {
     slotOffsetRad: 0.05236,
     maxOffsetRad: 8.7266e-4,

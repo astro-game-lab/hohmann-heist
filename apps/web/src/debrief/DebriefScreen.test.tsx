@@ -8,8 +8,8 @@
  * shape of result once it gets there.
  */
 import type { Outcome, ProximityEvaluation } from '@hh/game';
-import { epoch } from '@hh/astro';
-import { metres, metresPerSec } from '@hh/math';
+import { rtn, epoch } from '@hh/astro';
+import { V, metres, metresPerSec } from '@hh/math';
 import { createCatalogue } from '@hh/ui';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -37,6 +37,7 @@ const proximity = (met: boolean, rangeM: number): ProximityEvaluation => ({
     epoch: epoch(4123),
     rangeM: metres(rangeM),
     relativeSpeedMps: metresPerSec(42.7),
+    missRtn: rtn(V.vec3(metres(0), metres(0), metres(0))),
   },
   candidates: [],
   tolerance: { maxRangeM: metres(1000), maxRelativeSpeedMps: null },
@@ -47,6 +48,7 @@ const outcomeOf = (over: Partial<Outcome> = {}): Outcome => ({
   failure: null,
   medalCap: 'clean',
   cappedBy: [],
+  codex: null,
   dvUsedMps: 109.1177,
   dvBudgetMps: 300,
   metSeconds: 4123,

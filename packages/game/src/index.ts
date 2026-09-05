@@ -105,6 +105,9 @@ export type {
 } from './progression.js';
 export { bronzeThreshold, hasBronze, isUnlocked, progression } from './progression.js';
 
+export type { CodexSlug, Diagnosis, DiagnosisFacts } from './diagnosis.js';
+export { DOMINANCE_RATIO, diagnose } from './diagnosis.js';
+
 export type { PlanEdit } from './plan-edits.js';
 export { addNode, componentsOf, deleteNode, moveNode, setNodeDeltaV } from './plan-edits.js';
 
