@@ -7,10 +7,10 @@
 "use strict";
 export const validate = validate20;
 export default validate20;
-const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json","title":"Scenario","description":"A Hohmann Heist contract, version 1. Declarative data only: the loader interprets this and nothing else (FR-201). All quantities are SI and carry their unit in the field name.","type":"object","required":["id","version","act","index","title","briefKey","epoch","horizonSeconds","ship","objective","par"],"additionalProperties":false,"properties":{"$schema":{"type":"string","description":"Optional pointer back to this schema, so an editor can validate on save."},"id":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","description":"Stable identifier, kebab-case. Appears in URLs and save data, so it never changes once shipped."},"version":{"type":"integer","const":1,"description":"Schema version. Required so that a future v2 is distinguishable from v1 rather than inferred from which fields happen to be present."},"act":{"type":"integer","minimum":1,"maximum":6},"index":{"type":"integer","minimum":1},"title":{"type":"string","minLength":1},"briefKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the briefing text (D14, FR-910). Never literal prose: contract text is translated and reviewed separately from contract logic."},"clientKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the client's name, shown in the briefing (§8.3.3). A key rather than a string for the same reason briefKey is one: \"withheld\" is prose. Omitted when the contract names no client."},"fee_kcr":{"type":"number","exclusiveMinimum":0,"description":"The contract's fee in kilocredits (§6.10). Credits do nothing but rank a career total; the fee is flavour with a number attached, which is why it is not a game rule and nothing evaluates it. Omitted when the contract pays nothing."},"epoch":{"type":"object","required":["scale","j2000Seconds"],"additionalProperties":false,"properties":{"scale":{"type":"string","const":"TAI","description":"Time scale. TAI only: UTC is not uniform and leap seconds make it wrong for propagation (§7.2)."},"j2000Seconds":{"type":"number","description":"Start epoch, TAI seconds past J2000."}}},"horizonSeconds":{"type":"number","exclusiveMinimum":0,"description":"Planning horizon: the deadline plus a margin (§6.3). Prediction is not drawn past it."},"ship":{"type":"object","required":["state","dvBudget_mps"],"additionalProperties":false,"properties":{"state":{"$ref":"#/$defs/stateSpec"},"dvBudget_mps":{"type":"number","minimum":0,"description":"Cap on the sum of burn magnitudes. A scalar tank, not propellant (DEP-02)."}}},"targets":{"type":"array","default":[],"items":{"$ref":"#/$defs/target"},"description":"Objects the ship can be asked to reach. Massless and non-maneuvering (DEP-11)."},"objective":{"$ref":"#/$defs/objective"},"constraints":{"type":"array","default":[],"items":{"$ref":"#/$defs/constraint"}},"par":{"$ref":"#/$defs/par"},"unlocks":{"type":"array","default":[],"items":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"}},"assistsAllowed":{"type":"array","default":[],"uniqueItems":true,"items":{"$ref":"#/$defs/assist"}},"coachMarks":{"type":"array","default":[],"items":{"$ref":"#/$defs/catalogueKey"},"description":"Catalogue keys for contextual hints. At most three, and only in C01–C04 (FR-902)."}},"$defs":{"catalogueKey":{"type":"string","pattern":"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$","description":"A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."},"stateSpec":{"type":"object","required":["kind","a_m","e","i_rad","raan_rad","argp_rad","nu_rad"],"additionalProperties":false,"description":"An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.","properties":{"kind":{"type":"string","const":"elements"},"a_m":{"type":"number","exclusiveMinimum":0,"description":"Semi-major axis, metres."},"e":{"type":"number","minimum":0,"exclusiveMaximum":1,"description":"Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"nu_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"orbitGoal":{"type":"object","required":["a_m","e","i_rad","raan_rad","argp_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"target":{"type":"object","required":["id","label","state"],"additionalProperties":false,"properties":{"id":{"type":"string","minLength":1},"label":{"type":"string","minLength":1,"description":"Display name. A call sign rather than translated prose — it is the object's name, not a sentence about it."},"state":{"$ref":"#/$defs/stateSpec"}}},"objective":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}},{"type":"object","required":["kind","slotOffset_rad"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"station"},"slotOffset_rad":{"type":"number","minimum":-6.283185307179587,"maximum":6.283185307179587,"description":"Where the slot is, as a signed offset from the ship's longitude at the start of the plan. Positive is east. Relative rather than absolute because the sidereal angle at J2000 is not modelled (§7.4, DEP-14), and because §6.8 states contract 07's slot as '3.0 degrees east' of where the ship begins."},"maxOffset_rad":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's ±0.05°. May tighten it, never loosen it."},"maxDrift_radPerSec":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's 0.01°/day, in SI. May tighten it, never loosen it."}}}]},"constraint":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}}]},"par":{"type":"object","required":["dv_mps","time_s","burns","derivation","referenceReplay"],"additionalProperties":false,"description":"The best known solution, not a proven optimum (DEP-12). §11.5: a par without a reproducible derivation is not mergeable.","properties":{"dv_mps":{"type":"number","minimum":0},"time_s":{"type":"number","exclusiveMinimum":0},"burns":{"type":"integer","minimum":0},"derivation":{"type":"string","minLength":20,"description":"How this par was found, in prose, naming the solver script. Reviewed by a human; the length floor only stops it being empty."},"referenceReplay":{"type":"string","minLength":1,"description":"A replay code that achieves the objective at this cost. Replayed and asserted by the content tests (§7.6 Tier 4, §13.4)."}}},"assist":{"type":"string","enum":["closest_approach","elements","snapping","constraints","targeting_computer","porkchop","coach_marks"]}}};
+const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json","title":"Scenario","description":"A Hohmann Heist contract, version 1. Declarative data only: the loader interprets this and nothing else (FR-201). All quantities are SI and carry their unit in the field name.","type":"object","required":["id","version","act","index","title","briefKey","epoch","horizonSeconds","ship","objective","par"],"additionalProperties":false,"properties":{"$schema":{"type":"string","description":"Optional pointer back to this schema, so an editor can validate on save."},"id":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","description":"Stable identifier, kebab-case. Appears in URLs and save data, so it never changes once shipped."},"version":{"type":"integer","const":1,"description":"Schema version. Required so that a future v2 is distinguishable from v1 rather than inferred from which fields happen to be present."},"act":{"type":"integer","minimum":1,"maximum":6},"index":{"type":"integer","minimum":1},"title":{"type":"string","minLength":1},"briefKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the briefing text (D14, FR-910). Never literal prose: contract text is translated and reviewed separately from contract logic."},"clientKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the client's name, shown in the briefing (§8.3.3). A key rather than a string for the same reason briefKey is one: \"withheld\" is prose. Omitted when the contract names no client."},"fee_kcr":{"type":"number","exclusiveMinimum":0,"description":"The contract's fee in kilocredits (§6.10). Credits do nothing but rank a career total; the fee is flavour with a number attached, which is why it is not a game rule and nothing evaluates it. Omitted when the contract pays nothing."},"epoch":{"type":"object","required":["scale","j2000Seconds"],"additionalProperties":false,"properties":{"scale":{"type":"string","const":"TAI","description":"Time scale. TAI only: UTC is not uniform and leap seconds make it wrong for propagation (§7.2)."},"j2000Seconds":{"type":"number","description":"Start epoch, TAI seconds past J2000."}}},"horizonSeconds":{"type":"number","exclusiveMinimum":0,"description":"Planning horizon: the deadline plus a margin (§6.3). Prediction is not drawn past it."},"ship":{"type":"object","required":["state","dvBudget_mps"],"additionalProperties":false,"properties":{"state":{"$ref":"#/$defs/stateSpec"},"dvBudget_mps":{"type":"number","minimum":0,"description":"Cap on the sum of burn magnitudes. A scalar tank, not propellant (DEP-02)."}}},"targets":{"type":"array","default":[],"items":{"$ref":"#/$defs/target"},"description":"Objects the ship can be asked to reach. Massless and non-maneuvering (DEP-11)."},"objective":{"$ref":"#/$defs/objective"},"constraints":{"type":"array","default":[],"items":{"$ref":"#/$defs/constraint"}},"par":{"$ref":"#/$defs/par"},"unlocks":{"type":"array","default":[],"items":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"}},"assistsAllowed":{"type":"array","default":[],"uniqueItems":true,"items":{"$ref":"#/$defs/assist"}},"coachMarks":{"type":"array","default":[],"items":{"$ref":"#/$defs/catalogueKey"},"description":"Catalogue keys for contextual hints. At most three, and only in C01–C04 (FR-902)."}},"$defs":{"catalogueKey":{"type":"string","pattern":"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$","description":"A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."},"stateSpec":{"type":"object","required":["kind","a_m","e","i_rad","raan_rad","argp_rad","nu_rad"],"additionalProperties":false,"description":"An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.","properties":{"kind":{"type":"string","const":"elements"},"a_m":{"type":"number","exclusiveMinimum":0,"description":"Semi-major axis, metres."},"e":{"type":"number","minimum":0,"exclusiveMaximum":1,"description":"Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"nu_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"orbitGoal":{"type":"object","required":["a_m","e","i_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on. `raan_rad` and `argp_rad` are optional because a goal that is equatorial has no node line and a goal that is circular has no apse line, and a file that stated one anyway would be asserting an orientation the goal does not have; the loader refuses a document that omits one its own goal makes meaningful.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587,"description":"Right ascension of the ascending node. Omitted when the goal is equatorial, where there is no node line to orient."},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587,"description":"Argument of periapsis. Omitted when the goal is circular, where there is no apse line to orient."}}},"target":{"type":"object","required":["id","label","state"],"additionalProperties":false,"properties":{"id":{"type":"string","minLength":1},"label":{"type":"string","minLength":1,"description":"Display name. A call sign rather than translated prose — it is the object's name, not a sentence about it."},"state":{"$ref":"#/$defs/stateSpec"}}},"objective":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}},{"type":"object","required":["kind","slotOffset_rad"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"station"},"slotOffset_rad":{"type":"number","minimum":-6.283185307179587,"maximum":6.283185307179587,"description":"Where the slot is, as a signed offset from the ship's longitude at the start of the plan. Positive is east. Relative rather than absolute because the sidereal angle at J2000 is not modelled (§7.4, DEP-14), and because §6.8 states contract 07's slot as '3.0 degrees east' of where the ship begins."},"maxOffset_rad":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's ±0.05°. May tighten it, never loosen it."},"maxDrift_radPerSec":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's 0.01°/day, in SI. May tighten it, never loosen it."}}}]},"constraint":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}},{"type":"object","required":["kind","max"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"burn_count"},"max":{"type":"integer","minimum":1,"description":"Largest burn count the contract is designed around (§6.5). **Soft**: it never blocks commit, and §6.4's legality codes have no entry for it. Exceeding it forfeits Gold and nothing else, through §6.7's existing `burns ≤ par_burns` rule — so a contract publishes the same number here that its par carries, and the cap is what makes it visible in the briefing and the HUD rather than a second rule."}}}]},"par":{"type":"object","required":["dv_mps","time_s","burns","derivation","referenceReplay"],"additionalProperties":false,"description":"The best known solution, not a proven optimum (DEP-12). §11.5: a par without a reproducible derivation is not mergeable.","properties":{"dv_mps":{"type":"number","minimum":0},"time_s":{"type":"number","exclusiveMinimum":0},"burns":{"type":"integer","minimum":0},"derivation":{"type":"string","minLength":20,"description":"How this par was found, in prose, naming the solver script. Reviewed by a human; the length floor only stops it being empty."},"referenceReplay":{"type":"string","minLength":1,"description":"A replay code that achieves the objective at this cost. Replayed and asserted by the content tests (§7.6 Tier 4, §13.4)."}}},"assist":{"type":"string","enum":["closest_approach","elements","snapping","constraints","targeting_computer","porkchop","coach_marks"]}}};
 const schema32 = {"type":"string","pattern":"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$","description":"A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."};
 const schema34 = {"type":"object","required":["kind","a_m","e","i_rad","raan_rad","argp_rad","nu_rad"],"additionalProperties":false,"description":"An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.","properties":{"kind":{"type":"string","const":"elements"},"a_m":{"type":"number","exclusiveMinimum":0,"description":"Semi-major axis, metres."},"e":{"type":"number","minimum":0,"exclusiveMaximum":1,"description":"Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"nu_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}};
-const schema39 = {"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}}]};
+const schema39 = {"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}},{"type":"object","required":["kind","max"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"burn_count"},"max":{"type":"integer","minimum":1,"description":"Largest burn count the contract is designed around (§6.5). **Soft**: it never blocks commit, and §6.4's legality codes have no entry for it. Exceeding it forfeits Gold and nothing else, through §6.7's existing `burns ≤ par_burns` rule — so a contract publishes the same number here that its par carries, and the cap is what makes it visible in the briefing and the HUD rather than a second rule."}}}]};
 const schema40 = {"type":"object","required":["dv_mps","time_s","burns","derivation","referenceReplay"],"additionalProperties":false,"description":"The best known solution, not a proven optimum (DEP-12). §11.5: a par without a reproducible derivation is not mergeable.","properties":{"dv_mps":{"type":"number","minimum":0},"time_s":{"type":"number","exclusiveMinimum":0},"burns":{"type":"integer","minimum":0},"derivation":{"type":"string","minLength":20,"description":"How this par was found, in prose, naming the solver script. Reviewed by a human; the length floor only stops it being empty."},"referenceReplay":{"type":"string","minLength":1,"description":"A replay code that achieves the objective at this cost. Replayed and asserted by the content tests (§7.6 Tier 4, §13.4)."}}};
 const schema41 = {"type":"string","enum":["closest_approach","elements","snapping","constraints","targeting_computer","porkchop","coach_marks"]};
 const func1 = Object.prototype.hasOwnProperty;
@@ -460,7 +460,7 @@ return errors === 0;
 validate21.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 const schema37 = {"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}},{"type":"object","required":["kind","slotOffset_rad"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"station"},"slotOffset_rad":{"type":"number","minimum":-6.283185307179587,"maximum":6.283185307179587,"description":"Where the slot is, as a signed offset from the ship's longitude at the start of the plan. Positive is east. Relative rather than absolute because the sidereal angle at J2000 is not modelled (§7.4, DEP-14), and because §6.8 states contract 07's slot as '3.0 degrees east' of where the ship begins."},"maxOffset_rad":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's ±0.05°. May tighten it, never loosen it."},"maxDrift_radPerSec":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's 0.01°/day, in SI. May tighten it, never loosen it."}}}]};
-const schema38 = {"type":"object","required":["a_m","e","i_rad","raan_rad","argp_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}};
+const schema38 = {"type":"object","required":["a_m","e","i_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on. `raan_rad` and `argp_rad` are optional because a goal that is equatorial has no node line and a goal that is circular has no apse line, and a file that stated one anyway would be asserting an orientation the goal does not have; the loader refuses a document that omits one its own goal makes meaningful.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587,"description":"Right ascension of the ascending node. Omitted when the goal is equatorial, where there is no node line to orient."},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587,"description":"Argument of periapsis. Omitted when the goal is circular, where there is no apse line to orient."}}};
 
 function validate23(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
@@ -565,8 +565,9 @@ vErrors.push(err7);
 }
 errors++;
 }
-if(data1.raan_rad === undefined){
-const err8 = {instancePath:instancePath+"/goal",schemaPath:"#/$defs/orbitGoal/required",keyword:"required",params:{missingProperty: "raan_rad"},message:"must have required property '"+"raan_rad"+"'"};
+for(const key1 in data1){
+if(!(((((key1 === "a_m") || (key1 === "e")) || (key1 === "i_rad")) || (key1 === "raan_rad")) || (key1 === "argp_rad"))){
+const err8 = {instancePath:instancePath+"/goal",schemaPath:"#/$defs/orbitGoal/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -575,8 +576,12 @@ vErrors.push(err8);
 }
 errors++;
 }
-if(data1.argp_rad === undefined){
-const err9 = {instancePath:instancePath+"/goal",schemaPath:"#/$defs/orbitGoal/required",keyword:"required",params:{missingProperty: "argp_rad"},message:"must have required property '"+"argp_rad"+"'"};
+}
+if(data1.a_m !== undefined){
+let data2 = data1.a_m;
+if((typeof data2 == "number") && (isFinite(data2))){
+if(data2 <= 0 || isNaN(data2)){
+const err9 = {instancePath:instancePath+"/goal/a_m",schemaPath:"#/$defs/orbitGoal/properties/a_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err9];
 }
@@ -585,9 +590,9 @@ vErrors.push(err9);
 }
 errors++;
 }
-for(const key1 in data1){
-if(!(((((key1 === "a_m") || (key1 === "e")) || (key1 === "i_rad")) || (key1 === "raan_rad")) || (key1 === "argp_rad"))){
-const err10 = {instancePath:instancePath+"/goal",schemaPath:"#/$defs/orbitGoal/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+}
+else {
+const err10 = {instancePath:instancePath+"/goal/a_m",schemaPath:"#/$defs/orbitGoal/properties/a_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err10];
 }
@@ -597,11 +602,11 @@ vErrors.push(err10);
 errors++;
 }
 }
-if(data1.a_m !== undefined){
-let data2 = data1.a_m;
-if((typeof data2 == "number") && (isFinite(data2))){
-if(data2 <= 0 || isNaN(data2)){
-const err11 = {instancePath:instancePath+"/goal/a_m",schemaPath:"#/$defs/orbitGoal/properties/a_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(data1.e !== undefined){
+let data3 = data1.e;
+if((typeof data3 == "number") && (isFinite(data3))){
+if(data3 < 0 || isNaN(data3)){
+const err11 = {instancePath:instancePath+"/goal/e",schemaPath:"#/$defs/orbitGoal/properties/e/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -610,9 +615,8 @@ vErrors.push(err11);
 }
 errors++;
 }
-}
-else {
-const err12 = {instancePath:instancePath+"/goal/a_m",schemaPath:"#/$defs/orbitGoal/properties/a_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data3 >= 1 || isNaN(data3)){
+const err12 = {instancePath:instancePath+"/goal/e",schemaPath:"#/$defs/orbitGoal/properties/e/exclusiveMaximum",keyword:"exclusiveMaximum",params:{comparison: "<", limit: 1},message:"must be < 1"};
 if(vErrors === null){
 vErrors = [err12];
 }
@@ -622,11 +626,8 @@ vErrors.push(err12);
 errors++;
 }
 }
-if(data1.e !== undefined){
-let data3 = data1.e;
-if((typeof data3 == "number") && (isFinite(data3))){
-if(data3 < 0 || isNaN(data3)){
-const err13 = {instancePath:instancePath+"/goal/e",schemaPath:"#/$defs/orbitGoal/properties/e/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+else {
+const err13 = {instancePath:instancePath+"/goal/e",schemaPath:"#/$defs/orbitGoal/properties/e/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err13];
 }
@@ -635,8 +636,12 @@ vErrors.push(err13);
 }
 errors++;
 }
-if(data3 >= 1 || isNaN(data3)){
-const err14 = {instancePath:instancePath+"/goal/e",schemaPath:"#/$defs/orbitGoal/properties/e/exclusiveMaximum",keyword:"exclusiveMaximum",params:{comparison: "<", limit: 1},message:"must be < 1"};
+}
+if(data1.i_rad !== undefined){
+let data4 = data1.i_rad;
+if((typeof data4 == "number") && (isFinite(data4))){
+if(data4 > 3.141592653589794 || isNaN(data4)){
+const err14 = {instancePath:instancePath+"/goal/i_rad",schemaPath:"#/$defs/orbitGoal/properties/i_rad/maximum",keyword:"maximum",params:{comparison: "<=", limit: 3.141592653589794},message:"must be <= 3.141592653589794"};
 if(vErrors === null){
 vErrors = [err14];
 }
@@ -645,9 +650,8 @@ vErrors.push(err14);
 }
 errors++;
 }
-}
-else {
-const err15 = {instancePath:instancePath+"/goal/e",schemaPath:"#/$defs/orbitGoal/properties/e/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data4 < 0 || isNaN(data4)){
+const err15 = {instancePath:instancePath+"/goal/i_rad",schemaPath:"#/$defs/orbitGoal/properties/i_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err15];
 }
@@ -657,11 +661,8 @@ vErrors.push(err15);
 errors++;
 }
 }
-if(data1.i_rad !== undefined){
-let data4 = data1.i_rad;
-if((typeof data4 == "number") && (isFinite(data4))){
-if(data4 > 3.141592653589794 || isNaN(data4)){
-const err16 = {instancePath:instancePath+"/goal/i_rad",schemaPath:"#/$defs/orbitGoal/properties/i_rad/maximum",keyword:"maximum",params:{comparison: "<=", limit: 3.141592653589794},message:"must be <= 3.141592653589794"};
+else {
+const err16 = {instancePath:instancePath+"/goal/i_rad",schemaPath:"#/$defs/orbitGoal/properties/i_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err16];
 }
@@ -670,8 +671,12 @@ vErrors.push(err16);
 }
 errors++;
 }
-if(data4 < 0 || isNaN(data4)){
-const err17 = {instancePath:instancePath+"/goal/i_rad",schemaPath:"#/$defs/orbitGoal/properties/i_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+}
+if(data1.raan_rad !== undefined){
+let data5 = data1.raan_rad;
+if((typeof data5 == "number") && (isFinite(data5))){
+if(data5 < 0 || isNaN(data5)){
+const err17 = {instancePath:instancePath+"/goal/raan_rad",schemaPath:"#/$defs/orbitGoal/properties/raan_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err17];
 }
@@ -680,9 +685,8 @@ vErrors.push(err17);
 }
 errors++;
 }
-}
-else {
-const err18 = {instancePath:instancePath+"/goal/i_rad",schemaPath:"#/$defs/orbitGoal/properties/i_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data5 >= 6.283185307179587 || isNaN(data5)){
+const err18 = {instancePath:instancePath+"/goal/raan_rad",schemaPath:"#/$defs/orbitGoal/properties/raan_rad/exclusiveMaximum",keyword:"exclusiveMaximum",params:{comparison: "<", limit: 6.283185307179587},message:"must be < 6.283185307179587"};
 if(vErrors === null){
 vErrors = [err18];
 }
@@ -692,11 +696,8 @@ vErrors.push(err18);
 errors++;
 }
 }
-if(data1.raan_rad !== undefined){
-let data5 = data1.raan_rad;
-if((typeof data5 == "number") && (isFinite(data5))){
-if(data5 < 0 || isNaN(data5)){
-const err19 = {instancePath:instancePath+"/goal/raan_rad",schemaPath:"#/$defs/orbitGoal/properties/raan_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+else {
+const err19 = {instancePath:instancePath+"/goal/raan_rad",schemaPath:"#/$defs/orbitGoal/properties/raan_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err19];
 }
@@ -705,8 +706,12 @@ vErrors.push(err19);
 }
 errors++;
 }
-if(data5 >= 6.283185307179587 || isNaN(data5)){
-const err20 = {instancePath:instancePath+"/goal/raan_rad",schemaPath:"#/$defs/orbitGoal/properties/raan_rad/exclusiveMaximum",keyword:"exclusiveMaximum",params:{comparison: "<", limit: 6.283185307179587},message:"must be < 6.283185307179587"};
+}
+if(data1.argp_rad !== undefined){
+let data6 = data1.argp_rad;
+if((typeof data6 == "number") && (isFinite(data6))){
+if(data6 < 0 || isNaN(data6)){
+const err20 = {instancePath:instancePath+"/goal/argp_rad",schemaPath:"#/$defs/orbitGoal/properties/argp_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err20];
 }
@@ -715,9 +720,8 @@ vErrors.push(err20);
 }
 errors++;
 }
-}
-else {
-const err21 = {instancePath:instancePath+"/goal/raan_rad",schemaPath:"#/$defs/orbitGoal/properties/raan_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data6 >= 6.283185307179587 || isNaN(data6)){
+const err21 = {instancePath:instancePath+"/goal/argp_rad",schemaPath:"#/$defs/orbitGoal/properties/argp_rad/exclusiveMaximum",keyword:"exclusiveMaximum",params:{comparison: "<", limit: 6.283185307179587},message:"must be < 6.283185307179587"};
 if(vErrors === null){
 vErrors = [err21];
 }
@@ -727,11 +731,8 @@ vErrors.push(err21);
 errors++;
 }
 }
-if(data1.argp_rad !== undefined){
-let data6 = data1.argp_rad;
-if((typeof data6 == "number") && (isFinite(data6))){
-if(data6 < 0 || isNaN(data6)){
-const err22 = {instancePath:instancePath+"/goal/argp_rad",schemaPath:"#/$defs/orbitGoal/properties/argp_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+else {
+const err22 = {instancePath:instancePath+"/goal/argp_rad",schemaPath:"#/$defs/orbitGoal/properties/argp_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err22];
 }
@@ -740,8 +741,10 @@ vErrors.push(err22);
 }
 errors++;
 }
-if(data6 >= 6.283185307179587 || isNaN(data6)){
-const err23 = {instancePath:instancePath+"/goal/argp_rad",schemaPath:"#/$defs/orbitGoal/properties/argp_rad/exclusiveMaximum",keyword:"exclusiveMaximum",params:{comparison: "<", limit: 6.283185307179587},message:"must be < 6.283185307179587"};
+}
+}
+else {
+const err23 = {instancePath:instancePath+"/goal",schemaPath:"#/$defs/orbitGoal/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err23];
 }
@@ -751,8 +754,11 @@ vErrors.push(err23);
 errors++;
 }
 }
-else {
-const err24 = {instancePath:instancePath+"/goal/argp_rad",schemaPath:"#/$defs/orbitGoal/properties/argp_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data.tolerance !== undefined){
+let data7 = data.tolerance;
+if(data7 && typeof data7 == "object" && !Array.isArray(data7)){
+if(data7.radius_m === undefined){
+const err24 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/required",keyword:"required",params:{missingProperty: "radius_m"},message:"must have required property '"+"radius_m"+"'"};
 if(vErrors === null){
 vErrors = [err24];
 }
@@ -761,10 +767,8 @@ vErrors.push(err24);
 }
 errors++;
 }
-}
-}
-else {
-const err25 = {instancePath:instancePath+"/goal",schemaPath:"#/$defs/orbitGoal/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data7.angle_rad === undefined){
+const err25 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/required",keyword:"required",params:{missingProperty: "angle_rad"},message:"must have required property '"+"angle_rad"+"'"};
 if(vErrors === null){
 vErrors = [err25];
 }
@@ -773,12 +777,9 @@ vErrors.push(err25);
 }
 errors++;
 }
-}
-if(data.tolerance !== undefined){
-let data7 = data.tolerance;
-if(data7 && typeof data7 == "object" && !Array.isArray(data7)){
-if(data7.radius_m === undefined){
-const err26 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/required",keyword:"required",params:{missingProperty: "radius_m"},message:"must have required property '"+"radius_m"+"'"};
+for(const key2 in data7){
+if(!((key2 === "radius_m") || (key2 === "angle_rad"))){
+const err26 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err26];
 }
@@ -787,8 +788,12 @@ vErrors.push(err26);
 }
 errors++;
 }
-if(data7.angle_rad === undefined){
-const err27 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/required",keyword:"required",params:{missingProperty: "angle_rad"},message:"must have required property '"+"angle_rad"+"'"};
+}
+if(data7.radius_m !== undefined){
+let data8 = data7.radius_m;
+if((typeof data8 == "number") && (isFinite(data8))){
+if(data8 <= 0 || isNaN(data8)){
+const err27 = {instancePath:instancePath+"/tolerance/radius_m",schemaPath:"#/oneOf/0/properties/tolerance/properties/radius_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err27];
 }
@@ -797,9 +802,9 @@ vErrors.push(err27);
 }
 errors++;
 }
-for(const key2 in data7){
-if(!((key2 === "radius_m") || (key2 === "angle_rad"))){
-const err28 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"};
+}
+else {
+const err28 = {instancePath:instancePath+"/tolerance/radius_m",schemaPath:"#/oneOf/0/properties/tolerance/properties/radius_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err28];
 }
@@ -809,11 +814,11 @@ vErrors.push(err28);
 errors++;
 }
 }
-if(data7.radius_m !== undefined){
-let data8 = data7.radius_m;
-if((typeof data8 == "number") && (isFinite(data8))){
-if(data8 <= 0 || isNaN(data8)){
-const err29 = {instancePath:instancePath+"/tolerance/radius_m",schemaPath:"#/oneOf/0/properties/tolerance/properties/radius_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(data7.angle_rad !== undefined){
+let data9 = data7.angle_rad;
+if((typeof data9 == "number") && (isFinite(data9))){
+if(data9 <= 0 || isNaN(data9)){
+const err29 = {instancePath:instancePath+"/tolerance/angle_rad",schemaPath:"#/oneOf/0/properties/tolerance/properties/angle_rad/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err29];
 }
@@ -824,7 +829,7 @@ errors++;
 }
 }
 else {
-const err30 = {instancePath:instancePath+"/tolerance/radius_m",schemaPath:"#/oneOf/0/properties/tolerance/properties/radius_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err30 = {instancePath:instancePath+"/tolerance/angle_rad",schemaPath:"#/oneOf/0/properties/tolerance/properties/angle_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err30];
 }
@@ -834,11 +839,9 @@ vErrors.push(err30);
 errors++;
 }
 }
-if(data7.angle_rad !== undefined){
-let data9 = data7.angle_rad;
-if((typeof data9 == "number") && (isFinite(data9))){
-if(data9 <= 0 || isNaN(data9)){
-const err31 = {instancePath:instancePath+"/tolerance/angle_rad",schemaPath:"#/oneOf/0/properties/tolerance/properties/angle_rad/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+}
+else {
+const err31 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err31];
 }
@@ -848,8 +851,9 @@ vErrors.push(err31);
 errors++;
 }
 }
+}
 else {
-const err32 = {instancePath:instancePath+"/tolerance/angle_rad",schemaPath:"#/oneOf/0/properties/tolerance/properties/angle_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err32 = {instancePath,schemaPath:"#/oneOf/0/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err32];
 }
@@ -858,10 +862,12 @@ vErrors.push(err32);
 }
 errors++;
 }
+var props0 = true;
 }
-}
-else {
-const err33 = {instancePath:instancePath+"/tolerance",schemaPath:"#/oneOf/0/properties/tolerance/type",keyword:"type",params:{type: "object"},message:"must be object"};
+else if(tag0 === "intercept"){
+if(data && typeof data == "object" && !Array.isArray(data)){
+if(data.kind === undefined){
+const err33 = {instancePath,schemaPath:"#/oneOf/1/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
 if(vErrors === null){
 vErrors = [err33];
 }
@@ -870,10 +876,8 @@ vErrors.push(err33);
 }
 errors++;
 }
-}
-}
-else {
-const err34 = {instancePath,schemaPath:"#/oneOf/0/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data.targetId === undefined){
+const err34 = {instancePath,schemaPath:"#/oneOf/1/required",keyword:"required",params:{missingProperty: "targetId"},message:"must have required property '"+"targetId"+"'"};
 if(vErrors === null){
 vErrors = [err34];
 }
@@ -882,12 +886,9 @@ vErrors.push(err34);
 }
 errors++;
 }
-var props0 = true;
-}
-else if(tag0 === "intercept"){
-if(data && typeof data == "object" && !Array.isArray(data)){
-if(data.kind === undefined){
-const err35 = {instancePath,schemaPath:"#/oneOf/1/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+for(const key3 in data){
+if(!(((key3 === "kind") || (key3 === "targetId")) || (key3 === "maxRange_m"))){
+const err35 = {instancePath,schemaPath:"#/oneOf/1/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err35];
 }
@@ -896,8 +897,11 @@ vErrors.push(err35);
 }
 errors++;
 }
-if(data.targetId === undefined){
-const err36 = {instancePath,schemaPath:"#/oneOf/1/required",keyword:"required",params:{missingProperty: "targetId"},message:"must have required property '"+"targetId"+"'"};
+}
+if(data.kind !== undefined){
+let data10 = data.kind;
+if(typeof data10 !== "string"){
+const err36 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/1/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err36];
 }
@@ -906,9 +910,8 @@ vErrors.push(err36);
 }
 errors++;
 }
-for(const key3 in data){
-if(!(((key3 === "kind") || (key3 === "targetId")) || (key3 === "maxRange_m"))){
-const err37 = {instancePath,schemaPath:"#/oneOf/1/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"};
+if("intercept" !== data10){
+const err37 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/1/properties/kind/const",keyword:"const",params:{allowedValue: "intercept"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err37];
 }
@@ -918,10 +921,11 @@ vErrors.push(err37);
 errors++;
 }
 }
-if(data.kind !== undefined){
-let data10 = data.kind;
-if(typeof data10 !== "string"){
-const err38 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/1/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(data.targetId !== undefined){
+let data11 = data.targetId;
+if(typeof data11 === "string"){
+if(func2(data11) < 1){
+const err38 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/1/properties/targetId/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
 if(vErrors === null){
 vErrors = [err38];
 }
@@ -930,8 +934,9 @@ vErrors.push(err38);
 }
 errors++;
 }
-if("intercept" !== data10){
-const err39 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/1/properties/kind/const",keyword:"const",params:{allowedValue: "intercept"},message:"must be equal to constant"};
+}
+else {
+const err39 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/1/properties/targetId/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err39];
 }
@@ -941,11 +946,11 @@ vErrors.push(err39);
 errors++;
 }
 }
-if(data.targetId !== undefined){
-let data11 = data.targetId;
-if(typeof data11 === "string"){
-if(func2(data11) < 1){
-const err40 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/1/properties/targetId/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(data.maxRange_m !== undefined){
+let data12 = data.maxRange_m;
+if((typeof data12 == "number") && (isFinite(data12))){
+if(data12 <= 0 || isNaN(data12)){
+const err40 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/1/properties/maxRange_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err40];
 }
@@ -956,7 +961,7 @@ errors++;
 }
 }
 else {
-const err41 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/1/properties/targetId/type",keyword:"type",params:{type: "string"},message:"must be string"};
+const err41 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/1/properties/maxRange_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err41];
 }
@@ -966,39 +971,14 @@ vErrors.push(err41);
 errors++;
 }
 }
-if(data.maxRange_m !== undefined){
-let data12 = data.maxRange_m;
-if((typeof data12 == "number") && (isFinite(data12))){
-if(data12 <= 0 || isNaN(data12)){
-const err42 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/1/properties/maxRange_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+}
+else {
+const err42 = {instancePath,schemaPath:"#/oneOf/1/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err42];
 }
 else {
 vErrors.push(err42);
-}
-errors++;
-}
-}
-else {
-const err43 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/1/properties/maxRange_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
-if(vErrors === null){
-vErrors = [err43];
-}
-else {
-vErrors.push(err43);
-}
-errors++;
-}
-}
-}
-else {
-const err44 = {instancePath,schemaPath:"#/oneOf/1/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err44];
-}
-else {
-vErrors.push(err44);
 }
 errors++;
 }
@@ -1009,7 +989,28 @@ props0 = true;
 else if(tag0 === "rendezvous"){
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.kind === undefined){
-const err45 = {instancePath,schemaPath:"#/oneOf/2/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+const err43 = {instancePath,schemaPath:"#/oneOf/2/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+if(vErrors === null){
+vErrors = [err43];
+}
+else {
+vErrors.push(err43);
+}
+errors++;
+}
+if(data.targetId === undefined){
+const err44 = {instancePath,schemaPath:"#/oneOf/2/required",keyword:"required",params:{missingProperty: "targetId"},message:"must have required property '"+"targetId"+"'"};
+if(vErrors === null){
+vErrors = [err44];
+}
+else {
+vErrors.push(err44);
+}
+errors++;
+}
+for(const key4 in data){
+if(!((((key4 === "kind") || (key4 === "targetId")) || (key4 === "maxRange_m")) || (key4 === "maxRelSpeed_mps"))){
+const err45 = {instancePath,schemaPath:"#/oneOf/2/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err45];
 }
@@ -1018,8 +1019,11 @@ vErrors.push(err45);
 }
 errors++;
 }
-if(data.targetId === undefined){
-const err46 = {instancePath,schemaPath:"#/oneOf/2/required",keyword:"required",params:{missingProperty: "targetId"},message:"must have required property '"+"targetId"+"'"};
+}
+if(data.kind !== undefined){
+let data13 = data.kind;
+if(typeof data13 !== "string"){
+const err46 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/2/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err46];
 }
@@ -1028,9 +1032,8 @@ vErrors.push(err46);
 }
 errors++;
 }
-for(const key4 in data){
-if(!((((key4 === "kind") || (key4 === "targetId")) || (key4 === "maxRange_m")) || (key4 === "maxRelSpeed_mps"))){
-const err47 = {instancePath,schemaPath:"#/oneOf/2/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"};
+if("rendezvous" !== data13){
+const err47 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/2/properties/kind/const",keyword:"const",params:{allowedValue: "rendezvous"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err47];
 }
@@ -1040,10 +1043,11 @@ vErrors.push(err47);
 errors++;
 }
 }
-if(data.kind !== undefined){
-let data13 = data.kind;
-if(typeof data13 !== "string"){
-const err48 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/2/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(data.targetId !== undefined){
+let data14 = data.targetId;
+if(typeof data14 === "string"){
+if(func2(data14) < 1){
+const err48 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/2/properties/targetId/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
 if(vErrors === null){
 vErrors = [err48];
 }
@@ -1052,8 +1056,9 @@ vErrors.push(err48);
 }
 errors++;
 }
-if("rendezvous" !== data13){
-const err49 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/2/properties/kind/const",keyword:"const",params:{allowedValue: "rendezvous"},message:"must be equal to constant"};
+}
+else {
+const err49 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/2/properties/targetId/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err49];
 }
@@ -1063,11 +1068,11 @@ vErrors.push(err49);
 errors++;
 }
 }
-if(data.targetId !== undefined){
-let data14 = data.targetId;
-if(typeof data14 === "string"){
-if(func2(data14) < 1){
-const err50 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/2/properties/targetId/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(data.maxRange_m !== undefined){
+let data15 = data.maxRange_m;
+if((typeof data15 == "number") && (isFinite(data15))){
+if(data15 <= 0 || isNaN(data15)){
+const err50 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/2/properties/maxRange_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err50];
 }
@@ -1078,7 +1083,7 @@ errors++;
 }
 }
 else {
-const err51 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/2/properties/targetId/type",keyword:"type",params:{type: "string"},message:"must be string"};
+const err51 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/2/properties/maxRange_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err51];
 }
@@ -1088,11 +1093,11 @@ vErrors.push(err51);
 errors++;
 }
 }
-if(data.maxRange_m !== undefined){
-let data15 = data.maxRange_m;
-if((typeof data15 == "number") && (isFinite(data15))){
-if(data15 <= 0 || isNaN(data15)){
-const err52 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/2/properties/maxRange_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(data.maxRelSpeed_mps !== undefined){
+let data16 = data.maxRelSpeed_mps;
+if((typeof data16 == "number") && (isFinite(data16))){
+if(data16 <= 0 || isNaN(data16)){
+const err52 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/2/properties/maxRelSpeed_mps/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err52];
 }
@@ -1103,7 +1108,7 @@ errors++;
 }
 }
 else {
-const err53 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/2/properties/maxRange_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err53 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/2/properties/maxRelSpeed_mps/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err53];
 }
@@ -1113,39 +1118,14 @@ vErrors.push(err53);
 errors++;
 }
 }
-if(data.maxRelSpeed_mps !== undefined){
-let data16 = data.maxRelSpeed_mps;
-if((typeof data16 == "number") && (isFinite(data16))){
-if(data16 <= 0 || isNaN(data16)){
-const err54 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/2/properties/maxRelSpeed_mps/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+}
+else {
+const err54 = {instancePath,schemaPath:"#/oneOf/2/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err54];
 }
 else {
 vErrors.push(err54);
-}
-errors++;
-}
-}
-else {
-const err55 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/2/properties/maxRelSpeed_mps/type",keyword:"type",params:{type: "number"},message:"must be number"};
-if(vErrors === null){
-vErrors = [err55];
-}
-else {
-vErrors.push(err55);
-}
-errors++;
-}
-}
-}
-else {
-const err56 = {instancePath,schemaPath:"#/oneOf/2/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err56];
-}
-else {
-vErrors.push(err56);
 }
 errors++;
 }
@@ -1156,7 +1136,28 @@ props0 = true;
 else if(tag0 === "soft_rendezvous"){
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.kind === undefined){
-const err57 = {instancePath,schemaPath:"#/oneOf/3/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+const err55 = {instancePath,schemaPath:"#/oneOf/3/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+if(vErrors === null){
+vErrors = [err55];
+}
+else {
+vErrors.push(err55);
+}
+errors++;
+}
+if(data.targetId === undefined){
+const err56 = {instancePath,schemaPath:"#/oneOf/3/required",keyword:"required",params:{missingProperty: "targetId"},message:"must have required property '"+"targetId"+"'"};
+if(vErrors === null){
+vErrors = [err56];
+}
+else {
+vErrors.push(err56);
+}
+errors++;
+}
+for(const key5 in data){
+if(!((((key5 === "kind") || (key5 === "targetId")) || (key5 === "maxRange_m")) || (key5 === "maxRelSpeed_mps"))){
+const err57 = {instancePath,schemaPath:"#/oneOf/3/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key5},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err57];
 }
@@ -1165,8 +1166,11 @@ vErrors.push(err57);
 }
 errors++;
 }
-if(data.targetId === undefined){
-const err58 = {instancePath,schemaPath:"#/oneOf/3/required",keyword:"required",params:{missingProperty: "targetId"},message:"must have required property '"+"targetId"+"'"};
+}
+if(data.kind !== undefined){
+let data17 = data.kind;
+if(typeof data17 !== "string"){
+const err58 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/3/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err58];
 }
@@ -1175,9 +1179,8 @@ vErrors.push(err58);
 }
 errors++;
 }
-for(const key5 in data){
-if(!((((key5 === "kind") || (key5 === "targetId")) || (key5 === "maxRange_m")) || (key5 === "maxRelSpeed_mps"))){
-const err59 = {instancePath,schemaPath:"#/oneOf/3/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key5},message:"must NOT have additional properties"};
+if("soft_rendezvous" !== data17){
+const err59 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/3/properties/kind/const",keyword:"const",params:{allowedValue: "soft_rendezvous"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err59];
 }
@@ -1187,10 +1190,11 @@ vErrors.push(err59);
 errors++;
 }
 }
-if(data.kind !== undefined){
-let data17 = data.kind;
-if(typeof data17 !== "string"){
-const err60 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/3/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(data.targetId !== undefined){
+let data18 = data.targetId;
+if(typeof data18 === "string"){
+if(func2(data18) < 1){
+const err60 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/3/properties/targetId/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
 if(vErrors === null){
 vErrors = [err60];
 }
@@ -1199,8 +1203,9 @@ vErrors.push(err60);
 }
 errors++;
 }
-if("soft_rendezvous" !== data17){
-const err61 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/3/properties/kind/const",keyword:"const",params:{allowedValue: "soft_rendezvous"},message:"must be equal to constant"};
+}
+else {
+const err61 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/3/properties/targetId/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err61];
 }
@@ -1210,11 +1215,11 @@ vErrors.push(err61);
 errors++;
 }
 }
-if(data.targetId !== undefined){
-let data18 = data.targetId;
-if(typeof data18 === "string"){
-if(func2(data18) < 1){
-const err62 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/3/properties/targetId/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(data.maxRange_m !== undefined){
+let data19 = data.maxRange_m;
+if((typeof data19 == "number") && (isFinite(data19))){
+if(data19 <= 0 || isNaN(data19)){
+const err62 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/3/properties/maxRange_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err62];
 }
@@ -1225,7 +1230,7 @@ errors++;
 }
 }
 else {
-const err63 = {instancePath:instancePath+"/targetId",schemaPath:"#/oneOf/3/properties/targetId/type",keyword:"type",params:{type: "string"},message:"must be string"};
+const err63 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/3/properties/maxRange_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err63];
 }
@@ -1235,11 +1240,11 @@ vErrors.push(err63);
 errors++;
 }
 }
-if(data.maxRange_m !== undefined){
-let data19 = data.maxRange_m;
-if((typeof data19 == "number") && (isFinite(data19))){
-if(data19 <= 0 || isNaN(data19)){
-const err64 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/3/properties/maxRange_m/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(data.maxRelSpeed_mps !== undefined){
+let data20 = data.maxRelSpeed_mps;
+if((typeof data20 == "number") && (isFinite(data20))){
+if(data20 <= 0 || isNaN(data20)){
+const err64 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/3/properties/maxRelSpeed_mps/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err64];
 }
@@ -1250,7 +1255,7 @@ errors++;
 }
 }
 else {
-const err65 = {instancePath:instancePath+"/maxRange_m",schemaPath:"#/oneOf/3/properties/maxRange_m/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err65 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/3/properties/maxRelSpeed_mps/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err65];
 }
@@ -1260,39 +1265,14 @@ vErrors.push(err65);
 errors++;
 }
 }
-if(data.maxRelSpeed_mps !== undefined){
-let data20 = data.maxRelSpeed_mps;
-if((typeof data20 == "number") && (isFinite(data20))){
-if(data20 <= 0 || isNaN(data20)){
-const err66 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/3/properties/maxRelSpeed_mps/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+}
+else {
+const err66 = {instancePath,schemaPath:"#/oneOf/3/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err66];
 }
 else {
 vErrors.push(err66);
-}
-errors++;
-}
-}
-else {
-const err67 = {instancePath:instancePath+"/maxRelSpeed_mps",schemaPath:"#/oneOf/3/properties/maxRelSpeed_mps/type",keyword:"type",params:{type: "number"},message:"must be number"};
-if(vErrors === null){
-vErrors = [err67];
-}
-else {
-vErrors.push(err67);
-}
-errors++;
-}
-}
-}
-else {
-const err68 = {instancePath,schemaPath:"#/oneOf/3/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err68];
-}
-else {
-vErrors.push(err68);
 }
 errors++;
 }
@@ -1303,7 +1283,28 @@ props0 = true;
 else if(tag0 === "station"){
 if(data && typeof data == "object" && !Array.isArray(data)){
 if(data.kind === undefined){
-const err69 = {instancePath,schemaPath:"#/oneOf/4/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+const err67 = {instancePath,schemaPath:"#/oneOf/4/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
+if(vErrors === null){
+vErrors = [err67];
+}
+else {
+vErrors.push(err67);
+}
+errors++;
+}
+if(data.slotOffset_rad === undefined){
+const err68 = {instancePath,schemaPath:"#/oneOf/4/required",keyword:"required",params:{missingProperty: "slotOffset_rad"},message:"must have required property '"+"slotOffset_rad"+"'"};
+if(vErrors === null){
+vErrors = [err68];
+}
+else {
+vErrors.push(err68);
+}
+errors++;
+}
+for(const key6 in data){
+if(!((((key6 === "kind") || (key6 === "slotOffset_rad")) || (key6 === "maxOffset_rad")) || (key6 === "maxDrift_radPerSec"))){
+const err69 = {instancePath,schemaPath:"#/oneOf/4/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err69];
 }
@@ -1312,8 +1313,11 @@ vErrors.push(err69);
 }
 errors++;
 }
-if(data.slotOffset_rad === undefined){
-const err70 = {instancePath,schemaPath:"#/oneOf/4/required",keyword:"required",params:{missingProperty: "slotOffset_rad"},message:"must have required property '"+"slotOffset_rad"+"'"};
+}
+if(data.kind !== undefined){
+let data21 = data.kind;
+if(typeof data21 !== "string"){
+const err70 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/4/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err70];
 }
@@ -1322,9 +1326,8 @@ vErrors.push(err70);
 }
 errors++;
 }
-for(const key6 in data){
-if(!((((key6 === "kind") || (key6 === "slotOffset_rad")) || (key6 === "maxOffset_rad")) || (key6 === "maxDrift_radPerSec"))){
-const err71 = {instancePath,schemaPath:"#/oneOf/4/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"};
+if("station" !== data21){
+const err71 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/4/properties/kind/const",keyword:"const",params:{allowedValue: "station"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err71];
 }
@@ -1334,10 +1337,11 @@ vErrors.push(err71);
 errors++;
 }
 }
-if(data.kind !== undefined){
-let data21 = data.kind;
-if(typeof data21 !== "string"){
-const err72 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/4/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(data.slotOffset_rad !== undefined){
+let data22 = data.slotOffset_rad;
+if((typeof data22 == "number") && (isFinite(data22))){
+if(data22 > 6.283185307179587 || isNaN(data22)){
+const err72 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/maximum",keyword:"maximum",params:{comparison: "<=", limit: 6.283185307179587},message:"must be <= 6.283185307179587"};
 if(vErrors === null){
 vErrors = [err72];
 }
@@ -1346,8 +1350,8 @@ vErrors.push(err72);
 }
 errors++;
 }
-if("station" !== data21){
-const err73 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/4/properties/kind/const",keyword:"const",params:{allowedValue: "station"},message:"must be equal to constant"};
+if(data22 < -6.283185307179587 || isNaN(data22)){
+const err73 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: -6.283185307179587},message:"must be >= -6.283185307179587"};
 if(vErrors === null){
 vErrors = [err73];
 }
@@ -1357,11 +1361,8 @@ vErrors.push(err73);
 errors++;
 }
 }
-if(data.slotOffset_rad !== undefined){
-let data22 = data.slotOffset_rad;
-if((typeof data22 == "number") && (isFinite(data22))){
-if(data22 > 6.283185307179587 || isNaN(data22)){
-const err74 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/maximum",keyword:"maximum",params:{comparison: "<=", limit: 6.283185307179587},message:"must be <= 6.283185307179587"};
+else {
+const err74 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err74];
 }
@@ -1370,8 +1371,12 @@ vErrors.push(err74);
 }
 errors++;
 }
-if(data22 < -6.283185307179587 || isNaN(data22)){
-const err75 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: -6.283185307179587},message:"must be >= -6.283185307179587"};
+}
+if(data.maxOffset_rad !== undefined){
+let data23 = data.maxOffset_rad;
+if((typeof data23 == "number") && (isFinite(data23))){
+if(data23 <= 0 || isNaN(data23)){
+const err75 = {instancePath:instancePath+"/maxOffset_rad",schemaPath:"#/oneOf/4/properties/maxOffset_rad/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err75];
 }
@@ -1382,7 +1387,7 @@ errors++;
 }
 }
 else {
-const err76 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err76 = {instancePath:instancePath+"/maxOffset_rad",schemaPath:"#/oneOf/4/properties/maxOffset_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err76];
 }
@@ -1392,11 +1397,11 @@ vErrors.push(err76);
 errors++;
 }
 }
-if(data.maxOffset_rad !== undefined){
-let data23 = data.maxOffset_rad;
-if((typeof data23 == "number") && (isFinite(data23))){
-if(data23 <= 0 || isNaN(data23)){
-const err77 = {instancePath:instancePath+"/maxOffset_rad",schemaPath:"#/oneOf/4/properties/maxOffset_rad/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(data.maxDrift_radPerSec !== undefined){
+let data24 = data.maxDrift_radPerSec;
+if((typeof data24 == "number") && (isFinite(data24))){
+if(data24 <= 0 || isNaN(data24)){
+const err77 = {instancePath:instancePath+"/maxDrift_radPerSec",schemaPath:"#/oneOf/4/properties/maxDrift_radPerSec/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err77];
 }
@@ -1407,7 +1412,7 @@ errors++;
 }
 }
 else {
-const err78 = {instancePath:instancePath+"/maxOffset_rad",schemaPath:"#/oneOf/4/properties/maxOffset_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err78 = {instancePath:instancePath+"/maxDrift_radPerSec",schemaPath:"#/oneOf/4/properties/maxDrift_radPerSec/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err78];
 }
@@ -1417,11 +1422,9 @@ vErrors.push(err78);
 errors++;
 }
 }
-if(data.maxDrift_radPerSec !== undefined){
-let data24 = data.maxDrift_radPerSec;
-if((typeof data24 == "number") && (isFinite(data24))){
-if(data24 <= 0 || isNaN(data24)){
-const err79 = {instancePath:instancePath+"/maxDrift_radPerSec",schemaPath:"#/oneOf/4/properties/maxDrift_radPerSec/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+}
+else {
+const err79 = {instancePath,schemaPath:"#/oneOf/4/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err79];
 }
@@ -1430,9 +1433,12 @@ vErrors.push(err79);
 }
 errors++;
 }
+if(props0 !== true){
+props0 = true;
+}
 }
 else {
-const err80 = {instancePath:instancePath+"/maxDrift_radPerSec",schemaPath:"#/oneOf/4/properties/maxDrift_radPerSec/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err80 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "mapping", tag: "kind", tagValue: tag0},message:"value of tag \"kind\" must be in oneOf"};
 if(vErrors === null){
 vErrors = [err80];
 }
@@ -1442,9 +1448,8 @@ vErrors.push(err80);
 errors++;
 }
 }
-}
 else {
-const err81 = {instancePath,schemaPath:"#/oneOf/4/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err81 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "tag", tag: "kind", tagValue: tag0},message:"tag \"kind\" must be string"};
 if(vErrors === null){
 vErrors = [err81];
 }
@@ -1453,39 +1458,14 @@ vErrors.push(err81);
 }
 errors++;
 }
-if(props0 !== true){
-props0 = true;
-}
 }
 else {
-const err82 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "mapping", tag: "kind", tagValue: tag0},message:"value of tag \"kind\" must be in oneOf"};
+const err82 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err82];
 }
 else {
 vErrors.push(err82);
-}
-errors++;
-}
-}
-else {
-const err83 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "tag", tag: "kind", tagValue: tag0},message:"tag \"kind\" must be string"};
-if(vErrors === null){
-vErrors = [err83];
-}
-else {
-vErrors.push(err83);
-}
-errors++;
-}
-}
-else {
-const err84 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
-if(vErrors === null){
-vErrors = [err84];
-}
-else {
-vErrors.push(err84);
 }
 errors++;
 }
@@ -2579,8 +2559,10 @@ if(props1 !== true){
 props1 = true;
 }
 }
-else {
-const err90 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/discriminator",keyword:"discriminator",params:{error: "mapping", tag: "kind", tagValue: tag0},message:"value of tag \"kind\" must be in oneOf"};
+else if(tag0 === "burn_count"){
+if(data27 && typeof data27 == "object" && !Array.isArray(data27)){
+if(data27.kind === undefined){
+const err90 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/oneOf/2/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
 if(vErrors === null){
 vErrors = [err90];
 }
@@ -2589,9 +2571,8 @@ vErrors.push(err90);
 }
 errors++;
 }
-}
-else {
-const err91 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/discriminator",keyword:"discriminator",params:{error: "tag", tag: "kind", tagValue: tag0},message:"tag \"kind\" must be string"};
+if(data27.max === undefined){
+const err91 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/oneOf/2/required",keyword:"required",params:{missingProperty: "max"},message:"must have required property '"+"max"+"'"};
 if(vErrors === null){
 vErrors = [err91];
 }
@@ -2600,9 +2581,9 @@ vErrors.push(err91);
 }
 errors++;
 }
-}
-else {
-const err92 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/type",keyword:"type",params:{type: "object"},message:"must be object"};
+for(const key6 in data27){
+if(!((key6 === "kind") || (key6 === "max"))){
+const err92 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/oneOf/2/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err92];
 }
@@ -2612,9 +2593,10 @@ vErrors.push(err92);
 errors++;
 }
 }
-}
-else {
-const err93 = {instancePath:instancePath+"/constraints",schemaPath:"#/properties/constraints/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(data27.kind !== undefined){
+let data32 = data27.kind;
+if(typeof data32 !== "string"){
+const err93 = {instancePath:instancePath+"/constraints/" + i1+"/kind",schemaPath:"#/$defs/constraint/oneOf/2/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err93];
 }
@@ -2623,12 +2605,8 @@ vErrors.push(err93);
 }
 errors++;
 }
-}
-if(data.par !== undefined){
-let data32 = data.par;
-if(data32 && typeof data32 == "object" && !Array.isArray(data32)){
-if(data32.dv_mps === undefined){
-const err94 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "dv_mps"},message:"must have required property '"+"dv_mps"+"'"};
+if("burn_count" !== data32){
+const err94 = {instancePath:instancePath+"/constraints/" + i1+"/kind",schemaPath:"#/$defs/constraint/oneOf/2/properties/kind/const",keyword:"const",params:{allowedValue: "burn_count"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err94];
 }
@@ -2637,8 +2615,11 @@ vErrors.push(err94);
 }
 errors++;
 }
-if(data32.time_s === undefined){
-const err95 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "time_s"},message:"must have required property '"+"time_s"+"'"};
+}
+if(data27.max !== undefined){
+let data33 = data27.max;
+if(!(((typeof data33 == "number") && (!(data33 % 1) && !isNaN(data33))) && (isFinite(data33)))){
+const err95 = {instancePath:instancePath+"/constraints/" + i1+"/max",schemaPath:"#/$defs/constraint/oneOf/2/properties/max/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
 if(vErrors === null){
 vErrors = [err95];
 }
@@ -2647,8 +2628,9 @@ vErrors.push(err95);
 }
 errors++;
 }
-if(data32.burns === undefined){
-const err96 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "burns"},message:"must have required property '"+"burns"+"'"};
+if((typeof data33 == "number") && (isFinite(data33))){
+if(data33 < 1 || isNaN(data33)){
+const err96 = {instancePath:instancePath+"/constraints/" + i1+"/max",schemaPath:"#/$defs/constraint/oneOf/2/properties/max/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"};
 if(vErrors === null){
 vErrors = [err96];
 }
@@ -2657,8 +2639,11 @@ vErrors.push(err96);
 }
 errors++;
 }
-if(data32.derivation === undefined){
-const err97 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "derivation"},message:"must have required property '"+"derivation"+"'"};
+}
+}
+}
+else {
+const err97 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/oneOf/2/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err97];
 }
@@ -2667,8 +2652,12 @@ vErrors.push(err97);
 }
 errors++;
 }
-if(data32.referenceReplay === undefined){
-const err98 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "referenceReplay"},message:"must have required property '"+"referenceReplay"+"'"};
+if(props1 !== true){
+props1 = true;
+}
+}
+else {
+const err98 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/discriminator",keyword:"discriminator",params:{error: "mapping", tag: "kind", tagValue: tag0},message:"value of tag \"kind\" must be in oneOf"};
 if(vErrors === null){
 vErrors = [err98];
 }
@@ -2677,9 +2666,9 @@ vErrors.push(err98);
 }
 errors++;
 }
-for(const key6 in data32){
-if(!(((((key6 === "dv_mps") || (key6 === "time_s")) || (key6 === "burns")) || (key6 === "derivation")) || (key6 === "referenceReplay"))){
-const err99 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"};
+}
+else {
+const err99 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/discriminator",keyword:"discriminator",params:{error: "tag", tag: "kind", tagValue: tag0},message:"tag \"kind\" must be string"};
 if(vErrors === null){
 vErrors = [err99];
 }
@@ -2689,11 +2678,8 @@ vErrors.push(err99);
 errors++;
 }
 }
-if(data32.dv_mps !== undefined){
-let data33 = data32.dv_mps;
-if((typeof data33 == "number") && (isFinite(data33))){
-if(data33 < 0 || isNaN(data33)){
-const err100 = {instancePath:instancePath+"/par/dv_mps",schemaPath:"#/$defs/par/properties/dv_mps/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+else {
+const err100 = {instancePath:instancePath+"/constraints/" + i1,schemaPath:"#/$defs/constraint/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err100];
 }
@@ -2703,8 +2689,9 @@ vErrors.push(err100);
 errors++;
 }
 }
+}
 else {
-const err101 = {instancePath:instancePath+"/par/dv_mps",schemaPath:"#/$defs/par/properties/dv_mps/type",keyword:"type",params:{type: "number"},message:"must be number"};
+const err101 = {instancePath:instancePath+"/constraints",schemaPath:"#/properties/constraints/type",keyword:"type",params:{type: "array"},message:"must be array"};
 if(vErrors === null){
 vErrors = [err101];
 }
@@ -2714,11 +2701,11 @@ vErrors.push(err101);
 errors++;
 }
 }
-if(data32.time_s !== undefined){
-let data34 = data32.time_s;
-if((typeof data34 == "number") && (isFinite(data34))){
-if(data34 <= 0 || isNaN(data34)){
-const err102 = {instancePath:instancePath+"/par/time_s",schemaPath:"#/$defs/par/properties/time_s/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(data.par !== undefined){
+let data34 = data.par;
+if(data34 && typeof data34 == "object" && !Array.isArray(data34)){
+if(data34.dv_mps === undefined){
+const err102 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "dv_mps"},message:"must have required property '"+"dv_mps"+"'"};
 if(vErrors === null){
 vErrors = [err102];
 }
@@ -2727,9 +2714,8 @@ vErrors.push(err102);
 }
 errors++;
 }
-}
-else {
-const err103 = {instancePath:instancePath+"/par/time_s",schemaPath:"#/$defs/par/properties/time_s/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data34.time_s === undefined){
+const err103 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "time_s"},message:"must have required property '"+"time_s"+"'"};
 if(vErrors === null){
 vErrors = [err103];
 }
@@ -2738,11 +2724,8 @@ vErrors.push(err103);
 }
 errors++;
 }
-}
-if(data32.burns !== undefined){
-let data35 = data32.burns;
-if(!(((typeof data35 == "number") && (!(data35 % 1) && !isNaN(data35))) && (isFinite(data35)))){
-const err104 = {instancePath:instancePath+"/par/burns",schemaPath:"#/$defs/par/properties/burns/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
+if(data34.burns === undefined){
+const err104 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "burns"},message:"must have required property '"+"burns"+"'"};
 if(vErrors === null){
 vErrors = [err104];
 }
@@ -2751,9 +2734,8 @@ vErrors.push(err104);
 }
 errors++;
 }
-if((typeof data35 == "number") && (isFinite(data35))){
-if(data35 < 0 || isNaN(data35)){
-const err105 = {instancePath:instancePath+"/par/burns",schemaPath:"#/$defs/par/properties/burns/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(data34.derivation === undefined){
+const err105 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "derivation"},message:"must have required property '"+"derivation"+"'"};
 if(vErrors === null){
 vErrors = [err105];
 }
@@ -2762,13 +2744,8 @@ vErrors.push(err105);
 }
 errors++;
 }
-}
-}
-if(data32.derivation !== undefined){
-let data36 = data32.derivation;
-if(typeof data36 === "string"){
-if(func2(data36) < 20){
-const err106 = {instancePath:instancePath+"/par/derivation",schemaPath:"#/$defs/par/properties/derivation/minLength",keyword:"minLength",params:{limit: 20},message:"must NOT have fewer than 20 characters"};
+if(data34.referenceReplay === undefined){
+const err106 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/required",keyword:"required",params:{missingProperty: "referenceReplay"},message:"must have required property '"+"referenceReplay"+"'"};
 if(vErrors === null){
 vErrors = [err106];
 }
@@ -2777,9 +2754,9 @@ vErrors.push(err106);
 }
 errors++;
 }
-}
-else {
-const err107 = {instancePath:instancePath+"/par/derivation",schemaPath:"#/$defs/par/properties/derivation/type",keyword:"type",params:{type: "string"},message:"must be string"};
+for(const key7 in data34){
+if(!(((((key7 === "dv_mps") || (key7 === "time_s")) || (key7 === "burns")) || (key7 === "derivation")) || (key7 === "referenceReplay"))){
+const err107 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key7},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err107];
 }
@@ -2789,11 +2766,11 @@ vErrors.push(err107);
 errors++;
 }
 }
-if(data32.referenceReplay !== undefined){
-let data37 = data32.referenceReplay;
-if(typeof data37 === "string"){
-if(func2(data37) < 1){
-const err108 = {instancePath:instancePath+"/par/referenceReplay",schemaPath:"#/$defs/par/properties/referenceReplay/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(data34.dv_mps !== undefined){
+let data35 = data34.dv_mps;
+if((typeof data35 == "number") && (isFinite(data35))){
+if(data35 < 0 || isNaN(data35)){
+const err108 = {instancePath:instancePath+"/par/dv_mps",schemaPath:"#/$defs/par/properties/dv_mps/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err108];
 }
@@ -2804,7 +2781,7 @@ errors++;
 }
 }
 else {
-const err109 = {instancePath:instancePath+"/par/referenceReplay",schemaPath:"#/$defs/par/properties/referenceReplay/type",keyword:"type",params:{type: "string"},message:"must be string"};
+const err109 = {instancePath:instancePath+"/par/dv_mps",schemaPath:"#/$defs/par/properties/dv_mps/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err109];
 }
@@ -2814,9 +2791,11 @@ vErrors.push(err109);
 errors++;
 }
 }
-}
-else {
-const err110 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data34.time_s !== undefined){
+let data36 = data34.time_s;
+if((typeof data36 == "number") && (isFinite(data36))){
+if(data36 <= 0 || isNaN(data36)){
+const err110 = {instancePath:instancePath+"/par/time_s",schemaPath:"#/$defs/par/properties/time_s/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
 if(vErrors === null){
 vErrors = [err110];
 }
@@ -2826,15 +2805,8 @@ vErrors.push(err110);
 errors++;
 }
 }
-if(data.unlocks !== undefined){
-let data38 = data.unlocks;
-if(Array.isArray(data38)){
-const len2 = data38.length;
-for(let i2=0; i2<len2; i2++){
-let data39 = data38[i2];
-if(typeof data39 === "string"){
-if(!pattern4.test(data39)){
-const err111 = {instancePath:instancePath+"/unlocks/" + i2,schemaPath:"#/properties/unlocks/items/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},message:"must match pattern \""+"^[a-z0-9]+(-[a-z0-9]+)*$"+"\""};
+else {
+const err111 = {instancePath:instancePath+"/par/time_s",schemaPath:"#/$defs/par/properties/time_s/type",keyword:"type",params:{type: "number"},message:"must be number"};
 if(vErrors === null){
 vErrors = [err111];
 }
@@ -2844,8 +2816,10 @@ vErrors.push(err111);
 errors++;
 }
 }
-else {
-const err112 = {instancePath:instancePath+"/unlocks/" + i2,schemaPath:"#/properties/unlocks/items/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(data34.burns !== undefined){
+let data37 = data34.burns;
+if(!(((typeof data37 == "number") && (!(data37 % 1) && !isNaN(data37))) && (isFinite(data37)))){
+const err112 = {instancePath:instancePath+"/par/burns",schemaPath:"#/$defs/par/properties/burns/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
 if(vErrors === null){
 vErrors = [err112];
 }
@@ -2854,10 +2828,9 @@ vErrors.push(err112);
 }
 errors++;
 }
-}
-}
-else {
-const err113 = {instancePath:instancePath+"/unlocks",schemaPath:"#/properties/unlocks/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if((typeof data37 == "number") && (isFinite(data37))){
+if(data37 < 0 || isNaN(data37)){
+const err113 = {instancePath:instancePath+"/par/burns",schemaPath:"#/$defs/par/properties/burns/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
 if(vErrors === null){
 vErrors = [err113];
 }
@@ -2867,14 +2840,12 @@ vErrors.push(err113);
 errors++;
 }
 }
-if(data.assistsAllowed !== undefined){
-let data40 = data.assistsAllowed;
-if(Array.isArray(data40)){
-const len3 = data40.length;
-for(let i3=0; i3<len3; i3++){
-let data41 = data40[i3];
-if(typeof data41 !== "string"){
-const err114 = {instancePath:instancePath+"/assistsAllowed/" + i3,schemaPath:"#/$defs/assist/type",keyword:"type",params:{type: "string"},message:"must be string"};
+}
+if(data34.derivation !== undefined){
+let data38 = data34.derivation;
+if(typeof data38 === "string"){
+if(func2(data38) < 20){
+const err114 = {instancePath:instancePath+"/par/derivation",schemaPath:"#/$defs/par/properties/derivation/minLength",keyword:"minLength",params:{limit: 20},message:"must NOT have fewer than 20 characters"};
 if(vErrors === null){
 vErrors = [err114];
 }
@@ -2883,8 +2854,9 @@ vErrors.push(err114);
 }
 errors++;
 }
-if(!(((((((data41 === "closest_approach") || (data41 === "elements")) || (data41 === "snapping")) || (data41 === "constraints")) || (data41 === "targeting_computer")) || (data41 === "porkchop")) || (data41 === "coach_marks"))){
-const err115 = {instancePath:instancePath+"/assistsAllowed/" + i3,schemaPath:"#/$defs/assist/enum",keyword:"enum",params:{allowedValues: schema41.enum},message:"must be equal to one of the allowed values"};
+}
+else {
+const err115 = {instancePath:instancePath+"/par/derivation",schemaPath:"#/$defs/par/properties/derivation/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err115];
 }
@@ -2894,14 +2866,11 @@ vErrors.push(err115);
 errors++;
 }
 }
-let i4 = data40.length;
-let j0;
-if(i4 > 1){
-outer0:
-for(;i4--;){
-for(j0 = i4; j0--;){
-if(func0(data40[i4], data40[j0])){
-const err116 = {instancePath:instancePath+"/assistsAllowed",schemaPath:"#/properties/assistsAllowed/uniqueItems",keyword:"uniqueItems",params:{i: i4, j: j0},message:"must NOT have duplicate items (items ## "+j0+" and "+i4+" are identical)"};
+if(data34.referenceReplay !== undefined){
+let data39 = data34.referenceReplay;
+if(typeof data39 === "string"){
+if(func2(data39) < 1){
+const err116 = {instancePath:instancePath+"/par/referenceReplay",schemaPath:"#/$defs/par/properties/referenceReplay/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
 if(vErrors === null){
 vErrors = [err116];
 }
@@ -2909,14 +2878,10 @@ else {
 vErrors.push(err116);
 }
 errors++;
-break outer0;
-}
-}
-}
 }
 }
 else {
-const err117 = {instancePath:instancePath+"/assistsAllowed",schemaPath:"#/properties/assistsAllowed/type",keyword:"type",params:{type: "array"},message:"must be array"};
+const err117 = {instancePath:instancePath+"/par/referenceReplay",schemaPath:"#/$defs/par/properties/referenceReplay/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err117];
 }
@@ -2926,15 +2891,9 @@ vErrors.push(err117);
 errors++;
 }
 }
-if(data.coachMarks !== undefined){
-let data42 = data.coachMarks;
-if(Array.isArray(data42)){
-const len4 = data42.length;
-for(let i5=0; i5<len4; i5++){
-let data43 = data42[i5];
-if(typeof data43 === "string"){
-if(!pattern5.test(data43)){
-const err118 = {instancePath:instancePath+"/coachMarks/" + i5,schemaPath:"#/$defs/catalogueKey/pattern",keyword:"pattern",params:{pattern: "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$"},message:"must match pattern \""+"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$"+"\""};
+}
+else {
+const err118 = {instancePath:instancePath+"/par",schemaPath:"#/$defs/par/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err118];
 }
@@ -2944,8 +2903,15 @@ vErrors.push(err118);
 errors++;
 }
 }
-else {
-const err119 = {instancePath:instancePath+"/coachMarks/" + i5,schemaPath:"#/$defs/catalogueKey/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(data.unlocks !== undefined){
+let data40 = data.unlocks;
+if(Array.isArray(data40)){
+const len2 = data40.length;
+for(let i2=0; i2<len2; i2++){
+let data41 = data40[i2];
+if(typeof data41 === "string"){
+if(!pattern4.test(data41)){
+const err119 = {instancePath:instancePath+"/unlocks/" + i2,schemaPath:"#/properties/unlocks/items/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},message:"must match pattern \""+"^[a-z0-9]+(-[a-z0-9]+)*$"+"\""};
 if(vErrors === null){
 vErrors = [err119];
 }
@@ -2955,9 +2921,8 @@ vErrors.push(err119);
 errors++;
 }
 }
-}
 else {
-const err120 = {instancePath:instancePath+"/coachMarks",schemaPath:"#/properties/coachMarks/type",keyword:"type",params:{type: "array"},message:"must be array"};
+const err120 = {instancePath:instancePath+"/unlocks/" + i2,schemaPath:"#/properties/unlocks/items/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err120];
 }
@@ -2969,12 +2934,124 @@ errors++;
 }
 }
 else {
-const err121 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const err121 = {instancePath:instancePath+"/unlocks",schemaPath:"#/properties/unlocks/type",keyword:"type",params:{type: "array"},message:"must be array"};
 if(vErrors === null){
 vErrors = [err121];
 }
 else {
 vErrors.push(err121);
+}
+errors++;
+}
+}
+if(data.assistsAllowed !== undefined){
+let data42 = data.assistsAllowed;
+if(Array.isArray(data42)){
+const len3 = data42.length;
+for(let i3=0; i3<len3; i3++){
+let data43 = data42[i3];
+if(typeof data43 !== "string"){
+const err122 = {instancePath:instancePath+"/assistsAllowed/" + i3,schemaPath:"#/$defs/assist/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err122];
+}
+else {
+vErrors.push(err122);
+}
+errors++;
+}
+if(!(((((((data43 === "closest_approach") || (data43 === "elements")) || (data43 === "snapping")) || (data43 === "constraints")) || (data43 === "targeting_computer")) || (data43 === "porkchop")) || (data43 === "coach_marks"))){
+const err123 = {instancePath:instancePath+"/assistsAllowed/" + i3,schemaPath:"#/$defs/assist/enum",keyword:"enum",params:{allowedValues: schema41.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err123];
+}
+else {
+vErrors.push(err123);
+}
+errors++;
+}
+}
+let i4 = data42.length;
+let j0;
+if(i4 > 1){
+outer0:
+for(;i4--;){
+for(j0 = i4; j0--;){
+if(func0(data42[i4], data42[j0])){
+const err124 = {instancePath:instancePath+"/assistsAllowed",schemaPath:"#/properties/assistsAllowed/uniqueItems",keyword:"uniqueItems",params:{i: i4, j: j0},message:"must NOT have duplicate items (items ## "+j0+" and "+i4+" are identical)"};
+if(vErrors === null){
+vErrors = [err124];
+}
+else {
+vErrors.push(err124);
+}
+errors++;
+break outer0;
+}
+}
+}
+}
+}
+else {
+const err125 = {instancePath:instancePath+"/assistsAllowed",schemaPath:"#/properties/assistsAllowed/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err125];
+}
+else {
+vErrors.push(err125);
+}
+errors++;
+}
+}
+if(data.coachMarks !== undefined){
+let data44 = data.coachMarks;
+if(Array.isArray(data44)){
+const len4 = data44.length;
+for(let i5=0; i5<len4; i5++){
+let data45 = data44[i5];
+if(typeof data45 === "string"){
+if(!pattern5.test(data45)){
+const err126 = {instancePath:instancePath+"/coachMarks/" + i5,schemaPath:"#/$defs/catalogueKey/pattern",keyword:"pattern",params:{pattern: "^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$"},message:"must match pattern \""+"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$"+"\""};
+if(vErrors === null){
+vErrors = [err126];
+}
+else {
+vErrors.push(err126);
+}
+errors++;
+}
+}
+else {
+const err127 = {instancePath:instancePath+"/coachMarks/" + i5,schemaPath:"#/$defs/catalogueKey/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err127];
+}
+else {
+vErrors.push(err127);
+}
+errors++;
+}
+}
+}
+else {
+const err128 = {instancePath:instancePath+"/coachMarks",schemaPath:"#/properties/coachMarks/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err128];
+}
+else {
+vErrors.push(err128);
+}
+errors++;
+}
+}
+}
+else {
+const err129 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err129];
+}
+else {
+vErrors.push(err129);
 }
 errors++;
 }

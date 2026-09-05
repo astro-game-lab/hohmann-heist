@@ -10,6 +10,11 @@
  * | `L5` | two nodes within the minimum spacing | yes |
  * | `L6` | the objective is not met anywhere in the timeline | **no** |
  *
+ * §6.5's burn-count cap is **not** in this table, and that is the point of it being
+ * soft: it is evaluated into {@link LegalityConstraints} on every call and produces no
+ * reason and no code. Adding an `L7` for it would be a design change to §6.4, not a
+ * detail of this file.
+ *
  * ## `L6` is a warning, and that is a design decision rather than an oversight
  *
  * §6.4: *"Committing a plan you know will fail is a legitimate way to learn, and the
@@ -66,10 +71,16 @@ import { MINIMUM_NODE_SPACING_S } from '@hh/sim';
 import type {
   AltitudeFloorEvaluation,
   BudgetEvaluation,
+  BurnCountEvaluation,
   ConstraintViolation,
   DeadlineEvaluation,
 } from './constraints/index.js';
-import { evaluateAltitudeFloor, evaluateBudget, evaluateDeadline } from './constraints/index.js';
+import {
+  evaluateAltitudeFloor,
+  evaluateBudget,
+  evaluateBurnCount,
+  evaluateDeadline,
+} from './constraints/index.js';
 import type { GameMessage } from './messages.js';
 import { NO_PARAMS, gameMessage } from './messages.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
@@ -98,6 +109,15 @@ export interface LegalityRules {
   readonly deadlineSeconds: number;
   /** Altitude floor in metres. Defaults to DEP-08's 100 km. */
   readonly floorAltitudeM?: number;
+  /**
+   * §6.5's soft burn-count cap, or `undefined` for a contract that declares none.
+   *
+   * Present in the rules and **absent from the reason list**, which is the whole of what
+   * "soft" means here — see `./constraints/burn-count.ts`. It is carried so the
+   * evaluation lands in {@link LegalityConstraints} beside the other three and the
+   * planner can draw its band without a second pass over the plan.
+   */
+  readonly maxBurns?: number;
 }
 
 /** The constraint evaluations legality ran, so a caller need not repeat them. */
@@ -105,6 +125,14 @@ export interface LegalityConstraints {
   readonly budget: BudgetEvaluation;
   readonly deadline: DeadlineEvaluation;
   readonly altitudeFloor: AltitudeFloorEvaluation;
+  /**
+   * The burn-count cap (§6.5, C04 onward).
+   *
+   * Always evaluated, always reported, and — alone among the four — never consulted when
+   * {@link evaluateLegality} builds its reason list. A contract with no cap reports a
+   * `null` cap rather than being absent, so a consumer reads one shape.
+   */
+  readonly burnCount: BurnCountEvaluation;
 }
 
 export type Legality =
@@ -279,8 +307,12 @@ export const evaluateLegality = (
     budget: evaluateBudget(timeline, rules.budgetMps),
     deadline: evaluateDeadline(timeline, rules.deadlineSeconds),
     altitudeFloor: evaluateAltitudeFloor(timeline, rules.floorAltitudeM),
+    burnCount: evaluateBurnCount(timeline, rules.maxBurns),
   };
 
+  // `constraints.burnCount` is deliberately absent from this list. §6.4's codes stop at
+  // `L6` and none of them is a burn count, so the cap is evaluated, reported and drawn
+  // without ever reaching `commitAllowed`. See `./constraints/burn-count.ts`.
   const reasons = [
     checkBudget(constraints.budget),
     checkAltitudeFloor(constraints.altitudeFloor, timeline.startEpoch),

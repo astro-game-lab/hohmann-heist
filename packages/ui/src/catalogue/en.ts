@@ -259,6 +259,15 @@ export const en: Messages = {
   'scenario.error.toleranceTooLoose': ({ path, requested, limit }, fmt) =>
     `${path} asks for ${fmt.number(requested)}, which is looser than the ${fmt.number(limit)} ` +
     'the departures table promises the player',
+  // The two halves say different things on purpose: what is missing, and why it was not
+  // allowed to be. A goal may omit an angle it does not have; omitting one it does have
+  // would make the contract demand an orientation nobody wrote down.
+  'scenario.error.omittedMeaningfulElement': ({ path, property, because }) =>
+    `${path} omits ${property}, but this goal is ${
+      because === 'eccentric'
+        ? 'eccentric and so has an apse line'
+        : 'inclined and so has a node line'
+    } to orient. Omit it only when the goal makes it meaningless.`,
 
   // ── Contract briefs and coach marks (§8.3.3) ───────────────────────────────
   //
@@ -429,7 +438,7 @@ export const en: Messages = {
   // Order matches `ConstraintKind`: dv_budget, deadline, altitude_floor. A kind outside
   // the list falls back to the generic sentence rather than to `undefined`.
   'planner.timeline.band': ({ kind, startMetSeconds, endMetSeconds }, fmt) => {
-    const names = ['Δv budget', 'deadline', 'altitude floor'];
+    const names = ['Δv budget', 'deadline', 'altitude floor', 'burn count'];
     const name = names[kind] ?? 'constraint';
     return `${name} violated from ${fmt.met(startMetSeconds)} to ${fmt.met(endMetSeconds)}`;
   },

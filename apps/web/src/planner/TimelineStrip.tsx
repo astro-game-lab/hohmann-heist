@@ -37,7 +37,7 @@
  * never discovers a constraint by failing it).
  */
 import { metAt, type Epoch } from '@hh/astro';
-import type { ConstraintViolation, LegalityReason } from '@hh/game';
+import type { ConstraintKind, ConstraintViolation, LegalityReason } from '@hh/game';
 import type { Plan } from '@hh/sim';
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
@@ -51,8 +51,21 @@ import type { JSX } from 'preact';
  */
 export const SCRUB_STEP_SECONDS = 60;
 
-/** Where a constraint band came from, so its label can name the constraint. */
-const BAND_KIND_ORDER = ['dv_budget', 'deadline', 'altitude_floor'] as const;
+/**
+ * Where a constraint band came from, so its label can name the constraint.
+ *
+ * Every member of `ConstraintKind`, so the lookup below is total. `burn_count` never
+ * reaches here today — the cap is soft, so it produces no `LegalityReason` and these
+ * bands are flattened out of the reason list — and it is listed anyway: the compiler
+ * checks this array against the union, and leaving a kind out would make the next
+ * constraint that *is* drawn silently label itself "constraint".
+ */
+const BAND_KIND_ORDER: readonly ConstraintKind[] = [
+  'dv_budget',
+  'deadline',
+  'altitude_floor',
+  'burn_count',
+];
 
 export interface TimelineStripProps {
   readonly t: Catalogue['resolve'];

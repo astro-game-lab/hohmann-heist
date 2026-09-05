@@ -134,11 +134,27 @@ export interface ReachOrbitEvaluation {
   readonly tolerance: OrbitTolerance;
 }
 
-/** `true` when the goal's eccentricity is below the threshold that makes an apse line meaningful. */
-const goalIsCircular = (goal: OrbitShape): boolean => goal.eccentricity <= CIRCULAR_TOLERANCE;
+/**
+ * `true` when the goal's eccentricity is below the threshold that makes an apse line
+ * meaningful.
+ *
+ * Exported because the *loader* asks the same question, for the mirror-image reason. The
+ * schema lets a goal omit `argp_rad`, and the loader refuses a document that omits it
+ * while still having an apse line — which is exactly the condition under which this
+ * evaluator would have compared it. One predicate, so the file format and the rule that
+ * reads it cannot drift apart: a threshold changed in one place and not the other would
+ * make a contract either uncheckable or unloadable, and neither would be visible here.
+ */
+export const goalIsCircular = (goal: OrbitShape): boolean =>
+  goal.eccentricity <= CIRCULAR_TOLERANCE;
 
-/** `true` when `sin i` is below the threshold that makes a node line meaningful (§7.2). */
-const goalIsEquatorial = (goal: OrbitShape): boolean =>
+/**
+ * `true` when `sin i` is below the threshold that makes a node line meaningful (§7.2).
+ *
+ * Exported alongside {@link goalIsCircular}, and for the same reason. `sin i` rather than
+ * `i` so a retrograde equatorial goal is caught as well as a prograde one.
+ */
+export const goalIsEquatorial = (goal: OrbitShape): boolean =>
   Math.abs(Math.sin(goal.inclination)) <= EQUATORIAL_TOLERANCE;
 
 /**

@@ -361,3 +361,93 @@ describe('tolerance overrides', () => {
     }
   });
 });
+
+/**
+ * A `reach_orbit` goal's two orientation angles — #90.
+ *
+ * The schema makes them optional so a degenerate goal need not invent an orientation it
+ * does not have. Everything below is about the other half of that bargain: a goal that
+ * *does* have one must say so, because `evaluateReachOrbit` decides what to compare from
+ * the goal and would otherwise compare against a default of zero — a requirement the
+ * contract never stated, and one that every §13.4 check would pass while it did.
+ */
+describe('a reach_orbit goal’s orientation (#90)', () => {
+  const withGoal = (goal: Record<string, unknown>): Record<string, unknown> => ({
+    ...scenario(),
+    targets: [],
+    objective: { kind: 'reach_orbit', goal },
+  });
+
+  it('accepts a circular equatorial goal that omits both angles', () => {
+    // C02's shape: circular at 800 km, equatorial. No apse line, no node line.
+    const result = loaded(withGoal({ a_m: 7_178_137, e: 0, i_rad: 0 }));
+    if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    expect(result.objective.goal.raan).toBe(0);
+    expect(result.objective.goal.argp).toBe(0);
+  });
+
+  it('accepts an eccentric equatorial goal that states argp and omits raan', () => {
+    // C01's shape: a 400 × 800 km ellipse, equatorial. The apse line is the puzzle; the
+    // node line does not exist.
+    const result = loaded(withGoal({ a_m: 6_978_137, e: 0.028_660_94, i_rad: 0, argp_rad: 0 }));
+    expect(result.objective.kind).toBe('reach_orbit');
+  });
+
+  it('refuses an eccentric goal that omits its argument of periapsis', () => {
+    const result = parseScenario(withGoal({ a_m: 6_978_137, e: 0.028_660_94, i_rad: 0 }));
+    expect(keys(result)).toContain('scenario.error.omittedMeaningfulElement');
+    expect(paths(result)).toContain('/objective/goal/argp_rad');
+  });
+
+  it('refuses an inclined goal that omits its RAAN', () => {
+    const result = parseScenario(withGoal({ a_m: 7_178_137, e: 0, i_rad: 0.9 }));
+    expect(keys(result)).toContain('scenario.error.omittedMeaningfulElement');
+    expect(paths(result)).toContain('/objective/goal/raan_rad');
+  });
+
+  // The equatorial test is on `sin i`, so π is as equatorial as 0 (§7.2). A retrograde
+  // equatorial goal has no node line either, and must be allowed to say so.
+  it('treats a retrograde equatorial goal as having no node line', () => {
+    expect(parseScenario(withGoal({ a_m: 7_178_137, e: 0, i_rad: Math.PI })).ok).toBe(true);
+  });
+
+  it('reports both omissions at once rather than stopping at the first', () => {
+    const result = parseScenario(withGoal({ a_m: 6_978_137, e: 0.05, i_rad: 0.9 }));
+    expect(paths(result)).toStrictEqual(['/objective/goal/argp_rad', '/objective/goal/raan_rad']);
+  });
+});
+
+/**
+ * §6.5's burn-count cap, as the loader sees it — #92.
+ *
+ * The loader's whole job here is to keep "no cap" distinguishable from "a generous cap".
+ * `constraints/burn-count.ts` says why that distinction reaches the HUD.
+ */
+describe('the burn-count cap (#92)', () => {
+  it('carries a declared cap into the rules', () => {
+    const document = {
+      ...scenario(),
+      constraints: [
+        { kind: 'altitude_floor', min_m: 100_000 },
+        { kind: 'deadline', seconds: 45_000 },
+        { kind: 'burn_count', max: 2 },
+      ],
+    };
+    expect(loaded(document).rules.maxBurns).toBe(2);
+  });
+
+  it('leaves maxBurns absent — not zero, not Infinity — when no cap is declared', () => {
+    expect(loaded(scenario()).rules).not.toHaveProperty('maxBurns');
+  });
+
+  it('refuses two burn_count constraints, like every other duplicated kind', () => {
+    const document = {
+      ...scenario(),
+      constraints: [
+        { kind: 'burn_count', max: 2 },
+        { kind: 'burn_count', max: 3 },
+      ],
+    };
+    expect(keys(parseScenario(document))).toContain('scenario.error.duplicateConstraint');
+  });
+});

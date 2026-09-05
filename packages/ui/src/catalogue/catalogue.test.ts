@@ -98,6 +98,12 @@ const samples: AllMessageParams = {
   'screen.notFound.body': { path: '/nope' },
   'screen.notFound.backToTitle': {},
   'screen.notBuiltYet': {},
+  'scenario.error.omittedMeaningfulElement': {
+    path: '/objective/goal/argp_rad',
+    property: 'argp_rad',
+    because: 'eccentric',
+  },
+
   'brief.c03': {},
   'client.withheld': {},
   'planner.handle.prograde': {},

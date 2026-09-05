@@ -60,6 +60,15 @@ const legality = (reasons: readonly LegalityReason[]): Legality => ({
       referenceRadiusM: 6_378_137,
       totalSecondsBelow: 0,
     },
+    burnCount: {
+      kind: 'burn_count',
+      violations: [],
+      burns: 0,
+      maxBurns: null,
+      remaining: null,
+      exceeded: false,
+      exceededAtNode: null,
+    },
   },
 });
 

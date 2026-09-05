@@ -41,7 +41,7 @@ export type {
   ReachOrbitEvaluation,
   SkipReason,
 } from './reach-orbit.js';
-export { evaluateReachOrbit } from './reach-orbit.js';
+export { evaluateReachOrbit, goalIsCircular, goalIsEquatorial } from './reach-orbit.js';
 
 export type {
   ProximityAchieved,

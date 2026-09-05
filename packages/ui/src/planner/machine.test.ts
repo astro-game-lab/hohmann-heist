@@ -91,6 +91,15 @@ const allowed = (): CommittableLegality => {
         referenceRadiusM: 6_378_137,
         totalSecondsBelow: 0,
       },
+      burnCount: {
+        kind: 'burn_count',
+        violations: [],
+        burns: 0,
+        maxBurns: null,
+        remaining: null,
+        exceeded: false,
+        exceededAtNode: null,
+      },
     },
   };
   // The narrowing is the point of the fixture, not ceremony around it: `commit` cannot

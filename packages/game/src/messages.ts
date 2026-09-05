@@ -267,6 +267,20 @@ export interface GameMessageParams {
     readonly requested: number;
     readonly limit: number;
   };
+  /**
+   * A `reach_orbit` goal omitted an element that its own shape makes meaningful.
+   *
+   * The two orientation angles are optional so a degenerate goal can decline to state
+   * an orientation it does not have — a circular goal has no apse line, an equatorial
+   * one no node line. Omitting one the goal *does* have is a different thing: the
+   * evaluator would compare the achieved orbit against a default of zero, so the
+   * contract would silently demand an orientation its author never wrote down.
+   */
+  readonly 'scenario.error.omittedMeaningfulElement': {
+    readonly path: string;
+    readonly property: string;
+    readonly because: 'eccentric' | 'inclined';
+  };
 }
 
 /** Every key this package can emit. */

@@ -78,6 +78,13 @@ export type Constraint =
        * Cap on mission elapsed time.
        */
       seconds: number;
+    }
+  | {
+      kind: 'burn_count';
+      /**
+       * Largest burn count the contract is designed around (§6.5). **Soft**: it never blocks commit, and §6.4's legality codes have no entry for it. Exceeding it forfeits Gold and nothing else, through §6.7's existing `burns ≤ par_burns` rule — so a contract publishes the same number here that its par carries, and the cap is what makes it visible in the briefing and the HUD rather than a second rule.
+       */
+      max: number;
     };
 export type Assist =
   | 'closest_approach'
@@ -185,14 +192,20 @@ export interface Target {
   state: StateSpec;
 }
 /**
- * The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.
+ * The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on. `raan_rad` and `argp_rad` are optional because a goal that is equatorial has no node line and a goal that is circular has no apse line, and a file that stated one anyway would be asserting an orientation the goal does not have; the loader refuses a document that omits one its own goal makes meaningful.
  */
 export interface OrbitGoal {
   a_m: number;
   e: number;
   i_rad: number;
-  raan_rad: number;
-  argp_rad: number;
+  /**
+   * Right ascension of the ascending node. Omitted when the goal is equatorial, where there is no node line to orient.
+   */
+  raan_rad?: number;
+  /**
+   * Argument of periapsis. Omitted when the goal is circular, where there is no apse line to orient.
+   */
+  argp_rad?: number;
 }
 /**
  * The best known solution, not a proven optimum (DEP-12). §11.5: a par without a reproducible derivation is not mergeable.

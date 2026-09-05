@@ -24,8 +24,9 @@
  *    the contributor's intent quietly did nothing (G6).
  * 4. **Semantics.** The things a schema genuinely cannot check — an objective naming a
  *    target that is not there, a deadline past the horizon, two constraints of the same
- *    kind, a start below the floor, a tolerance looser than the departure table
- *    permits. Same error shape, same specificity.
+ *    kind, a start below the floor, a tolerance looser than the departure table permits,
+ *    a `reach_orbit` goal that omitted an orientation its own shape makes meaningful.
+ *    Same error shape, same specificity.
  *
  * Each gate reports *all* of its own failures and then stops. Running the semantic
  * checks on a document that failed the schema would mean reading fields that may not
@@ -67,6 +68,8 @@ import {
   RENDEZVOUS_MAX_RANGE_M,
   RENDEZVOUS_MAX_REL_SPEED_MPS,
   SOFT_RENDEZVOUS_MAX_REL_SPEED_MPS,
+  goalIsCircular,
+  goalIsEquatorial,
 } from '../objectives/index.js';
 import type { ScenarioError } from './errors.js';
 import { toScenarioErrors } from './errors.js';
@@ -140,15 +143,66 @@ export type LoadResult =
 
 const failure = (errors: readonly ScenarioError[]): LoadResult => ({ ok: false, errors });
 
-/** `p = a(1 − e²)`. Total for `0 ≤ e < 1`, which the schema guarantees. */
+/**
+ * `p = a(1 − e²)`. Total for `0 ≤ e < 1`, which the schema guarantees.
+ *
+ * The two orientation angles fall back to zero because an {@link OrbitGoal} may omit
+ * them — a circular goal has no apse line and an equatorial one no node line, so the
+ * schema stopped requiring an author to invent a value for an angle their goal does not
+ * have. Zero is safe *only* because {@link checkGoalOrientation} has already refused any
+ * document that omitted one the goal makes meaningful; without that guard this line
+ * would silently turn "unspecified" into "aligned with the x-axis", which is a
+ * requirement the contract never stated. A `StateSpec` requires both, so this branch is
+ * unreachable for a ship or a target.
+ */
 const orbitShapeOf = (spec: StateSpec | OrbitGoal, trueAnomalyRad: number): OrbitShape => ({
   semiLatusRectum: metres(spec.a_m * (1 - spec.e * spec.e)),
   eccentricity: spec.e,
   inclination: radians(spec.i_rad),
-  raan: radians(spec.raan_rad),
-  argp: radians(spec.argp_rad),
+  raan: radians(spec.raan_rad ?? 0),
+  argp: radians(spec.argp_rad ?? 0),
   trueAnomaly: radians(trueAnomalyRad),
 });
+
+/**
+ * Refuse a `reach_orbit` goal that omitted an orientation it actually has.
+ *
+ * The schema's optionality exists so a degenerate goal can decline to state an angle
+ * that means nothing for it. The mistake it opens up is the opposite one: an eccentric
+ * or inclined goal that leaves the angle out gets zero from {@link orbitShapeOf}, and
+ * `evaluateReachOrbit` — which decides what to compare from the **goal**, not from the
+ * achieved orbit — would then compare against it. The contract would demand an apse
+ * line at the x-axis that nobody wrote down, and every one of §13.4's seven checks would
+ * pass while it did.
+ *
+ * The two predicates are `../objectives/reach-orbit.ts`'s own, so the condition under
+ * which an element must be present is exactly the condition under which it is compared.
+ */
+const checkGoalOrientation = (goal: OrbitGoal, errors: ScenarioError[]): void => {
+  const shape = orbitShapeOf(goal, 0);
+  if (goal.argp_rad === undefined && !goalIsCircular(shape)) {
+    const path = '/objective/goal/argp_rad';
+    errors.push({
+      path,
+      message: gameMessage('scenario.error.omittedMeaningfulElement', {
+        path,
+        property: 'argp_rad',
+        because: 'eccentric',
+      }),
+    });
+  }
+  if (goal.raan_rad === undefined && !goalIsEquatorial(shape)) {
+    const path = '/objective/goal/raan_rad';
+    errors.push({
+      path,
+      message: gameMessage('scenario.error.omittedMeaningfulElement', {
+        path,
+        property: 'raan_rad',
+        because: 'inclined',
+      }),
+    });
+  }
+};
 
 const stateOf = (spec: StateSpec, mu: number): State =>
   stateFromElements(orbitShapeOf(spec, spec.nu_rad), mu);
@@ -226,12 +280,17 @@ const interpret = (document: Scenario): LoadResult => {
 
   const deadline = rawConstraints.find((constraint) => constraint.kind === 'deadline');
   const floor = rawConstraints.find((constraint) => constraint.kind === 'altitude_floor');
+  const burnCap = rawConstraints.find((constraint) => constraint.kind === 'burn_count');
 
   // A contract with no explicit deadline is bounded by its own horizon, which is what
   // §6.3 says the horizon *is* — the deadline plus a margin. Defaulting to it keeps
   // `rules` total without inventing a number.
   const deadlineSeconds = deadline?.kind === 'deadline' ? deadline.seconds : horizonSeconds;
   const floorAltitudeM = floor?.kind === 'altitude_floor' ? floor.min_m : ALTITUDE_FLOOR_M;
+  // No default. §6.5's cap is per contract and most contracts have none, so "absent"
+  // has to stay distinguishable from "generous" — `evaluateBurnCount` reports a `null`
+  // cap for the first and a number for the second, and the HUD draws nothing for the one.
+  const maxBurns = burnCap?.kind === 'burn_count' ? burnCap.max : undefined;
 
   if (deadlineSeconds > horizonSeconds) {
     const path = '/constraints';
@@ -261,6 +320,7 @@ const interpret = (document: Scenario): LoadResult => {
   const objective = ((): LoadedObjective => {
     const raw = document.objective;
     if (raw.kind === 'reach_orbit') {
+      checkGoalOrientation(raw.goal, errors);
       return {
         kind: 'reach_orbit',
         goal: orbitShapeOf(raw.goal, 0),
@@ -361,6 +421,7 @@ const interpret = (document: Scenario): LoadResult => {
         budgetMps: document.ship.dvBudget_mps,
         deadlineSeconds,
         floorAltitudeM,
+        ...(maxBurns === undefined ? {} : { maxBurns }),
       },
     },
   };

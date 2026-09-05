@@ -192,9 +192,9 @@
     },
     "orbitGoal": {
       "type": "object",
-      "required": ["a_m", "e", "i_rad", "raan_rad", "argp_rad"],
+      "required": ["a_m", "e", "i_rad"],
       "additionalProperties": false,
-      "description": "The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.",
+      "description": "The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on. `raan_rad` and `argp_rad` are optional because a goal that is equatorial has no node line and a goal that is circular has no apse line, and a file that stated one anyway would be asserting an orientation the goal does not have; the loader refuses a document that omits one its own goal makes meaningful.",
       "properties": {
         "a_m": {
           "type": "number",
@@ -213,12 +213,14 @@
         "raan_rad": {
           "type": "number",
           "minimum": 0,
-          "exclusiveMaximum": 6.283185307179587
+          "exclusiveMaximum": 6.283185307179587,
+          "description": "Right ascension of the ascending node. Omitted when the goal is equatorial, where there is no node line to orient."
         },
         "argp_rad": {
           "type": "number",
           "minimum": 0,
-          "exclusiveMaximum": 6.283185307179587
+          "exclusiveMaximum": 6.283185307179587,
+          "description": "Argument of periapsis. Omitted when the goal is circular, where there is no apse line to orient."
         }
       }
     },
@@ -411,6 +413,22 @@
               "type": "number",
               "exclusiveMinimum": 0,
               "description": "Cap on mission elapsed time."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "max"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "burn_count"
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Largest burn count the contract is designed around (\u00a76.5). **Soft**: it never blocks commit, and \u00a76.4's legality codes have no entry for it. Exceeding it forfeits Gold and nothing else, through \u00a76.7's existing `burns \u2264 par_burns` rule \u2014 so a contract publishes the same number here that its par carries, and the cap is what makes it visible in the briefing and the HUD rather than a second rule."
             }
           }
         }

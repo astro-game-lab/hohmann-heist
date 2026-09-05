@@ -15,7 +15,12 @@
 import { describe, expect, it } from 'vitest';
 import { defaultAssistState, type AssistState } from './assists.js';
 
-import { evaluateAltitudeFloor, evaluateBudget, evaluateDeadline } from './constraints/index.js';
+import {
+  evaluateAltitudeFloor,
+  evaluateBudget,
+  evaluateBurnCount,
+  evaluateDeadline,
+} from './constraints/index.js';
 import type { LegalityConstraints, LegalityRules } from './legality.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
 import {
@@ -78,6 +83,7 @@ const inputFor = (options: {
     budget: { ...budget, usedMps: options.dvMps },
     deadline: evaluateDeadline(timeline, rules.deadlineSeconds),
     altitudeFloor: evaluateAltitudeFloor(timeline),
+    burnCount: evaluateBurnCount(timeline, rules.maxBurns),
   };
   return {
     timeline,
