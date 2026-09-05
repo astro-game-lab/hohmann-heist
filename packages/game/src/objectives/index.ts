@@ -37,11 +37,17 @@ export {
 export type {
   ComparedElement,
   ElementComparison,
+  GoalOrientation,
   ReachOrbitAchieved,
   ReachOrbitEvaluation,
   SkipReason,
 } from './reach-orbit.js';
-export { evaluateReachOrbit, goalIsCircular, goalIsEquatorial } from './reach-orbit.js';
+export {
+  FULLY_ORIENTED,
+  evaluateReachOrbit,
+  goalIsCircular,
+  goalIsEquatorial,
+} from './reach-orbit.js';
 
 export type {
   ProximityAchieved,

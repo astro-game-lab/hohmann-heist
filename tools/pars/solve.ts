@@ -73,7 +73,6 @@ import {
   biEllipticTransfer,
   eci,
   elementsFromState,
-  hohmannTransfer,
   period,
   periapsisRadius,
   solveLambert,
@@ -926,6 +925,7 @@ interface TransferShape {
  */
 const transferShapesFor = (
   departureRadiusM: number,
+  departureSpeedMps: number,
   goal: GoalApsides,
   radiusToleranceM: number,
   mu: number,
@@ -933,23 +933,40 @@ const transferShapesFor = (
   const here = (radius: number): boolean => Math.abs(radius - departureRadiusM) <= radiusToleranceM;
   const circularGoal = goal.apoapsisM - goal.periapsisM <= 2 * radiusToleranceM;
 
+  /**
+   * The impulse from **vis-viva at the ship's actual state**, not from `hohmannTransfer`.
+   *
+   * The closed form takes two circular radii and reports the burn between them, which is
+   * the ship's burn only when the ship is on the inner circle. C01's is not: it flies a
+   * 400 × 450 km ellipse, so at its own periapsis it is already moving faster than
+   * circular and needs 95.04 m/s to raise apoapsis to 800 km where a circular departure
+   * would need 109.12. Using the closed form there asks for the right *orbit* with the
+   * wrong *burn*, and misses by 300 km.
+   *
+   * `hohmannTransfer` keeps its job in `crosscheck.ts`, which is the better division of
+   * labour anyway: the search reads the state it is actually at, and the closed form
+   * checks the answer from the other direction.
+   */
+  const impulseTo = (targetApsisM: number, fromRadiusM: number, fromSpeedMps: number): number => {
+    const semiMajorAxis = (fromRadiusM + targetApsisM) / 2;
+    return Math.sqrt(mu * (2 / fromRadiusM - 1 / semiMajorAxis)) - fromSpeedMps;
+  };
+
   const build = (targetRadius: number, impulses: 1 | 2): TransferShape => {
-    const hohmann = hohmannTransfer(metres(departureRadiusM), metres(targetRadius), mu);
-    // Sign: outward is prograde, inward retrograde. `hohmannTransfer` reports magnitudes.
-    const outward = targetRadius > departureRadiusM ? 1 : -1;
-    return impulses === 1
-      ? {
-          shape: 'hohmann',
-          magnitudes: [outward * hohmann.firstBurn],
-          offsets: [0],
-          intermediateRadiusM: null,
-        }
-      : {
-          shape: 'hohmann',
-          magnitudes: [outward * hohmann.firstBurn, outward * hohmann.secondBurn],
-          offsets: [0, hohmann.timeOfFlight],
-          intermediateRadiusM: null,
-        };
+    const transferAxis = (departureRadiusM + targetRadius) / 2;
+    const first = impulseTo(targetRadius, departureRadiusM, departureSpeedMps);
+    if (impulses === 1) {
+      return { shape: 'hohmann', magnitudes: [first], offsets: [0], intermediateRadiusM: null };
+    }
+    // The second impulse circularises at the far apsis: the circular speed there against
+    // the speed the transfer ellipse arrives with.
+    const arrivalSpeed = Math.sqrt(mu * (2 / targetRadius - 1 / transferAxis));
+    return {
+      shape: 'hohmann',
+      magnitudes: [first, Math.sqrt(mu / targetRadius) - arrivalSpeed],
+      offsets: [0, Math.PI * Math.sqrt(transferAxis ** 3 / mu)],
+      intermediateRadiusM: null,
+    };
   };
 
   // An apsis already at the ship's radius, and the goal is not simply the orbit it is
@@ -957,16 +974,13 @@ const transferShapesFor = (
   if (!circularGoal && here(goal.periapsisM)) return [build(goal.apoapsisM, 1)];
   if (!circularGoal && here(goal.apoapsisM)) return [build(goal.periapsisM, 1)];
 
-  if (!circularGoal) {
-    throw new Error(
-      `no tangential transfer reaches an eccentric goal (${group(goal.periapsisM)} × ` +
-        `${group(goal.apoapsisM)} m) from a circular orbit at ${group(departureRadiusM)} m ` +
-        'that shares neither of its apsides. A two-impulse tangential transfer ends on a ' +
-        'circle; answering with the Hohmann transfer to the goal’s periapsis would publish ' +
-        'the cost of arriving on a different orbit. This needs a family of its own — see ' +
-        'tools/pars/solve.ts.',
-    );
-  }
+  // An eccentric goal sharing neither apsis with the ship's current radius: no tangential
+  // transfer reaches it, because a two-impulse tangential transfer ends on a circle.
+  // Empty rather than thrown — the departure sweep visits this at *most* of the epochs it
+  // tries, since the ship is only at an apsis twice per revolution, and walking over an
+  // epoch that offers no transfer is the ordinary case rather than an error. When no epoch
+  // works at all, `solveReachOrbit` says so with the whole sweep's evidence.
+  if (!circularGoal) return [];
 
   const targetRadius = goal.periapsisM;
   const shapes: TransferShape[] = [build(targetRadius, 2)];
@@ -977,12 +991,6 @@ const transferShapesFor = (
   if (best !== null) shapes.push(best);
   return shapes;
 };
-
-/** An integer with its digits grouped in threes, for a message a person will read. */
-const group = (value: number): string =>
-  Math.round(value)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 /**
  * `docs/PHYSICS.md`'s measured lower threshold: below this, Hohmann wins for every `r_b`.
@@ -1092,18 +1100,22 @@ const solveReachOrbit = (
     if (from === null) return [];
     const radius = V.norm(from.position);
 
-    return transferShapesFor(radius, goal, objective.tolerance.radiusM, scenario.mu).flatMap(
-      (shape) => {
-        const impulses = shape.magnitudes.map((magnitudeMps, index) => ({
-          met: departureMet + (shape.offsets[index] ?? 0),
-          magnitudeMps,
-        }));
-        const last = impulses[impulses.length - 1];
-        if (last === undefined || last.met > scenario.rules.deadlineSeconds) return [];
-        const plan = planForImpulses(scenario, impulses);
-        return plan === null ? [] : [{ shape, plan }];
-      },
-    );
+    return transferShapesFor(
+      radius,
+      V.norm(from.velocity),
+      goal,
+      objective.tolerance.radiusM,
+      scenario.mu,
+    ).flatMap((shape) => {
+      const impulses = shape.magnitudes.map((magnitudeMps, index) => ({
+        met: departureMet + (shape.offsets[index] ?? 0),
+        magnitudeMps,
+      }));
+      const last = impulses[impulses.length - 1];
+      if (last === undefined || last.met > scenario.rules.deadlineSeconds) return [];
+      const plan = planForImpulses(scenario, impulses);
+      return plan === null ? [] : [{ shape, plan }];
+    });
   };
 
   /** How far the best transfer from this departure epoch lands from the goal. */

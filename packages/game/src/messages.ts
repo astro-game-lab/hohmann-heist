@@ -52,6 +52,8 @@
  * exists to prevent; the catalogue has `Intl.ListFormat` and the locale, and this
  * package has neither.
  */
+import type { ComparedElement } from './objectives/reach-orbit.js';
+
 export type MessageParamValue = string | number | readonly string[];
 
 /** The parameters accompanying a key. */
@@ -163,7 +165,17 @@ export interface GameMessageParams {
    * into one, so the rule never builds prose (FR-910).
    */
   readonly 'debrief.diagnosis.wrongOrbit': {
-    readonly element: string;
+    /**
+     * Which element missed, as `reach_orbit`'s own union rather than as a string.
+     *
+     * It was `string`, and that is how the catalogue came to test for `'argp'` while the
+     * evaluator has always emitted `'argumentOfPeriapsis'`. Nothing caught it: the message
+     * fell through to the metres branch and rendered a 180° miss as "0 km out, against
+     * 0 km allowed", which is three wrong things — wrong unit, wrong magnitude, and a
+     * tolerance that reads as forbidding everything. Typed, the mismatch is a compile
+     * error, which is the only reason this cannot happen again for `raan`.
+     */
+    readonly element: ComparedElement;
     readonly difference: number;
     readonly tolerance: number;
   };
@@ -266,20 +278,6 @@ export interface GameMessageParams {
     readonly path: string;
     readonly requested: number;
     readonly limit: number;
-  };
-  /**
-   * A `reach_orbit` goal omitted an element that its own shape makes meaningful.
-   *
-   * The two orientation angles are optional so a degenerate goal can decline to state
-   * an orientation it does not have — a circular goal has no apse line, an equatorial
-   * one no node line. Omitting one the goal *does* have is a different thing: the
-   * evaluator would compare the achieved orbit against a default of zero, so the
-   * contract would silently demand an orientation its author never wrote down.
-   */
-  readonly 'scenario.error.omittedMeaningfulElement': {
-    readonly path: string;
-    readonly property: string;
-    readonly because: 'eccentric' | 'inclined';
   };
 }
 

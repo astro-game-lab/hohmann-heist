@@ -15,6 +15,7 @@
  */
 import { radians, toDegrees } from '@hh/math';
 import type { MessageFormatters, Messages } from './types.js';
+import type { ComparedElement } from '@hh/game';
 
 /**
  * Shared renderings, so that "412.3" is rounded the same way wherever it appears.
@@ -31,12 +32,20 @@ import type { MessageFormatters, Messages } from './types.js';
  * not what anyone says out loud. Absent from this table, the identifier is used as-is,
  * which is ugly rather than wrong.
  */
-const ELEMENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
+/**
+ * Element names, keyed by `reach_orbit`'s own `ComparedElement` union.
+ *
+ * `Record<ComparedElement, string>` and not `Record<string, string>`: the loose type is
+ * how this table came to have an `argp` key that nothing ever looked up, so an argument-of-
+ * periapsis miss printed the raw identifier at the player. A total record over the union
+ * makes a missing key a compile error and an extra one too.
+ */
+const ELEMENT_NAMES: Readonly<Record<ComparedElement, string>> = Object.freeze({
   periapsisRadius: 'periapsis',
   apoapsisRadius: 'apoapsis',
   inclination: 'inclination',
   raan: 'right ascension of the ascending node',
-  argp: 'argument of periapsis',
+  argumentOfPeriapsis: 'argument of periapsis',
 });
 
 const kilometres = (metres: number, fmt: MessageFormatters): string => {
@@ -212,14 +221,15 @@ export const en: Messages = {
   'debrief.diagnosis.wrongOrbit': ({ element, difference, tolerance }, fmt) => {
     // Radii are metres and angles are radians, so the unit follows the element rather
     // than the value — the alternative is guessing from magnitude, which breaks at GEO.
-    const angular = element === 'inclination' || element === 'raan' || element === 'argp';
+    const angular =
+      element === 'inclination' || element === 'raan' || element === 'argumentOfPeriapsis';
     const off = angular
       ? `${fmt.decimal(toDegrees(radians(Math.abs(difference))), 3)}°`
       : `${kilometres(Math.abs(difference), fmt)} km`;
     const allowed = angular
       ? `${fmt.decimal(toDegrees(radians(tolerance)), 3)}°`
       : `${kilometres(tolerance, fmt)} km`;
-    return `Your ${ELEMENT_NAMES[element] ?? element} was ${off} out, against ${allowed} allowed.`;
+    return `Your ${ELEMENT_NAMES[element]} was ${off} out, against ${allowed} allowed.`;
   },
   'debrief.diagnosis.tooFast': ({ relativeSpeedMps, maxRelativeSpeedMps }, fmt) =>
     `You were close enough, and still closing at ${fmt.decimal(relativeSpeedMps, 2)} m/s — ` +
@@ -274,15 +284,6 @@ export const en: Messages = {
   'scenario.error.toleranceTooLoose': ({ path, requested, limit }, fmt) =>
     `${path} asks for ${fmt.number(requested)}, which is looser than the ${fmt.number(limit)} ` +
     'the departures table promises the player',
-  // The two halves say different things on purpose: what is missing, and why it was not
-  // allowed to be. A goal may omit an angle it does not have; omitting one it does have
-  // would make the contract demand an orientation nobody wrote down.
-  'scenario.error.omittedMeaningfulElement': ({ path, property, because }) =>
-    `${path} omits ${property}, but this goal is ${
-      because === 'eccentric'
-        ? 'eccentric and so has an apse line'
-        : 'inclined and so has a node line'
-    } to orient. Omit it only when the goal makes it meaningless.`,
 
   // ── Contract briefs and coach marks (§8.3.3) ───────────────────────────────
   //

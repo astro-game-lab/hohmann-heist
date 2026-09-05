@@ -47,6 +47,7 @@ import type { GameMessage } from './messages.js';
 import { gameMessage } from './messages.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
 import { isProximityEvaluation } from './objectives/index.js';
+import type { ComparedElement } from './objectives/reach-orbit.js';
 
 /**
  * How much one axis must exceed the other before the miss is called by its name.
@@ -144,7 +145,7 @@ export const diagnose = (facts: DiagnosisFacts): Diagnosis | null => {
     // wrong" across quantities in different units, which a raw difference cannot rank.
     const worst = objective.comparisons
       .filter((comparison) => comparison.compared && !comparison.within)
-      .reduce<{ element: string; difference: number; tolerance: number } | null>(
+      .reduce<{ element: ComparedElement; difference: number; tolerance: number } | null>(
         (best, comparison) => {
           if (!comparison.compared) return best;
           const ratio = Math.abs(comparison.difference) / comparison.tolerance;

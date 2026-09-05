@@ -236,17 +236,17 @@ lost was worth.
 | Δv budget | 200.0 m/s |
 | Deadline | T+01:30:00 |
 | Horizon | T+03:00:00 |
-| **par_dv** | **109.1177 m/s** |
-| **par_time** | **2776.813 s** (T+00:46:16) |
+| **par_dv** | **95.0405 m/s** |
+| **par_time** | **2792.189 s** (T+00:46:32) |
 | **par_burns** | **1** |
-| Budget headroom | 1.83× (§13.4 asks for ≥ 1.15×) |
-| Horizon headroom | 3.89× (§13.4 asks for ≥ 1.10×) |
+| Budget headroom | 2.10× (§13.4 asks for ≥ 1.15×) |
+| Horizon headroom | 3.87× (§13.4 asks for ≥ 1.10×) |
 
-**Solution.** A single impulse — at MET T+00:46:16 (2776.813 s), RTN [0.0000, 109.1177, 0.0000] m/s prograde.
+**Solution.** A single impulse — at MET T+00:46:32 (2792.189 s), RTN [0.0000, 95.0405, 0.0000] m/s prograde.
 
 **Search.** No Δv search: the minimum-Δv two-impulse transfer between coplanar circular orbits is a closed form, and the winner is a Hohmann transfer in 1 impulse from 6 778 137 m to 7 178 137 m. What was searched is the departure epoch — 361 samples across one revolution, then 30 simplex iterations to the centre of the goal's tolerance band; the refinement stopped on its tolerance. The bi-elliptic branch was **not** searched. The radius ratio is 1.06, below the 11.94 threshold `docs/PHYSICS.md` measures, and below it Hohmann wins for *every* intermediate radius — so there is provably nothing there to find rather than nothing found.
 
-**Independent check.** Against the tangential impulse that raises the far apsis to the goal’s: **109.1177 m/s**. The search found 109.1177 m/s, a difference of 0.000031 m/s (0.00003%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕. Circularising there as well — what C02 costs — would be 216.6823 m/s.
+**Independent check.** Against the tangential impulse that moves the far apsis to the goal’s, from vis-viva on the ship’s own orbit at the apsis it departs from: **95.0405 m/s**. The search found 95.0405 m/s, a difference of 0.000037 m/s (0.00004%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕. Circularising at the far apsis as well would cost a further 107.5646 m/s — the burn this objective does not ask for.
 
 ### c02-round-trip
 
@@ -268,7 +268,7 @@ lost was worth.
 
 **Search.** No Δv search: the minimum-Δv two-impulse transfer between coplanar circular orbits is a closed form, and the winner is a Hohmann transfer in 2 impulses from 6 778 137 m to 7 178 137 m. What was searched is the departure epoch — 1 samples across one revolution, then 0 simplex iterations to the centre of the goal's tolerance band; the refinement stopped on its tolerance. The bi-elliptic branch was **not** searched. The radius ratio is 1.06, below the 11.94 threshold `docs/PHYSICS.md` measures, and below it Hohmann wins for *every* intermediate radius — so there is provably nothing there to find rather than nothing found.
 
-**Independent check.** Against the two-impulse Hohmann transfer between the two circular radii: **216.6823 m/s**. The search found 216.6823 m/s, a difference of 0.000023 m/s (0.00001%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕.
+**Independent check.** Against the two-impulse tangential transfer between the two circular radii: **216.6823 m/s**. The search found 216.6823 m/s, a difference of 0.000023 m/s (0.00001%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕.
 
 ### c03-cold-open
 
@@ -313,7 +313,7 @@ lost was worth.
 
 **Search.** No Δv search: the minimum-Δv two-impulse transfer between coplanar circular orbits is a closed form, and the winner is a Hohmann transfer in 2 impulses from 6 778 137 m to 42 164 173 m. What was searched is the departure epoch — 1 samples across one revolution, then 0 simplex iterations to the centre of the goal's tolerance band; the refinement stopped on its tolerance. The bi-elliptic branch was **not** searched. The radius ratio is 6.22, below the 11.94 threshold `docs/PHYSICS.md` measures, and below it Hohmann wins for *every* intermediate radius — so there is provably nothing there to find rather than nothing found.
 
-**Independent check.** Against the two-impulse Hohmann transfer between the two circular radii: **3853.9598 m/s**. The search found 3853.9598 m/s, a difference of 0.000016 m/s (0.00000%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕.
+**Independent check.** Against the two-impulse tangential transfer between the two circular radii: **3853.9598 m/s**. The search found 3853.9598 m/s, a difference of 0.000016 m/s (0.00000%), against a tolerance of 0.001000 m/s — an exact relation, held to DEP-09’s quantisation noise. The two share only the values of μ and ω⊕.
 
 ### c05-tailgate
 

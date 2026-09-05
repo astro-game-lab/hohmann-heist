@@ -25,7 +25,8 @@
  * tests ask whether the solver agrees with itself. Written out from the relation, they ask
  * whether the *contract* has the property §6.8 says it has.
  */
-import { MU_EARTH, R_EARTH_EQ } from '@hh/astro';
+import { MU_EARTH, R_EARTH_EQ, elementsFromState, metAt, period, periapsisRadius } from '@hh/astro';
+import { metres } from '@hh/math';
 import { evaluateLegality, stationDrift } from '@hh/game';
 import { describe, expect, it } from 'vitest';
 
@@ -79,9 +80,8 @@ describe('C01 and C02 — one burn, then two (#90, §6.8)', () => {
   /**
    * The reason C01 is one burn, stated as the thing that makes it true.
    *
-   * Its goal shares the ship's periapsis, so the second impulse a circularisation would
-   * add buys nothing the objective asks for. A goal that did not would need two, and this
-   * is the line that would fail.
+   * Its goal shares the ship's *periapsis*, so the second impulse a circularisation would
+   * add buys nothing the objective asks for. A goal that did not would need two.
    */
   it('C01’s goal keeps the ship’s own periapsis, which is why one burn reaches it', () => {
     const { scenario } = reference('c01-shakedown');
@@ -89,15 +89,69 @@ describe('C01 and C02 — one burn, then two (#90, §6.8)', () => {
     if (objective.kind !== 'reach_orbit') throw new Error('C01 should be a reach_orbit');
     const goal = objective.goal;
     const goalPeriapsis = goal.semiLatusRectum / (1 + goal.eccentricity);
-    const shipRadius = Math.hypot(
-      scenario.ship.state.position.x,
-      scenario.ship.state.position.y,
-      scenario.ship.state.position.z,
+    const shipShape = elementsFromState(
+      scenario.ship.state.position,
+      scenario.ship.state.velocity,
+      scenario.mu,
     );
-    expect(Math.abs(goalPeriapsis - shipRadius)).toBeLessThanOrEqual(objective.tolerance.radiusM);
-    // And it is genuinely eccentric, so the apse line is compared and the burn point is
-    // pinned — the whole of the puzzle §6.8 assigns to this contract.
-    expect(goal.eccentricity).toBeGreaterThan(0.01);
+    expect(Math.abs(goalPeriapsis - periapsisRadius(shipShape))).toBeLessThanOrEqual(
+      objective.tolerance.radiusM,
+    );
+  });
+
+  /**
+   * C01 asks for a shape, not an orientation — #90.
+   *
+   * *"The goal spec must express 'raise apoapsis to 800 km, leave periapsis alone' without
+   * asserting an argument of periapsis that does not exist."* The goal is eccentric, so it
+   * genuinely **has** an apse line and the evaluator would compare it by default; the
+   * contract declines to state one, and this is the assertion that keeps it declining.
+   *
+   * The version that did assert `argp: 0` passed all seven of §13.4's checks and was
+   * unplayable: a correct prograde burn raised apoapsis to exactly 800 km and failed,
+   * because the apse line pointed 180° from an inertial axis nothing in the game draws.
+   */
+  it('C01 asks for its shape in any orientation', () => {
+    const { scenario } = reference('c01-shakedown');
+    const objective = scenario.objective;
+    if (objective.kind !== 'reach_orbit') throw new Error('C01 should be a reach_orbit');
+    expect(objective.oriented.argp).toBe(false);
+    expect(objective.goal.eccentricity).toBeGreaterThan(0.01);
+
+    const evaluation = reference('c01-shakedown').outcome.objective;
+    if (evaluation.kind !== 'reach_orbit') throw new Error('C01 should be a reach_orbit');
+    const argp = evaluation.comparisons.find((c) => c.element === 'argumentOfPeriapsis');
+    expect(argp?.compared).toBe(false);
+    if (argp?.compared === false) expect(argp.reason).toBe('goal-unoriented');
+  });
+
+  /**
+   * What *does* pin C01's burn, now that the apse line does not.
+   *
+   * The ship flies a 400 × 450 km ellipse, so a prograde burn leaves periapsis at 400 km
+   * only when it happens **at** periapsis. That is a reference the planner draws and the
+   * snapping assist snaps to, which is the whole difference from the version this
+   * replaced: the constraint is visible on screen instead of being an invisible axis.
+   */
+  it('C01’s burn is pinned by the ship’s own periapsis, which is drawn on screen', () => {
+    const { scenario, outcome } = reference('c01-shakedown');
+    const shipShape = elementsFromState(
+      scenario.ship.state.position,
+      scenario.ship.state.velocity,
+      scenario.mu,
+    );
+    // Genuinely eccentric, or there would be no periapsis to find and no reason to wait.
+    expect(shipShape.eccentricity).toBeGreaterThan(1e-3);
+
+    const node = outcome.timeline.plan.nodes[0];
+    if (node === undefined) throw new Error('C01 should have a burn');
+    const burnMet = metAt(scenario.startEpoch, node.epoch);
+    const shipPeriod = period(
+      metres(shipShape.semiLatusRectum / (1 - shipShape.eccentricity ** 2)),
+      scenario.mu,
+    );
+    // The ship starts at apoapsis, so its periapsis comes half a period later.
+    expect(burnMet).toBeCloseTo(shipPeriod / 2, 0);
   });
 });
 

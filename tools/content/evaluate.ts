@@ -102,7 +102,7 @@ export const evaluateObjective = (
 ): ObjectiveEvaluation => {
   const objective = scenario.objective;
   if (objective.kind === 'reach_orbit') {
-    return evaluateReachOrbit(timeline, objective.goal, objective.tolerance);
+    return evaluateReachOrbit(timeline, objective.goal, objective.tolerance, objective.oriented);
   }
   // `station` names no target — it is a condition on the ship alone (#77, §6.4).
   if (objective.kind === 'station') {

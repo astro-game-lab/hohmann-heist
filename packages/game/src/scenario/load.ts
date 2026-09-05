@@ -25,7 +25,6 @@
  * 4. **Semantics.** The things a schema genuinely cannot check — an objective naming a
  *    target that is not there, a deadline past the horizon, two constraints of the same
  *    kind, a start below the floor, a tolerance looser than the departure table permits,
- *    a `reach_orbit` goal that omitted an orientation its own shape makes meaningful.
  *    Same error shape, same specificity.
  *
  * Each gate reports *all* of its own failures and then stops. Running the semantic
@@ -54,6 +53,7 @@ import { V, metres, metresPerSec, radians, seconds } from '@hh/math';
 import type { LegalityRules } from '../legality.js';
 import { gameMessage } from '../messages.js';
 import type {
+  GoalOrientation,
   OrbitTolerance,
   ProximityKind,
   ProximityTolerance,
@@ -68,8 +68,6 @@ import {
   RENDEZVOUS_MAX_RANGE_M,
   RENDEZVOUS_MAX_REL_SPEED_MPS,
   SOFT_RENDEZVOUS_MAX_REL_SPEED_MPS,
-  goalIsCircular,
-  goalIsEquatorial,
 } from '../objectives/index.js';
 import type { ScenarioError } from './errors.js';
 import { toScenarioErrors } from './errors.js';
@@ -88,7 +86,22 @@ export interface LoadedTarget {
 
 /** The objective, in the shape the evaluators take. */
 export type LoadedObjective =
-  | { readonly kind: 'reach_orbit'; readonly goal: OrbitShape; readonly tolerance: OrbitTolerance }
+  | {
+      readonly kind: 'reach_orbit';
+      readonly goal: OrbitShape;
+      readonly tolerance: OrbitTolerance;
+      /**
+       * Which orientations the goal actually constrained.
+       *
+       * Read from whether the document *stated* the field, never from its value: the
+       * schema makes both angles optional so a contract can ask for a shape in any
+       * orientation, and `orbitShapeOf` defaults an absent one to zero. Without this the
+       * evaluator could not tell "aligned with the x-axis" from "I do not care" and would
+       * compare against the default — which is how C01 came to demand alignment with an
+       * inertial axis that nothing in the game draws and no player can find.
+       */
+      readonly oriented: GoalOrientation;
+    }
   | {
       readonly kind: ProximityKind;
       readonly targetId: string;
@@ -149,11 +162,11 @@ const failure = (errors: readonly ScenarioError[]): LoadResult => ({ ok: false, 
  * The two orientation angles fall back to zero because an {@link OrbitGoal} may omit
  * them — a circular goal has no apse line and an equatorial one no node line, so the
  * schema stopped requiring an author to invent a value for an angle their goal does not
- * have. Zero is safe *only* because {@link checkGoalOrientation} has already refused any
- * document that omitted one the goal makes meaningful; without that guard this line
- * would silently turn "unspecified" into "aligned with the x-axis", which is a
- * requirement the contract never stated. A `StateSpec` requires both, so this branch is
- * unreachable for a ship or a target.
+ * have. The zero never reaches a comparison: {@link LoadedObjective}'s `oriented` records
+ * which angles the document actually stated, and `evaluateReachOrbit` skips the ones it
+ * did not — so "unspecified" stays distinguishable from "aligned with the x-axis", which
+ * is a requirement no contract has ever meant to make. A `StateSpec` requires both, so
+ * this branch is unreachable for a ship or a target.
  */
 const orbitShapeOf = (spec: StateSpec | OrbitGoal, trueAnomalyRad: number): OrbitShape => ({
   semiLatusRectum: metres(spec.a_m * (1 - spec.e * spec.e)),
@@ -163,46 +176,6 @@ const orbitShapeOf = (spec: StateSpec | OrbitGoal, trueAnomalyRad: number): Orbi
   argp: radians(spec.argp_rad ?? 0),
   trueAnomaly: radians(trueAnomalyRad),
 });
-
-/**
- * Refuse a `reach_orbit` goal that omitted an orientation it actually has.
- *
- * The schema's optionality exists so a degenerate goal can decline to state an angle
- * that means nothing for it. The mistake it opens up is the opposite one: an eccentric
- * or inclined goal that leaves the angle out gets zero from {@link orbitShapeOf}, and
- * `evaluateReachOrbit` — which decides what to compare from the **goal**, not from the
- * achieved orbit — would then compare against it. The contract would demand an apse
- * line at the x-axis that nobody wrote down, and every one of §13.4's seven checks would
- * pass while it did.
- *
- * The two predicates are `../objectives/reach-orbit.ts`'s own, so the condition under
- * which an element must be present is exactly the condition under which it is compared.
- */
-const checkGoalOrientation = (goal: OrbitGoal, errors: ScenarioError[]): void => {
-  const shape = orbitShapeOf(goal, 0);
-  if (goal.argp_rad === undefined && !goalIsCircular(shape)) {
-    const path = '/objective/goal/argp_rad';
-    errors.push({
-      path,
-      message: gameMessage('scenario.error.omittedMeaningfulElement', {
-        path,
-        property: 'argp_rad',
-        because: 'eccentric',
-      }),
-    });
-  }
-  if (goal.raan_rad === undefined && !goalIsEquatorial(shape)) {
-    const path = '/objective/goal/raan_rad';
-    errors.push({
-      path,
-      message: gameMessage('scenario.error.omittedMeaningfulElement', {
-        path,
-        property: 'raan_rad',
-        because: 'inclined',
-      }),
-    });
-  }
-};
 
 const stateOf = (spec: StateSpec, mu: number): State =>
   stateFromElements(orbitShapeOf(spec, spec.nu_rad), mu);
@@ -320,10 +293,13 @@ const interpret = (document: Scenario): LoadResult => {
   const objective = ((): LoadedObjective => {
     const raw = document.objective;
     if (raw.kind === 'reach_orbit') {
-      checkGoalOrientation(raw.goal, errors);
       return {
         kind: 'reach_orbit',
         goal: orbitShapeOf(raw.goal, 0),
+        oriented: {
+          raan: raw.goal.raan_rad !== undefined,
+          argp: raw.goal.argp_rad !== undefined,
+        },
         tolerance: {
           radiusM: metres(
             boundedTolerance(

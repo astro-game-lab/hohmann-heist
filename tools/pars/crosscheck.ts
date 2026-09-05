@@ -155,54 +155,82 @@ export const closedFormFor = (
   const ship = document.ship.state;
   const mu = scenario.mu;
 
-  if (!isCircular(ship.e)) return null;
-
   if (objective.kind === 'reach_orbit') {
     const goal = objective.goal;
     if (Math.abs(ship.i_rad - goal.i_rad) > COPLANAR_TOLERANCE_RAD) return null;
 
-    const r1 = ship.a_m;
+    // The ship's own apsides, which for a circular ship are both its radius. The
+    // departure point is whichever of them coincides with an apsis of the goal — that is
+    // the only place a tangential burn can change one apsis and leave the other alone,
+    // and it is what makes the manoeuvre a one-impulse one.
+    const shipPeriapsis = ship.a_m * (1 - ship.e);
+    const shipApoapsis = ship.a_m * (1 + ship.e);
     const goalPeriapsis = goal.a_m * (1 - goal.e);
     const goalApoapsis = goal.a_m * (1 + goal.e);
 
-    // Which manoeuvre the contract asks for: one impulse when one of the goal's apsides is
-    // **already at the ship's radius**, two otherwise. Not "which apsis is nearer" — a
-    // circular goal has both at the same radius, so a nearer-of-the-two test answers "one
-    // impulse" for every circularisation and compares C02's 216.68 m/s against C01's
-    // 109.12. Sharing the branch with the strategy is deliberate and is not sharing an
-    // assumption: which manoeuvre a goal describes is a reading of the contract, while
-    // what it costs is the thing being checked, and only the second is computed twice.
     const tolerance =
       scenario.objective.kind === 'reach_orbit' ? scenario.objective.tolerance.radiusM : 0;
+    const near = (a: number, b: number): boolean => Math.abs(a - b) <= tolerance;
     const circularGoal = goalApoapsis - goalPeriapsis <= 2 * tolerance;
-    const nearIsHere = !circularGoal && Math.abs(goalPeriapsis - r1) <= tolerance;
-    const farIsHere = !circularGoal && Math.abs(goalApoapsis - r1) <= tolerance;
-    const oneImpulse = nearIsHere || farIsHere;
-    if (!circularGoal && !oneImpulse) return null;
 
-    const r2 = nearIsHere ? goalApoapsis : goalPeriapsis;
-    const transfer = hohmannTransfer(metres(r1), metres(r2), mu);
+    // Which manoeuvre the contract asks for. Not "which goal apsis is nearer" — a
+    // circular goal has both at the same radius, so a nearer-of-the-two test answers "one
+    // impulse" for every circularisation and would compare C02's 216.68 m/s against
+    // C01's. Sharing that reading with the strategy is deliberate and is not sharing an
+    // assumption: which manoeuvre a goal describes is a reading of the contract, while
+    // what it costs is the thing being checked, and only the second is computed twice.
+    const shipApsides = [shipPeriapsis, shipApoapsis];
+    const keepsPeriapsis = !circularGoal && shipApsides.some((r) => near(r, goalPeriapsis));
+    const keepsApoapsis = !circularGoal && shipApsides.some((r) => near(r, goalApoapsis));
+    const oneImpulse = keepsPeriapsis || keepsApoapsis;
+    if (!circularGoal && !oneImpulse) return null;
+    // A two-impulse transfer starts anywhere on a circle and nowhere useful otherwise.
+    if (circularGoal && !isCircular(ship.e)) return null;
+
+    const departureRadius = circularGoal ? ship.a_m : keepsPeriapsis ? goalPeriapsis : goalApoapsis;
+    const arrivalRadius = circularGoal
+      ? goalPeriapsis
+      : keepsPeriapsis
+        ? goalApoapsis
+        : goalPeriapsis;
+
+    // Vis-viva on the **ship's own orbit** at the departure radius, which is the speed the
+    // burn is measured against. `hohmannTransfer` would price the burn from a *circular*
+    // orbit there, and C01's ship crosses that radius at the periapsis of a 400 × 450 km
+    // ellipse, already 14 m/s faster — a difference of 14 m/s in a 95 m/s answer.
+    const departureSpeed = visViva(departureRadius, ship.a_m, mu);
+    const transferAxis = (departureRadius + arrivalRadius) / 2;
+    const firstBurn = Math.abs(visViva(departureRadius, transferAxis, mu) - departureSpeed);
+    const secondBurn = Math.abs(
+      Math.sqrt(mu / arrivalRadius) - visViva(arrivalRadius, transferAxis, mu),
+    );
 
     return {
       kind: 'transfer',
       method: oneImpulse
-        ? 'the tangential impulse that raises the far apsis to the goal’s'
-        : 'the two-impulse Hohmann transfer between the two circular radii',
-      expectedMps: oneImpulse ? transfer.firstBurn : transfer.totalDeltaV,
+        ? 'the tangential impulse that moves the far apsis to the goal’s, from vis-viva on ' +
+          'the ship’s own orbit at the apsis it departs from'
+        : 'the two-impulse tangential transfer between the two circular radii',
+      expectedMps: oneImpulse ? firstBurn : firstBurn + secondBurn,
       toleranceMps: QUANTISATION_TOLERANCE_MPS,
       rationale: 'an exact relation, held to DEP-09’s quantisation noise',
       detail: {
-        departureRadiusM: r1,
-        arrivalRadiusM: r2,
-        firstBurnMps: transfer.firstBurn,
-        secondBurnMps: transfer.secondBurn,
-        timeOfFlightSeconds: transfer.timeOfFlight,
+        departureRadiusM: departureRadius,
+        departureSpeedMps: departureSpeed,
+        arrivalRadiusM: arrivalRadius,
+        firstBurnMps: firstBurn,
+        secondBurnMps: secondBurn,
+        timeOfFlightSeconds: Math.PI * Math.sqrt(transferAxis ** 3 / mu),
       },
       aside: oneImpulse
-        ? `Circularising there as well — what C02 costs — would be ${transfer.totalDeltaV.toFixed(4)} m/s.`
+        ? `Circularising at the far apsis as well would cost a further ` +
+          `${secondBurn.toFixed(4)} m/s — the burn this objective does not ask for.`
         : null,
     };
   }
+
+  // Every remaining geometry assumes the ship is on a circle.
+  if (!isCircular(ship.e)) return null;
 
   if (objective.kind === 'station') {
     const radius = ship.a_m;

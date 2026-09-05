@@ -365,11 +365,17 @@ describe('tolerance overrides', () => {
 /**
  * A `reach_orbit` goal's two orientation angles — #90.
  *
- * The schema makes them optional so a degenerate goal need not invent an orientation it
- * does not have. Everything below is about the other half of that bargain: a goal that
- * *does* have one must say so, because `evaluateReachOrbit` decides what to compare from
- * the goal and would otherwise compare against a default of zero — a requirement the
- * contract never stated, and one that every §13.4 check would pass while it did.
+ * The schema makes them optional, and **omitting one is a statement**: the contract asks
+ * for that shape in any orientation. It is not a mistake to be caught.
+ *
+ * The loader used to refuse an eccentric goal that left `argp_rad` out, on the reasoning
+ * that a goal with an apse line ought to say where it points. C01 is the counter-example
+ * and it is not an edge case: its ship starts on a circular-enough orbit, a prograde burn
+ * puts periapsis wherever the burn happened, and no inertial direction in this game is
+ * drawn or referenced — so demanding a particular apse line demanded alignment with an
+ * invisible axis. The rule was exactly backwards, and #90 said so: the goal must express
+ * "raise apoapsis, leave periapsis alone" *"without asserting an argument of periapsis
+ * that does not exist."*
  */
 describe('a reach_orbit goal’s orientation (#90)', () => {
   const withGoal = (goal: Record<string, unknown>): Record<string, unknown> => ({
@@ -379,41 +385,39 @@ describe('a reach_orbit goal’s orientation (#90)', () => {
   });
 
   it('accepts a circular equatorial goal that omits both angles', () => {
-    // C02's shape: circular at 800 km, equatorial. No apse line, no node line.
     const result = loaded(withGoal({ a_m: 7_178_137, e: 0, i_rad: 0 }));
     if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
-    expect(result.objective.goal.raan).toBe(0);
-    expect(result.objective.goal.argp).toBe(0);
+    expect(result.objective.oriented).toStrictEqual({ raan: false, argp: false });
   });
 
-  it('accepts an eccentric equatorial goal that states argp and omits raan', () => {
-    // C01's shape: a 400 × 800 km ellipse, equatorial. The apse line is the puzzle; the
-    // node line does not exist.
-    const result = loaded(withGoal({ a_m: 6_978_137, e: 0.028_660_94, i_rad: 0, argp_rad: 0 }));
-    expect(result.objective.kind).toBe('reach_orbit');
+  it('accepts an eccentric goal that omits its argument of periapsis', () => {
+    // C01's shape. The apse line exists; the contract does not care where it points.
+    const result = loaded(withGoal({ a_m: 6_978_137, e: 0.028_660_944_891_165_076, i_rad: 0 }));
+    if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    expect(result.objective.oriented.argp).toBe(false);
   });
 
-  it('refuses an eccentric goal that omits its argument of periapsis', () => {
-    const result = parseScenario(withGoal({ a_m: 6_978_137, e: 0.028_660_94, i_rad: 0 }));
-    expect(keys(result)).toContain('scenario.error.omittedMeaningfulElement');
-    expect(paths(result)).toContain('/objective/goal/argp_rad');
+  it('records an angle the goal did state, so it can be compared', () => {
+    const result = loaded(
+      withGoal({ a_m: 6_978_137, e: 0.02, i_rad: 0.9, raan_rad: 0.5, argp_rad: 1.2 }),
+    );
+    if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    expect(result.objective.oriented).toStrictEqual({ raan: true, argp: true });
+    expect(result.objective.goal.argp).toBeCloseTo(1.2, 12);
   });
 
-  it('refuses an inclined goal that omits its RAAN', () => {
-    const result = parseScenario(withGoal({ a_m: 7_178_137, e: 0, i_rad: 0.9 }));
-    expect(keys(result)).toContain('scenario.error.omittedMeaningfulElement');
-    expect(paths(result)).toContain('/objective/goal/raan_rad');
-  });
-
-  // The equatorial test is on `sin i`, so π is as equatorial as 0 (§7.2). A retrograde
-  // equatorial goal has no node line either, and must be allowed to say so.
-  it('treats a retrograde equatorial goal as having no node line', () => {
-    expect(parseScenario(withGoal({ a_m: 7_178_137, e: 0, i_rad: Math.PI })).ok).toBe(true);
-  });
-
-  it('reports both omissions at once rather than stopping at the first', () => {
-    const result = parseScenario(withGoal({ a_m: 6_978_137, e: 0.05, i_rad: 0.9 }));
-    expect(paths(result)).toStrictEqual(['/objective/goal/argp_rad', '/objective/goal/raan_rad']);
+  // The distinction the whole mechanism exists for: an omitted angle defaults to zero in
+  // the shape, so without `oriented` the evaluator could not tell it from a stated zero.
+  it('distinguishes an omitted angle from a stated zero', () => {
+    const omitted = loaded(withGoal({ a_m: 6_978_137, e: 0.02, i_rad: 0 }));
+    const stated = loaded(withGoal({ a_m: 6_978_137, e: 0.02, i_rad: 0, argp_rad: 0 }));
+    if (omitted.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    if (stated.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    // Same shape …
+    expect(omitted.objective.goal.argp).toBe(stated.objective.goal.argp);
+    // … and a different requirement.
+    expect(omitted.objective.oriented.argp).toBe(false);
+    expect(stated.objective.oriented.argp).toBe(true);
   });
 });
 
