@@ -60,6 +60,21 @@ they relied on has moved.
   DOP853 oracle: at a returned epoch an independent integrator started from the arc's state must
   arrive back at it.
 
+### Added
+- **The build says what it is (§14.4).** The debrief prints `Build 0.0.0 (ae569e9)` — the app's
+  semver and the short commit SHA, injected at build time by `vite.config.ts` and exposed by
+  `apps/web/src/version.ts`. §14.4 asks for the version to be visible on the title screen and in
+  the debrief; the title screen is #118, so this is the half that exists, and the debrief is the
+  better half anyway — it is where a player who has just seen something wrong is closest to
+  reporting it, and the beat-par block beside it already offers a prefilled `physics` issue.
+  **The SHA is there because the version does not move between releases** and "which build is
+  this" is the question actually being asked: `docs/PLAYTEST-M2.md` answered it by reading the
+  entry script's content hash out of the deployed HTML and copying it into a table by hand, which
+  went stale within a day. Its round now records what the screen reports instead. The version has
+  one home, the root `package.json`; `apps/web`'s is private and unused, because two numbers that
+  can disagree eventually do. The identifier is deliberately **not** a catalogue string — it is
+  read back verbatim into bug reports, so there is nothing in it to translate.
+
 ### Fixed
 - **The ship and the target now move.** Both markers were drawn at a fixed offset along their
   opening orbit and stayed there — through a scrub of the planner's timeline, and through an
@@ -117,6 +132,22 @@ they relied on has moved.
   records the numbers, the probe, and what is still unmeasured; §5's D9 row, §14.1's M2 row and
   §16's R11 are updated. The tail is the part to keep watching: the worst frame at 10 000× is
   1.30 ms, 65% of the trigger, and M3 stacks the board, settings and medals on top of it.
+- **How a release is cut is written down.** `CLAUDE.md` gains a *Cutting a release* section. There
+  was no process at all — no `git tag` or `gh release` anywhere in the repo, no workflow reacting
+  to a tag, and zero tags and zero releases in existence — while §14.4 puts the app on semver and
+  §14.1 attaches a version to every milestone. The section says what a release *is* here (a tag
+  plus a GitHub release, and nothing else), and the thing that surprises people: **the tag does
+  not deploy.** `deploy.yml` runs on CI succeeding on `main`, so the site is live before the tag
+  exists; tagging records which commit was the release rather than causing one. No release
+  workflow was added, because there is nothing left for a tag to trigger — §11.13's other two
+  jobs are the Worker (M7) and publishing the scenario schema, which `vite.config.ts` already
+  emits on every build. The section also says to check §14.1's *criteria* rather than the
+  milestone's issue list, which at M2 are not the same thing.
+- **The M2 playtest round stops hand-pinning its build.** `docs/PLAYTEST-M2.md` named a SHA and an
+  entry script that were correct when it was written and wrong the next day, once #249 deployed.
+  No session had run, so nothing was measured against the stale pin — but a pin needing a manual
+  update after every deploy is one that will be wrong at the moment it matters. The round and the
+  observation sheet now record the `Build` line off the debrief instead.
 
 - **The application declares its own ground.** `app.css` described itself as "structure and motion,
   not the look" while carrying some thirty hex codes chosen against a dark field — but never set a

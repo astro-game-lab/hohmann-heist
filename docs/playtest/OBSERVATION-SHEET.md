@@ -25,8 +25,8 @@ assumes it.
 | **Consent** | Signed ☐ · screen ☐ · audio ☐ · copy given to participant ☐ |
 | **Recording started at** | |
 | **Build under test** | Pages URL: |
-| | `main` SHA: |
-| | Entry script (from `smoke.sh`): |
+| | `Build` line, read off the debrief at the end of the run: |
+| | Entry script (from `smoke.sh`), if the debrief was not reached: |
 | **Smoke check** | `tools/smoke/smoke.sh <url>` — pass ☐ / fail ☐ |
 | **Fresh profile / storage cleared** | ☐ |
 | **Contract(s) played** | |

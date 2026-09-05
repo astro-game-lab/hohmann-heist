@@ -139,6 +139,40 @@ There is no committed Playwright suite and no Playwright dependency in the works
 
 Two things this leaves in place, both worth not undoing. `deploy.yml` is the only writer to `gh-pages`, which is why `tools/pages/publish.sh` replaces the published tree whole rather than preserving paths it does not own. And no workflow gives a pull request write access to anything — reintroducing a preview would mean either a writable token on a PR build or `pull_request_target` running branch code with one. `docs/PRODUCT.md` §11.13 carries the reasoning in full.
 
+## Cutting a release
+
+§14.4 puts the app on semver and §14.1 attaches a version to each milestone — `v0.1.0` at M2, `v1.0.0` at M7. **A release is a git tag plus a GitHub release, and nothing else.** There is no release workflow, and adding one now would be scaffolding for jobs that do not exist: §11.13 says a tagged release also deploys the Worker and publishes the scenario schema, but the Worker is M7 and the schema is already emitted on **every** build (see `vite.config.ts`), so a tag has nothing left to trigger.
+
+What this means in practice, and it is the part that surprises people: **the tag does not deploy.** `deploy.yml` runs on CI succeeding on `main`, so the site is already live before the tag exists. Tagging records *which commit* was the release; it does not cause one.
+
+### The version lives in one place
+
+The root `package.json`'s `version`. `apps/web/package.json` is private and its version is unused — do not bump it, and do not add a second number that can disagree with the first.
+
+`vite.config.ts` reads that field at build time and injects it, with the short commit SHA, as `__HH_VERSION__` and `__HH_COMMIT__`. `apps/web/src/version.ts` exposes them as `VERSION`, `COMMIT` and `BUILD_ID`, and the debrief prints `BUILD_ID` — §14.4's *"visible … in the debrief"*. The title screen is the other half and is #118.
+
+The SHA is there because between releases the version does not move, and "which build is this" is the question actually being asked — by a bug report, and by `docs/PLAYTEST-M2.md`, whose protocol requires the build under test to be recorded and which otherwise reads the entry script's content hash out of the deployed HTML by hand.
+
+### Steps
+
+1. **Check the milestone's exit criteria in §14.1 are actually met.** Not "the issues are closed" — the criteria. They are not the same thing: at M2, `#208` was closed with its playtest sessions unrun.
+2. Open a release pull request that does two things and nothing else:
+   - bump `version` in the root `package.json`;
+   - in `CHANGELOG.md`, retitle `## [Unreleased]` to `## [X.Y.Z] — YYYY-MM-DD` and open a fresh empty `## [Unreleased]` above it.
+3. Merge it. Wait for **CI green on `main`**, then for **Deploy green** — the deploy is a separate workflow triggered by the first, and merging is not the end of it.
+4. Verify the deployed site is serving the build you are about to tag: play to a debrief and read the `Build` line, or `curl` the page and compare the entry script against a local `pnpm build`. `tools/smoke/smoke.sh <url>` does the mechanical half.
+5. Tag the merge commit and push it:
+   ```bash
+   git tag -a v0.1.0 -m "v0.1.0 — the vertical slice"
+   git push origin v0.1.0
+   ```
+6. `gh release create v0.1.0 --title "v0.1.0 — …" --notes-file <the changelog section>`.
+7. Close the milestone. Its epic tracking issues stay open by design — they are milestoned at their *start* and carry children in later milestones, so a milestone with only epics left is finished.
+
+### Engine version is a different number
+
+`e` in a replay code (§11.6) is the **engine major**, not the app version. It moves only when a physics result changes in a way that could alter an outcome, requires a `docs/PHYSICS.md` change in the same pull request, and is announced under a **Physics** heading in the changelog. Do not bump it with the app.
+
 ## Conventions
 
 - Commit subjects are `area: what changed`, imperative, under 72 characters — `astro:`, `math:`, `infra:`, `docs:`, `physics:`.

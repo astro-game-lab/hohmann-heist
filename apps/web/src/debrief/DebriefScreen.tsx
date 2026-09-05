@@ -40,6 +40,8 @@ import type { Catalogue, DebriefRow, MissRow, PersonalBest } from '@hh/ui';
 import { approachSummary, missRows, resultRows } from '@hh/ui';
 import type { JSX } from 'preact';
 
+import { BUILD_ID } from '../version.js';
+
 export interface DebriefScreenProps {
   readonly t: Catalogue['resolve'];
   readonly resolveDynamic: Catalogue['resolveDynamic'];
@@ -283,6 +285,19 @@ export const DebriefScreen = ({
           {shareResult === 'copied' ? t('debrief.share.copied', {}) : t('debrief.share.failed', {})}
         </p>
       )}
+
+      {/*
+        §14.4's *"the version is visible … in the debrief"*. The debrief is where a player
+        who has just seen something wrong is closest to reporting it — the beat-par block
+        above already offers a prefilled `physics` issue — and a report that names the
+        build is worth several that do not.
+
+        The label comes from the catalogue; the identifier does not. `version.ts` says why:
+        `0.0.0 (ae569e9)` is a string to be read back verbatim, not prose to translate.
+      */}
+      <p class="hh-debrief__build" data-testid="debrief-build">
+        <span>{t('debrief.build.label', {})}</span> <code>{BUILD_ID}</code>
+      </p>
     </div>
   );
 };
