@@ -101,9 +101,6 @@ importers:
       '@hh/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@preact/signals':
-        specifier: ^2.0.0
-        version: 2.11.1(preact@10.29.8)
       preact:
         specifier: ^10.0.0
         version: 10.29.8
@@ -340,14 +337,6 @@ packages:
 
   '@oxc-project/types@0.147.0':
     resolution: {integrity: sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg==}
-
-  '@preact/signals-core@1.14.4':
-    resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
-
-  '@preact/signals@2.11.1':
-    resolution: {integrity: sha512-uYoD+USkacTNU02kfCBkJEV7xabKTmA78W5pnT2GymsuGEC9n/ZO+UT4S96l0dIL6KLDk77VJyUFuOMBvftVHg==}
-    peerDependencies:
-      preact: '>= 10.25.0 || >=11.0.0-0'
 
   '@rolldown/binding-android-arm-eabi@1.2.6':
     resolution: {integrity: sha512-b+jTcARdTiFLI6jB4a5XjTm0RWd6KcRfQj/I2356fxUZemiho9zQLxo0RtCuMDAyKcLo6cEltkgbQp6d1+sjjQ==}
@@ -1567,13 +1556,6 @@ snapshots:
   '@jsdevtools/ono@7.1.3': {}
 
   '@oxc-project/types@0.147.0': {}
-
-  '@preact/signals-core@1.14.4': {}
-
-  '@preact/signals@2.11.1(preact@10.29.8)':
-    dependencies:
-      '@preact/signals-core': 1.14.4
-      preact: 10.29.8
 
   '@rolldown/binding-android-arm-eabi@1.2.6':
     optional: true
