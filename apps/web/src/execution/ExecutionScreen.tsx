@@ -33,6 +33,7 @@
  */
 import type { Epoch } from '@hh/astro';
 import type { FlightLogEntry, LoadedScenario, Outcome } from '@hh/game';
+import { isProximityEvaluation } from '@hh/game';
 import type { Timeline } from '@hh/sim';
 import type { Catalogue, PlaybackSpeed } from '@hh/ui';
 import { PLAYBACK_SPEEDS, elapsedSeconds, progressOf } from '@hh/ui';
@@ -102,7 +103,7 @@ export const ExecutionScreen = ({
   // searched for here: it is the same epoch the debrief quotes, so the view tightens on
   // exactly the moment the result is about.
   const encounterEpoch: Epoch | null =
-    outcome.objective !== null && outcome.objective.kind !== 'reach_orbit'
+    outcome.objective !== null && isProximityEvaluation(outcome.objective)
       ? outcome.objective.achieved.epoch
       : null;
 

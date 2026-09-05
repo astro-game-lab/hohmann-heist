@@ -42,33 +42,27 @@
  * player who flew a perfect intercept twenty minutes late deserves to be told that,
  * not "you missed".
  *
- * ## FR-307, and the one rule this milestone can honestly apply
+ * ## FR-307's diagnosis lives in `diagnosis.ts`
  *
- * > *The debrief MUST produce a diagnosis from the rule set in §8.3.9, and MUST fall
- * > back to bare numbers rather than speculate.*
- *
- * §8.3.9 lists seven candidate rules. Six of them cannot fire on a committed plan and
- * saying why is more useful than a table of dead branches: *ran out of budget*, *hit
- * the floor* and *violated a constraint* are `L1`, `L2` and the constraint checks, all
- * of which **block commit** — a run that reached execution has none of them. *Arrived
- * early/late*, *over/under-shot* and *too fast* each need a comparison against where
- * the target was and when, which is the outcome-diagnosis rule set of #83 (M3).
- *
- * The seventh — *missed the deadline* — is computable now, exactly and without
- * speculation, and is precisely the gap described above. So it is the one rule here.
- * Everything else returns `null`, and `null` is FR-307's stated fallback rather than a
- * placeholder: the debrief then shows the closest approach achieved, what was needed
- * and the Δv used, and says nothing about why. **A confident wrong explanation is worse
- * than none**, which is the requirement's own reasoning.
- *
- * When #83 lands it adds rules to {@link diagnose} and changes nothing else.
+ * This module owns §6.7's arithmetic — the medal ladder, the par comparison, the failure
+ * classification. *Why* a run failed is a separate rule set over those facts (#83), and it
+ * is a separate file because its failure mode is different: getting a threshold wrong
+ * costs a medal, and getting an explanation wrong teaches the player something false at
+ * the moment they are most willing to believe it.
  */
 import { metAt } from '@hh/astro';
 import type { Timeline } from '@hh/sim';
 
 import type { LegalityConstraints, LegalityRules } from './legality.js';
+import type { CodexSlug, OutcomeFailure } from './diagnosis.js';
+import { diagnose } from './diagnosis.js';
 import type { GameMessage } from './messages.js';
-import { gameMessage } from './messages.js';
+import type { AssistId, AssistState, MedalCap } from './assists.js';
+import {
+  cappingAssists,
+  cleanEligible as cleanEligibleFor,
+  medalCap as medalCapFor,
+} from './assists.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
 
 /**
@@ -99,19 +93,11 @@ export type Medal = 'bronze' | 'silver' | 'gold' | 'clean';
 /**
  * Why a run failed.
  *
- * A named reason rather than a boolean, because the debrief's failure block says
- * different things for each and because `pastDeadline` is a genuinely different event
- * from `objectiveMissed` — see the docstring.
+ * Defined by `./diagnosis.ts` and re-exported here, because that is the module which
+ * dispatches on it — and because the reverse arrangement was a cycle: the rule set needs
+ * the vocabulary, and the outcome needs the rule set. Callers import it from either.
  */
-export type OutcomeFailure =
-  /** The objective was never satisfied anywhere in the horizon. `L6`, after the fact. */
-  | 'objectiveMissed'
-  /** The objective was satisfied, but after the contract's deadline (§6.4, §6.7). */
-  | 'pastDeadline'
-  /** `Σ∣Δv∣` exceeded the contract's budget. Unreachable from a committed plan. */
-  | 'overBudget'
-  /** The scenario's objective was not judged, so there is nothing to report. */
-  | 'notEvaluated';
+export type { OutcomeFailure } from './diagnosis.js';
 
 /** A contract's published par (§6.7), in SI. */
 export interface ParValues {
@@ -138,16 +124,22 @@ export interface OutcomeInput {
   readonly rules: LegalityRules;
   readonly par: ParValues;
   /**
-   * Whether the run is eligible for §6.7's **Clean Job** — Gold with no medal-affecting
-   * assists enabled.
+   * Which assists were on for this run.
    *
-   * A parameter rather than something derived here, and deliberately so: which assists
-   * affect eligibility is §6.6's model and is owned by #81 (M3), which also carries
-   * FR-411's per-contract cap. This module knows only §6.7's *arithmetic*, and taking
-   * the eligibility as a fact keeps the two separable — #81 replaces the argument's
-   * source without touching a threshold.
+   * §6.6's model decides two things from it — whether the run is Clean Job eligible, and
+   * what medal it is capped at — and both are derived here rather than passed in. FR-301:
+   * *"MUST NOT award a medal the player did not earn under the assists actually
+   * enabled."* An eligibility flag supplied by a caller is exactly the shape that lets a
+   * call site hard-code `true`, which is what `apps/web` did until #81.
    */
-  readonly cleanEligible: boolean;
+  readonly assists: AssistState;
+  /**
+   * Assists this contract is designed around, which therefore do not cap it (§6.6, Act V).
+   *
+   * Empty for every contract in M3. `assists.ts` says why this is separate from the
+   * scenario's `assistsAllowed`.
+   */
+  readonly designedAround?: readonly AssistId[];
 }
 
 /** The debrief's numeric content. */
@@ -164,6 +156,17 @@ export interface Outcome {
   readonly burns: number;
   /** `null` when no medal was earned — which includes every failed run. */
   readonly medal: Medal | null;
+  /**
+   * The medal this run could have reached given its assists, before its own performance
+   * was considered. `clean` when nothing capped it.
+   *
+   * Reported whether or not it bit, because FR-411 asks the planner to show the cap
+   * *while planning* — a player needs to know what they are giving up before they commit,
+   * not after.
+   */
+  readonly medalCap: MedalCap;
+  /** Which assists capped the run. Empty when nothing did. */
+  readonly cappedBy: readonly AssistId[];
   readonly par: ParValues;
   /** `null` on a failed run: there is no time to compare, so there is no comparison. */
   readonly parDelta: ParDelta | null;
@@ -177,33 +180,11 @@ export interface Outcome {
   readonly beatParDv: boolean;
   /** FR-307's diagnosis, or `null` when no rule matched. See the docstring. */
   readonly diagnosis: GameMessage | null;
+  /** The Codex entry that diagnosis points at (§8.3.9), or `null` when there is none. */
+  readonly codex: CodexSlug | null;
   /** Carried through so the debrief quotes the encounter without re-deriving it. */
   readonly objective: ObjectiveEvaluation | null;
 }
-
-/**
- * FR-307's rule set, over the facts the outcome already holds.
- *
- * One rule this milestone; #83 (M3) adds the rest. Returns `null` — bare numbers, no
- * explanation — for everything else, which is the requirement's own fallback and not a
- * gap in it. See the docstring.
- */
-const diagnose = (
-  failure: OutcomeFailure | null,
-  facts: {
-    readonly metSeconds: number | null;
-    readonly deadlineSeconds: number;
-  },
-): GameMessage | null => {
-  if (failure === 'pastDeadline' && facts.metSeconds !== null) {
-    return gameMessage('debrief.diagnosis.pastDeadline', {
-      metSeconds: facts.metSeconds,
-      deadlineSeconds: facts.deadlineSeconds,
-      lateSeconds: facts.metSeconds - facts.deadlineSeconds,
-    });
-  }
-  return null;
-};
 
 /** A signed fraction against par, or `null` for a par of zero. */
 const fractionOf = (value: number, par: number): number | null =>
@@ -222,12 +203,17 @@ const medalFor = (
   score: { readonly dv: number; readonly time: number; readonly burns: number },
   par: { readonly dv: number; readonly time: number; readonly burns: number },
   cleanEligible: boolean,
+  cap: MedalCap,
 ): Medal | null => {
   if (!bronze) return null;
 
   const silver =
     score.dv <= toScoreDeltaV(par.dv * 1.1) && score.time <= toScoreTime(par.time * 1.25);
   if (!silver) return 'bronze';
+
+  // The cap is applied *here* rather than to the finished medal, so a capped run never
+  // briefly computes a Gold that something downstream has to take away.
+  if (cap === 'silver') return 'silver';
 
   const gold =
     score.dv <= toScoreDeltaV(par.dv * 1.02) &&
@@ -247,7 +233,9 @@ const medalFor = (
  * and the objective-met flag specifically.
  */
 export const evaluateOutcome = (input: OutcomeInput): Outcome => {
-  const { timeline, objective, constraints, rules, par, cleanEligible } = input;
+  const { timeline, objective, constraints, rules, par, assists } = input;
+  const designedAround = input.designedAround ?? [];
+  const cap = medalCapFor(assists, designedAround);
 
   const dvUsedMps = constraints.budget.usedMps;
   const burns = timeline.plan.nodes.length;
@@ -277,6 +265,11 @@ export const evaluateOutcome = (input: OutcomeInput): Outcome => {
 
   const success = failure === null;
 
+  // FR-307's rule set (#83). `null` is its stated fallback rather than a gap: the debrief
+  // then shows the closest approach, what was needed and the Δv used, and says nothing
+  // about why. A confident wrong explanation is worse than none.
+  const diagnosed = diagnose({ failure, objective, metSeconds, deadlineSeconds });
+
   const score = {
     dv: toScoreDeltaV(dvUsedMps),
     time: metSeconds === null ? Number.POSITIVE_INFINITY : toScoreTime(metSeconds),
@@ -295,8 +288,11 @@ export const evaluateOutcome = (input: OutcomeInput): Outcome => {
       success,
       score,
       { dv: par.dvMps, time: par.timeSeconds, burns: par.burns },
-      cleanEligible,
+      cleanEligibleFor(assists),
+      cap,
     ),
+    medalCap: cap,
+    cappedBy: cappingAssists(assists, designedAround),
     par,
     parDelta:
       metSeconds === null
@@ -308,7 +304,8 @@ export const evaluateOutcome = (input: OutcomeInput): Outcome => {
     // Strictly below par on the scoring grid. Equalling par is matching our answer, not
     // beating it, and only beating it is a report about our optimum being wrong.
     beatParDv: success && score.dv < toScoreDeltaV(par.dvMps),
-    diagnosis: diagnose(failure, { metSeconds, deadlineSeconds }),
+    diagnosis: diagnosed?.message ?? null,
+    codex: diagnosed?.codex ?? null,
     objective,
   });
 };

@@ -80,6 +80,7 @@ import type { ConstraintEvaluation, ConstraintViolation } from './constraints/in
 import type { GameMessage } from './messages.js';
 import { gameMessage } from './messages.js';
 import type { ObjectiveEvaluation } from './objectives/index.js';
+import { isProximityEvaluation } from './objectives/index.js';
 
 /**
  * What kind of thing happened.
@@ -288,7 +289,7 @@ export const buildFlightLog = (
 
   // ── The encounter ───────────────────────────────────────────────────────────
   const objective = input.objective ?? null;
-  if (objective !== null && objective.kind !== 'reach_orbit') {
+  if (objective !== null && isProximityEvaluation(objective)) {
     const { achieved } = objective;
     entries.push({
       epoch: achieved.epoch,
@@ -307,7 +308,7 @@ export const buildFlightLog = (
   // lines saying the same thing is noise rather than information.
   if (objective !== null && objective.met && objective.atEpoch !== null) {
     const already =
-      objective.kind !== 'reach_orbit' && objective.atEpoch === objective.achieved.epoch;
+      isProximityEvaluation(objective) && objective.atEpoch === objective.achieved.epoch;
     if (!already) {
       entries.push({
         epoch: objective.atEpoch,

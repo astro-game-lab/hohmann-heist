@@ -48,6 +48,21 @@ export type Objective =
        * Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it.
        */
       maxRelSpeed_mps?: number;
+    }
+  | {
+      kind: 'station';
+      /**
+       * Where the slot is, as a signed offset from the ship's longitude at the start of the plan. Positive is east. Relative rather than absolute because the sidereal angle at J2000 is not modelled (§7.4, DEP-14), and because §6.8 states contract 07's slot as '3.0 degrees east' of where the ship begins.
+       */
+      slotOffset_rad: number;
+      /**
+       * Optional override of DEP-14's ±0.05°. May tighten it, never loosen it.
+       */
+      maxOffset_rad?: number;
+      /**
+       * Optional override of DEP-14's 0.01°/day, in SI. May tighten it, never loosen it.
+       */
+      maxDrift_radPerSec?: number;
     };
 export type Constraint =
   | {

@@ -46,6 +46,7 @@
  * wrong one is then a call that does not exist rather than a table full of nulls.
  */
 import type { Outcome, ProximityEvaluation } from '@hh/game';
+import { isProximityEvaluation } from '@hh/game';
 
 /**
  * Which quantity a row is about. Drives the row's label key and its unit.
@@ -145,7 +146,11 @@ export const approachSummary = (
   startEpochSeconds: number,
 ): ApproachSummary | null => {
   const { objective } = outcome;
-  if (objective === null || objective.kind === 'reach_orbit') return null;
+  // Only an encounter with a second body has a range and a relative speed. `reach_orbit`
+  // compares element sets and `station` measures a longitude, and neither has a closest
+  // approach to summarise — so this is a predicate rather than a test against one kind,
+  // which is what stopped being correct when §6.4's fifth type landed (#77).
+  if (objective === null || !isProximityEvaluation(objective)) return null;
 
   const proximity: ProximityEvaluation = objective;
   return Object.freeze({

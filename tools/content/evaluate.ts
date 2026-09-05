@@ -34,6 +34,8 @@ import {
   evaluateLegality,
   evaluateProximity,
   evaluateReachOrbit,
+  evaluateStation,
+  isProximityEvaluation,
   parseScenario,
   targetArc,
   totalDeltaV,
@@ -102,6 +104,10 @@ export const evaluateObjective = (
   if (objective.kind === 'reach_orbit') {
     return evaluateReachOrbit(timeline, objective.goal, objective.tolerance);
   }
+  // `station` names no target — it is a condition on the ship alone (#77, §6.4).
+  if (objective.kind === 'station') {
+    return evaluateStation(timeline, objective.goal);
+  }
   const target = scenario.targets.find((candidate) => candidate.id === objective.targetId);
   if (target === undefined) {
     // The loader rejects an objective naming a target the scenario does not define, so
@@ -166,7 +172,9 @@ export const outcomeFor = (scenario: LoadedScenario, plan: Plan): ContractOutcom
         : metAt(scenario.startEpoch, objective.atEpoch),
     burns: plan.nodes.length,
     legality: evaluateLegality(result, scenario.rules, objective),
-    closestRangeM: objective.kind === 'reach_orbit' ? null : objective.achieved.rangeM,
+    // Only a proximity objective has a closest approach. `reach_orbit` and `station`
+    // report `null` rather than a number that would mean nothing (#77).
+    closestRangeM: isProximityEvaluation(objective) ? objective.achieved.rangeM : null,
   };
 };
 

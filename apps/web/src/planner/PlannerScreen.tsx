@@ -39,7 +39,7 @@
 import { arcAt, type Plan, type Timeline } from '@hh/sim';
 import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
-import { snapToNamedApsis } from '@hh/game';
+import { isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
 import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
@@ -252,8 +252,11 @@ export const PlannerScreen = ({
     );
   })();
 
+  // §8.3.4's closest-approach block belongs to an encounter with a second body. A
+  // `reach_orbit` goal compares element sets and a `station` goal measures a longitude;
+  // neither has an approach to read out (#77).
   const approach =
-    evaluation.objective !== null && evaluation.objective.kind !== 'reach_orbit'
+    evaluation.objective !== null && isProximityEvaluation(evaluation.objective)
       ? approachReadout(evaluation.objective)
       : null;
 

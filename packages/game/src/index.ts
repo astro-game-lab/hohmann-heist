@@ -51,6 +51,20 @@ export type {
 } from './messages.js';
 export { NO_PARAMS, gameMessage } from './messages.js';
 
+export type { AssistEffect, AssistId, AssistSpec, AssistState, MedalCap } from './assists.js';
+export {
+  ASSISTS,
+  ASSIST_IDS,
+  blindModifier,
+  cappingAssists,
+  cleanEligible,
+  decodeAssists,
+  defaultAssistState,
+  encodeAssists,
+  medalCap,
+  restrictToAllowed,
+} from './assists.js';
+
 export * from './objectives/index.js';
 export * from './constraints/index.js';
 
@@ -81,6 +95,18 @@ export type {
   LegalityRules,
 } from './legality.js';
 export { evaluateLegality } from './legality.js';
+
+export type {
+  ActProgress,
+  ContractRecord,
+  LockReason,
+  Progression,
+  ProgressionContract,
+} from './progression.js';
+export { bronzeThreshold, hasBronze, isUnlocked, progression } from './progression.js';
+
+export type { CodexSlug, Diagnosis, DiagnosisFacts } from './diagnosis.js';
+export { DOMINANCE_RATIO, diagnose } from './diagnosis.js';
 
 export type { PlanEdit } from './plan-edits.js';
 export { addNode, componentsOf, deleteNode, moveNode, setNodeDeltaV } from './plan-edits.js';

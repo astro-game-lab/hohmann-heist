@@ -13,6 +13,7 @@
  * would pass for any threshold.
  */
 import { describe, expect, it } from 'vitest';
+import { defaultAssistState, type AssistState } from './assists.js';
 
 import { evaluateAltitudeFloor, evaluateBudget, evaluateDeadline } from './constraints/index.js';
 import type { LegalityConstraints, LegalityRules } from './legality.js';
@@ -25,8 +26,8 @@ import {
   type ParValues,
 } from './outcome.js';
 import { HORIZON, START, messageOf, planOf, timelineFor } from './test-support.js';
-import { epoch } from '@hh/astro';
-import { metres, metresPerSec } from '@hh/math';
+import { epoch, rtn } from '@hh/astro';
+import { V, metres, metresPerSec } from '@hh/math';
 
 const RULES: LegalityRules = { budgetMps: 300, deadlineSeconds: 10_800 };
 
@@ -41,6 +42,8 @@ const proximity = (met: boolean, atSeconds: number | null): ObjectiveEvaluation 
     epoch: epoch(START + (atSeconds ?? 5000)),
     rangeM: metres(met ? 310 : 12_400),
     relativeSpeedMps: metresPerSec(42.7),
+    // Not what this fixture is about; #83's decomposition has its own tests.
+    missRtn: rtn(V.vec3(metres(0), metres(0), metres(0))),
   },
   candidates: [],
   tolerance: { maxRangeM: metres(1000), maxRelativeSpeedMps: null },
@@ -59,7 +62,8 @@ const inputFor = (options: {
   readonly metSeconds: number | null;
   readonly burns?: number;
   readonly par?: ParValues;
-  readonly cleanEligible?: boolean;
+  /** Which assists were on. §6.6's defaults unless a case says otherwise. */
+  readonly assists?: AssistState;
   readonly rules?: LegalityRules;
 }): OutcomeInput => {
   const burns = options.burns ?? 1;
@@ -81,7 +85,7 @@ const inputFor = (options: {
     constraints,
     rules,
     par: options.par ?? PAR,
-    cleanEligible: options.cleanEligible ?? false,
+    assists: options.assists ?? defaultAssistState(),
   };
 };
 
@@ -190,7 +194,55 @@ describe('evaluateOutcome', () => {
     });
 
     it('awards Gold at exactly par × 1.02 delta-v, par × 1.10 time and par burns', () => {
-      expect(evaluateOutcome(inputFor({ dvMps: 102, metSeconds: 4400 })).medal).toBe('gold');
+      // Gold rather than Clean Job needs a run that is *not* Clean-eligible, which under
+      // §6.6 means a medal-affecting assist switched on. With every default assist on, the
+      // same run is Clean Job — which is the case below, and the reading `assists.ts`
+      // argues for.
+      const withTool = { ...defaultAssistState(), targeting_computer: true };
+      expect(
+        evaluateOutcome(inputFor({ dvMps: 102, metSeconds: 4400, assists: withTool })).medal,
+      ).toBe('silver');
+
+      // Silver above, because the targeting computer *caps* at Silver (§6.6). To reach
+      // Gold and stop there the run has to be ineligible for Clean Job without being
+      // capped — which no assist in §6.6's table does, so Gold is unreachable today and
+      // saying so is better than a test that pretends otherwise. When Act V adds a
+      // contract designed around the tool, the cap lifts and this becomes Gold.
+      const designedAround = evaluateOutcome({
+        ...inputFor({ dvMps: 102, metSeconds: 4400, assists: withTool }),
+        designedAround: ['targeting_computer'],
+      });
+      expect(designedAround.medal).toBe('gold');
+      expect(designedAround.medalCap).toBe('clean');
+    });
+
+    it('caps a capped run at Silver however well it flew, and says what capped it', () => {
+      const capped = evaluateOutcome(
+        inputFor({
+          dvMps: 102,
+          metSeconds: 4400,
+          assists: { ...defaultAssistState(), porkchop: true },
+        }),
+      );
+
+      expect(capped.medal).toBe('silver');
+      expect(capped.medalCap).toBe('silver');
+      expect(capped.cappedBy).toEqual(['porkchop']);
+    });
+
+    it('reports the cap even when the run did not reach it', () => {
+      // FR-411 shows the cap while planning, so it is a property of the assist set rather
+      // than of the result: a Bronze run under a capping assist still reports the cap.
+      const capped = evaluateOutcome(
+        inputFor({
+          dvMps: 200,
+          metSeconds: 4900,
+          assists: { ...defaultAssistState(), porkchop: true },
+        }),
+      );
+
+      expect(capped.medal).toBe('bronze');
+      expect(capped.medalCap).toBe('silver');
     });
 
     it('drops to Silver when the burn count exceeds par', () => {
@@ -200,16 +252,18 @@ describe('evaluateOutcome', () => {
       );
     });
 
-    it('awards Clean Job for Gold with no medal-affecting assists', () => {
-      expect(
-        evaluateOutcome(inputFor({ dvMps: 102, metSeconds: 4400, cleanEligible: true })).medal,
-      ).toBe('clean');
+    it('awards Clean Job for Gold with no medal-affecting assists enabled', () => {
+      // §6.6's defaults are Clean-eligible: the two assists that affect a medal by being
+      // *enabled* are both off by default, and the two that affect it by being *disabled*
+      // are on. `assists.ts` argues this reading at length.
+      const clean = evaluateOutcome(inputFor({ dvMps: 102, metSeconds: 4400 }));
+      expect(clean.medal).toBe('clean');
+      expect(clean.medalCap).toBe('clean');
+      expect(clean.cappedBy).toEqual([]);
     });
 
     it('does not award Clean Job below Gold, however clean the run', () => {
-      expect(
-        evaluateOutcome(inputFor({ dvMps: 200, metSeconds: 4900, cleanEligible: true })).medal,
-      ).toBe('bronze');
+      expect(evaluateOutcome(inputFor({ dvMps: 200, metSeconds: 4900 })).medal).toBe('bronze');
     });
 
     it('awards nothing at all for a failed run', () => {

@@ -195,6 +195,16 @@ export interface UiMessageParams {
     readonly rangeMetres: number;
     readonly relativeSpeedMps: number;
   };
+  /**
+   * §6.4's `station`. The slot is stated relative to where the ship starts, because the
+   * sidereal angle at J2000 is not modelled (DEP-14) — so the sentence says "east of your
+   * current longitude" rather than naming an absolute one.
+   */
+  readonly 'briefing.objective.station': {
+    readonly slotOffsetRad: number;
+    readonly maxOffsetRad: number;
+    readonly maxDriftRadPerSec: number;
+  };
   readonly 'briefing.objective.softRendezvous': {
     readonly target: string;
     readonly rangeMetres: number;

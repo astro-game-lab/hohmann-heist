@@ -192,10 +192,51 @@ describe('monotone in tolerance (§13.3)', () => {
 describe('station is out of scope', () => {
   // §6.4 lists five objective types; this module implements three of them. `station`
   // is a mean-longitude and drift-rate condition on a geostationary slot, it shares no
-  // machinery with these, and it arrives with contract 07.
+  // machinery with these, and it lives in `./station.ts` (#77).
   it('covers exactly the three proximity kinds', () => {
     const kinds = ['intercept', 'rendezvous', 'soft_rendezvous'] as const;
     for (const kind of kinds) expect(toleranceFor(kind).maxRangeM).toBeGreaterThan(0);
     expect(kinds).toHaveLength(3);
+  });
+});
+
+describe('soft_rendezvous is its own kind, not rendezvous with a smaller number (#77)', () => {
+  // The failure this exists to catch is the cheapest one available: wiring both kinds to
+  // the same tolerance. Every existing test would still pass, because every existing test
+  // uses an encounter that either satisfies both or neither.
+  //
+  // So the encounter here is deliberately built to sit *between* them — inside DEP-03's
+  // 0.5 m/s and outside the 0.1 m/s §6.4 gives contract 10 — and both kinds are evaluated
+  // from the *same* timeline, so nothing but the tolerance differs.
+  it('passes rendezvous and fails soft_rendezvous on one encounter', () => {
+    const between = (RENDEZVOUS_MAX_REL_SPEED_MPS + SOFT_RENDEZVOUS_MAX_REL_SPEED_MPS) / 2;
+    expect(between).toBeGreaterThan(SOFT_RENDEZVOUS_MAX_REL_SPEED_MPS);
+    expect(between).toBeLessThan(RENDEZVOUS_MAX_REL_SPEED_MPS);
+
+    const candidate = {
+      rangeM: metres(50),
+      relativeSpeedMps: metresPerSec(between),
+    };
+
+    // Applied the way `evaluateProximity` applies them: range and speed together.
+    const satisfies = (kind: 'rendezvous' | 'soft_rendezvous'): boolean => {
+      const tolerance = toleranceFor(kind);
+      return (
+        candidate.rangeM <= tolerance.maxRangeM &&
+        candidate.relativeSpeedMps <= (tolerance.maxRelativeSpeedMps ?? Infinity)
+      );
+    };
+
+    expect(satisfies('rendezvous')).toBe(true);
+    expect(satisfies('soft_rendezvous')).toBe(false);
+  });
+
+  it('shares the range limit with rendezvous, and tightens only the speed', () => {
+    // §6.4 defines it as "rendezvous with |Δv| ≤ 0.1 m/s" — one number changes.
+    const loose = toleranceFor('rendezvous');
+    const tight = toleranceFor('soft_rendezvous');
+
+    expect(tight.maxRangeM).toBe(loose.maxRangeM);
+    expect(tight.maxRelativeSpeedMps).toBeLessThan(loose.maxRelativeSpeedMps ?? Infinity);
   });
 });

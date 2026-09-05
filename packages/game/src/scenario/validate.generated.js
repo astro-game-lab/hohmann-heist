@@ -7,7 +7,7 @@
 "use strict";
 export const validate = validate20;
 export default validate20;
-const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json","title":"Scenario","description":"A Hohmann Heist contract, version 1. Declarative data only: the loader interprets this and nothing else (FR-201). All quantities are SI and carry their unit in the field name.","type":"object","required":["id","version","act","index","title","briefKey","epoch","horizonSeconds","ship","objective","par"],"additionalProperties":false,"properties":{"$schema":{"type":"string","description":"Optional pointer back to this schema, so an editor can validate on save."},"id":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","description":"Stable identifier, kebab-case. Appears in URLs and save data, so it never changes once shipped."},"version":{"type":"integer","const":1,"description":"Schema version. Required so that a future v2 is distinguishable from v1 rather than inferred from which fields happen to be present."},"act":{"type":"integer","minimum":1,"maximum":6},"index":{"type":"integer","minimum":1},"title":{"type":"string","minLength":1},"briefKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the briefing text (D14, FR-910). Never literal prose: contract text is translated and reviewed separately from contract logic."},"clientKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the client's name, shown in the briefing (§8.3.3). A key rather than a string for the same reason briefKey is one: \"withheld\" is prose. Omitted when the contract names no client."},"fee_kcr":{"type":"number","exclusiveMinimum":0,"description":"The contract's fee in kilocredits (§6.10). Credits do nothing but rank a career total; the fee is flavour with a number attached, which is why it is not a game rule and nothing evaluates it. Omitted when the contract pays nothing."},"epoch":{"type":"object","required":["scale","j2000Seconds"],"additionalProperties":false,"properties":{"scale":{"type":"string","const":"TAI","description":"Time scale. TAI only: UTC is not uniform and leap seconds make it wrong for propagation (§7.2)."},"j2000Seconds":{"type":"number","description":"Start epoch, TAI seconds past J2000."}}},"horizonSeconds":{"type":"number","exclusiveMinimum":0,"description":"Planning horizon: the deadline plus a margin (§6.3). Prediction is not drawn past it."},"ship":{"type":"object","required":["state","dvBudget_mps"],"additionalProperties":false,"properties":{"state":{"$ref":"#/$defs/stateSpec"},"dvBudget_mps":{"type":"number","minimum":0,"description":"Cap on the sum of burn magnitudes. A scalar tank, not propellant (DEP-02)."}}},"targets":{"type":"array","default":[],"items":{"$ref":"#/$defs/target"},"description":"Objects the ship can be asked to reach. Massless and non-maneuvering (DEP-11)."},"objective":{"$ref":"#/$defs/objective"},"constraints":{"type":"array","default":[],"items":{"$ref":"#/$defs/constraint"}},"par":{"$ref":"#/$defs/par"},"unlocks":{"type":"array","default":[],"items":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"}},"assistsAllowed":{"type":"array","default":[],"uniqueItems":true,"items":{"$ref":"#/$defs/assist"}},"coachMarks":{"type":"array","default":[],"items":{"$ref":"#/$defs/catalogueKey"},"description":"Catalogue keys for contextual hints. At most three, and only in C01–C04 (FR-902)."}},"$defs":{"catalogueKey":{"type":"string","pattern":"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$","description":"A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."},"stateSpec":{"type":"object","required":["kind","a_m","e","i_rad","raan_rad","argp_rad","nu_rad"],"additionalProperties":false,"description":"An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.","properties":{"kind":{"type":"string","const":"elements"},"a_m":{"type":"number","exclusiveMinimum":0,"description":"Semi-major axis, metres."},"e":{"type":"number","minimum":0,"exclusiveMaximum":1,"description":"Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"nu_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"orbitGoal":{"type":"object","required":["a_m","e","i_rad","raan_rad","argp_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"target":{"type":"object","required":["id","label","state"],"additionalProperties":false,"properties":{"id":{"type":"string","minLength":1},"label":{"type":"string","minLength":1,"description":"Display name. A call sign rather than translated prose — it is the object's name, not a sentence about it."},"state":{"$ref":"#/$defs/stateSpec"}}},"objective":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}}]},"constraint":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}}]},"par":{"type":"object","required":["dv_mps","time_s","burns","derivation","referenceReplay"],"additionalProperties":false,"description":"The best known solution, not a proven optimum (DEP-12). §11.5: a par without a reproducible derivation is not mergeable.","properties":{"dv_mps":{"type":"number","minimum":0},"time_s":{"type":"number","exclusiveMinimum":0},"burns":{"type":"integer","minimum":0},"derivation":{"type":"string","minLength":20,"description":"How this par was found, in prose, naming the solver script. Reviewed by a human; the length floor only stops it being empty."},"referenceReplay":{"type":"string","minLength":1,"description":"A replay code that achieves the objective at this cost. Replayed and asserted by the content tests (§7.6 Tier 4, §13.4)."}}},"assist":{"type":"string","enum":["closest_approach","elements","snapping","constraints","targeting_computer","porkchop","coach_marks"]}}};
+const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json","title":"Scenario","description":"A Hohmann Heist contract, version 1. Declarative data only: the loader interprets this and nothing else (FR-201). All quantities are SI and carry their unit in the field name.","type":"object","required":["id","version","act","index","title","briefKey","epoch","horizonSeconds","ship","objective","par"],"additionalProperties":false,"properties":{"$schema":{"type":"string","description":"Optional pointer back to this schema, so an editor can validate on save."},"id":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","description":"Stable identifier, kebab-case. Appears in URLs and save data, so it never changes once shipped."},"version":{"type":"integer","const":1,"description":"Schema version. Required so that a future v2 is distinguishable from v1 rather than inferred from which fields happen to be present."},"act":{"type":"integer","minimum":1,"maximum":6},"index":{"type":"integer","minimum":1},"title":{"type":"string","minLength":1},"briefKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the briefing text (D14, FR-910). Never literal prose: contract text is translated and reviewed separately from contract logic."},"clientKey":{"$ref":"#/$defs/catalogueKey","description":"Message-catalogue key for the client's name, shown in the briefing (§8.3.3). A key rather than a string for the same reason briefKey is one: \"withheld\" is prose. Omitted when the contract names no client."},"fee_kcr":{"type":"number","exclusiveMinimum":0,"description":"The contract's fee in kilocredits (§6.10). Credits do nothing but rank a career total; the fee is flavour with a number attached, which is why it is not a game rule and nothing evaluates it. Omitted when the contract pays nothing."},"epoch":{"type":"object","required":["scale","j2000Seconds"],"additionalProperties":false,"properties":{"scale":{"type":"string","const":"TAI","description":"Time scale. TAI only: UTC is not uniform and leap seconds make it wrong for propagation (§7.2)."},"j2000Seconds":{"type":"number","description":"Start epoch, TAI seconds past J2000."}}},"horizonSeconds":{"type":"number","exclusiveMinimum":0,"description":"Planning horizon: the deadline plus a margin (§6.3). Prediction is not drawn past it."},"ship":{"type":"object","required":["state","dvBudget_mps"],"additionalProperties":false,"properties":{"state":{"$ref":"#/$defs/stateSpec"},"dvBudget_mps":{"type":"number","minimum":0,"description":"Cap on the sum of burn magnitudes. A scalar tank, not propellant (DEP-02)."}}},"targets":{"type":"array","default":[],"items":{"$ref":"#/$defs/target"},"description":"Objects the ship can be asked to reach. Massless and non-maneuvering (DEP-11)."},"objective":{"$ref":"#/$defs/objective"},"constraints":{"type":"array","default":[],"items":{"$ref":"#/$defs/constraint"}},"par":{"$ref":"#/$defs/par"},"unlocks":{"type":"array","default":[],"items":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$"}},"assistsAllowed":{"type":"array","default":[],"uniqueItems":true,"items":{"$ref":"#/$defs/assist"}},"coachMarks":{"type":"array","default":[],"items":{"$ref":"#/$defs/catalogueKey"},"description":"Catalogue keys for contextual hints. At most three, and only in C01–C04 (FR-902)."}},"$defs":{"catalogueKey":{"type":"string","pattern":"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$","description":"A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."},"stateSpec":{"type":"object","required":["kind","a_m","e","i_rad","raan_rad","argp_rad","nu_rad"],"additionalProperties":false,"description":"An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.","properties":{"kind":{"type":"string","const":"elements"},"a_m":{"type":"number","exclusiveMinimum":0,"description":"Semi-major axis, metres."},"e":{"type":"number","minimum":0,"exclusiveMaximum":1,"description":"Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"nu_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"orbitGoal":{"type":"object","required":["a_m","e","i_rad","raan_rad","argp_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}},"target":{"type":"object","required":["id","label","state"],"additionalProperties":false,"properties":{"id":{"type":"string","minLength":1},"label":{"type":"string","minLength":1,"description":"Display name. A call sign rather than translated prose — it is the object's name, not a sentence about it."},"state":{"$ref":"#/$defs/stateSpec"}}},"objective":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}},{"type":"object","required":["kind","slotOffset_rad"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"station"},"slotOffset_rad":{"type":"number","minimum":-6.283185307179587,"maximum":6.283185307179587,"description":"Where the slot is, as a signed offset from the ship's longitude at the start of the plan. Positive is east. Relative rather than absolute because the sidereal angle at J2000 is not modelled (§7.4, DEP-14), and because §6.8 states contract 07's slot as '3.0 degrees east' of where the ship begins."},"maxOffset_rad":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's ±0.05°. May tighten it, never loosen it."},"maxDrift_radPerSec":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's 0.01°/day, in SI. May tighten it, never loosen it."}}}]},"constraint":{"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}}]},"par":{"type":"object","required":["dv_mps","time_s","burns","derivation","referenceReplay"],"additionalProperties":false,"description":"The best known solution, not a proven optimum (DEP-12). §11.5: a par without a reproducible derivation is not mergeable.","properties":{"dv_mps":{"type":"number","minimum":0},"time_s":{"type":"number","exclusiveMinimum":0},"burns":{"type":"integer","minimum":0},"derivation":{"type":"string","minLength":20,"description":"How this par was found, in prose, naming the solver script. Reviewed by a human; the length floor only stops it being empty."},"referenceReplay":{"type":"string","minLength":1,"description":"A replay code that achieves the objective at this cost. Replayed and asserted by the content tests (§7.6 Tier 4, §13.4)."}}},"assist":{"type":"string","enum":["closest_approach","elements","snapping","constraints","targeting_computer","porkchop","coach_marks"]}}};
 const schema32 = {"type":"string","pattern":"^[a-z][a-zA-Z0-9]*(\\.[a-zA-Z0-9]+)+$","description":"A message-catalogue key: dotted segments, lower camel. Resolved by @hh/ui, never rendered raw."};
 const schema34 = {"type":"object","required":["kind","a_m","e","i_rad","raan_rad","argp_rad","nu_rad"],"additionalProperties":false,"description":"An initial state, as classical elements. Semi-major axis rather than semi-latus rectum because this is the author-facing boundary and `a` is what a contract designer reasons in; the loader converts.","properties":{"kind":{"type":"string","const":"elements"},"a_m":{"type":"number","exclusiveMinimum":0,"description":"Semi-major axis, metres."},"e":{"type":"number","minimum":0,"exclusiveMaximum":1,"description":"Eccentricity. Closed orbits only: an open initial orbit has an infinite semi-major axis and is not a contract."},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"nu_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}};
 const schema39 = {"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","min_m"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"altitude_floor"},"min_m":{"type":"number","minimum":0,"description":"Altitude above the reference radius. DEP-08's 100 km unless a contract says otherwise."}}},{"type":"object","required":["kind","seconds"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"deadline"},"seconds":{"type":"number","exclusiveMinimum":0,"description":"Cap on mission elapsed time."}}}]};
@@ -459,7 +459,7 @@ return errors === 0;
 }
 validate21.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-const schema37 = {"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}}]};
+const schema37 = {"type":"object","discriminator":{"propertyName":"kind"},"oneOf":[{"type":"object","required":["kind","goal"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"reach_orbit"},"goal":{"$ref":"#/$defs/orbitGoal"},"tolerance":{"type":"object","required":["radius_m","angle_rad"],"additionalProperties":false,"description":"Optional override of DEP-13's default. May tighten it, never loosen it — the table states the loosest tolerance the game will ever apply.","properties":{"radius_m":{"type":"number","exclusiveMinimum":0},"angle_rad":{"type":"number","exclusiveMinimum":0}}}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"intercept"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-04's 1 000 m. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.5 m/s. May tighten it, never loosen it."}}},{"type":"object","required":["kind","targetId"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"soft_rendezvous"},"targetId":{"type":"string","minLength":1},"maxRange_m":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 100 m. May tighten it, never loosen it."},"maxRelSpeed_mps":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-03's 0.1 m/s soft limit. May tighten it, never loosen it."}}},{"type":"object","required":["kind","slotOffset_rad"],"additionalProperties":false,"properties":{"kind":{"type":"string","const":"station"},"slotOffset_rad":{"type":"number","minimum":-6.283185307179587,"maximum":6.283185307179587,"description":"Where the slot is, as a signed offset from the ship's longitude at the start of the plan. Positive is east. Relative rather than absolute because the sidereal angle at J2000 is not modelled (§7.4, DEP-14), and because §6.8 states contract 07's slot as '3.0 degrees east' of where the ship begins."},"maxOffset_rad":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's ±0.05°. May tighten it, never loosen it."},"maxDrift_radPerSec":{"type":"number","exclusiveMinimum":0,"description":"Optional override of DEP-14's 0.01°/day, in SI. May tighten it, never loosen it."}}}]};
 const schema38 = {"type":"object","required":["a_m","e","i_rad","raan_rad","argp_rad"],"additionalProperties":false,"description":"The orbit a `reach_orbit` objective asks for. No true anomaly: where on the orbit the ship is does not matter, only which orbit it is on.","properties":{"a_m":{"type":"number","exclusiveMinimum":0},"e":{"type":"number","minimum":0,"exclusiveMaximum":1},"i_rad":{"type":"number","minimum":0,"maximum":3.141592653589794},"raan_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587},"argp_rad":{"type":"number","minimum":0,"exclusiveMaximum":6.283185307179587}}};
 
 function validate23(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
@@ -1300,8 +1300,10 @@ if(props0 !== true){
 props0 = true;
 }
 }
-else {
-const err69 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "mapping", tag: "kind", tagValue: tag0},message:"value of tag \"kind\" must be in oneOf"};
+else if(tag0 === "station"){
+if(data && typeof data == "object" && !Array.isArray(data)){
+if(data.kind === undefined){
+const err69 = {instancePath,schemaPath:"#/oneOf/4/required",keyword:"required",params:{missingProperty: "kind"},message:"must have required property '"+"kind"+"'"};
 if(vErrors === null){
 vErrors = [err69];
 }
@@ -1310,9 +1312,8 @@ vErrors.push(err69);
 }
 errors++;
 }
-}
-else {
-const err70 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "tag", tag: "kind", tagValue: tag0},message:"tag \"kind\" must be string"};
+if(data.slotOffset_rad === undefined){
+const err70 = {instancePath,schemaPath:"#/oneOf/4/required",keyword:"required",params:{missingProperty: "slotOffset_rad"},message:"must have required property '"+"slotOffset_rad"+"'"};
 if(vErrors === null){
 vErrors = [err70];
 }
@@ -1321,14 +1322,170 @@ vErrors.push(err70);
 }
 errors++;
 }
-}
-else {
-const err71 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
+for(const key6 in data){
+if(!((((key6 === "kind") || (key6 === "slotOffset_rad")) || (key6 === "maxOffset_rad")) || (key6 === "maxDrift_radPerSec"))){
+const err71 = {instancePath,schemaPath:"#/oneOf/4/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key6},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err71];
 }
 else {
 vErrors.push(err71);
+}
+errors++;
+}
+}
+if(data.kind !== undefined){
+let data21 = data.kind;
+if(typeof data21 !== "string"){
+const err72 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/4/properties/kind/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err72];
+}
+else {
+vErrors.push(err72);
+}
+errors++;
+}
+if("station" !== data21){
+const err73 = {instancePath:instancePath+"/kind",schemaPath:"#/oneOf/4/properties/kind/const",keyword:"const",params:{allowedValue: "station"},message:"must be equal to constant"};
+if(vErrors === null){
+vErrors = [err73];
+}
+else {
+vErrors.push(err73);
+}
+errors++;
+}
+}
+if(data.slotOffset_rad !== undefined){
+let data22 = data.slotOffset_rad;
+if((typeof data22 == "number") && (isFinite(data22))){
+if(data22 > 6.283185307179587 || isNaN(data22)){
+const err74 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/maximum",keyword:"maximum",params:{comparison: "<=", limit: 6.283185307179587},message:"must be <= 6.283185307179587"};
+if(vErrors === null){
+vErrors = [err74];
+}
+else {
+vErrors.push(err74);
+}
+errors++;
+}
+if(data22 < -6.283185307179587 || isNaN(data22)){
+const err75 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/minimum",keyword:"minimum",params:{comparison: ">=", limit: -6.283185307179587},message:"must be >= -6.283185307179587"};
+if(vErrors === null){
+vErrors = [err75];
+}
+else {
+vErrors.push(err75);
+}
+errors++;
+}
+}
+else {
+const err76 = {instancePath:instancePath+"/slotOffset_rad",schemaPath:"#/oneOf/4/properties/slotOffset_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err76];
+}
+else {
+vErrors.push(err76);
+}
+errors++;
+}
+}
+if(data.maxOffset_rad !== undefined){
+let data23 = data.maxOffset_rad;
+if((typeof data23 == "number") && (isFinite(data23))){
+if(data23 <= 0 || isNaN(data23)){
+const err77 = {instancePath:instancePath+"/maxOffset_rad",schemaPath:"#/oneOf/4/properties/maxOffset_rad/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(vErrors === null){
+vErrors = [err77];
+}
+else {
+vErrors.push(err77);
+}
+errors++;
+}
+}
+else {
+const err78 = {instancePath:instancePath+"/maxOffset_rad",schemaPath:"#/oneOf/4/properties/maxOffset_rad/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err78];
+}
+else {
+vErrors.push(err78);
+}
+errors++;
+}
+}
+if(data.maxDrift_radPerSec !== undefined){
+let data24 = data.maxDrift_radPerSec;
+if((typeof data24 == "number") && (isFinite(data24))){
+if(data24 <= 0 || isNaN(data24)){
+const err79 = {instancePath:instancePath+"/maxDrift_radPerSec",schemaPath:"#/oneOf/4/properties/maxDrift_radPerSec/exclusiveMinimum",keyword:"exclusiveMinimum",params:{comparison: ">", limit: 0},message:"must be > 0"};
+if(vErrors === null){
+vErrors = [err79];
+}
+else {
+vErrors.push(err79);
+}
+errors++;
+}
+}
+else {
+const err80 = {instancePath:instancePath+"/maxDrift_radPerSec",schemaPath:"#/oneOf/4/properties/maxDrift_radPerSec/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err80];
+}
+else {
+vErrors.push(err80);
+}
+errors++;
+}
+}
+}
+else {
+const err81 = {instancePath,schemaPath:"#/oneOf/4/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err81];
+}
+else {
+vErrors.push(err81);
+}
+errors++;
+}
+if(props0 !== true){
+props0 = true;
+}
+}
+else {
+const err82 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "mapping", tag: "kind", tagValue: tag0},message:"value of tag \"kind\" must be in oneOf"};
+if(vErrors === null){
+vErrors = [err82];
+}
+else {
+vErrors.push(err82);
+}
+errors++;
+}
+}
+else {
+const err83 = {instancePath,schemaPath:"#/discriminator",keyword:"discriminator",params:{error: "tag", tag: "kind", tagValue: tag0},message:"tag \"kind\" must be string"};
+if(vErrors === null){
+vErrors = [err83];
+}
+else {
+vErrors.push(err83);
+}
+errors++;
+}
+}
+else {
+const err84 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err84];
+}
+else {
+vErrors.push(err84);
 }
 errors++;
 }

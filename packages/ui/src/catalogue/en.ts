@@ -13,6 +13,7 @@
  *   message needs a variant, branch on the value inside the function; that is what
  *   makes the branch translatable along with the sentence.
  */
+import { radians, toDegrees } from '@hh/math';
 import type { MessageFormatters, Messages } from './types.js';
 
 /**
@@ -23,6 +24,21 @@ import type { MessageFormatters, Messages } from './types.js';
  * rounding is the point — a briefing that said "400 km" in one row and "400.0 km" in the
  * next would read as two different numbers.
  */
+/**
+ * §6.4's element names, as a player would say them.
+ *
+ * The evaluator's own identifiers are `periapsisRadius`, `raan` and so on — correct, and
+ * not what anyone says out loud. Absent from this table, the identifier is used as-is,
+ * which is ugly rather than wrong.
+ */
+const ELEMENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  periapsisRadius: 'periapsis',
+  apoapsisRadius: 'apoapsis',
+  inclination: 'inclination',
+  raan: 'right ascension of the ascending node',
+  argp: 'argument of periapsis',
+});
+
 const kilometres = (metres: number, fmt: MessageFormatters): string => {
   // Rounded to a tenth of a kilometre *first*, and the decimal dropped only if the
   // **rounded** value is whole. Testing `metres % 1000` instead would be a rule about
@@ -169,6 +185,44 @@ export const en: Messages = {
     `You reached the target, but ${hoursAndMinutes(lateSeconds, fmt)} after the ` +
     `${hoursAndMinutes(deadlineSeconds, fmt)} deadline. The intercept was good; the timing was not.`,
 
+  /**
+   * §8.3.9's diagnosis rules (#83).
+   *
+   * Each is one sentence that names what happened and, where it helps, what to do
+   * differently. None of them speculates: every number quoted is one the evaluator
+   * measured, and the rule that produced the sentence only fired because its evidence was
+   * unambiguous. The rules that could not decide say nothing at all, and the debrief shows
+   * bare numbers instead.
+   */
+  'debrief.diagnosis.wrongOrbit': ({ element, difference, tolerance }, fmt) => {
+    // Radii are metres and angles are radians, so the unit follows the element rather
+    // than the value — the alternative is guessing from magnitude, which breaks at GEO.
+    const angular = element === 'inclination' || element === 'raan' || element === 'argp';
+    const off = angular
+      ? `${fmt.decimal(toDegrees(radians(Math.abs(difference))), 3)}°`
+      : `${kilometres(Math.abs(difference), fmt)} km`;
+    const allowed = angular
+      ? `${fmt.decimal(toDegrees(radians(tolerance)), 3)}°`
+      : `${kilometres(tolerance, fmt)} km`;
+    return `Your ${ELEMENT_NAMES[element] ?? element} was ${off} out, against ${allowed} allowed.`;
+  },
+  'debrief.diagnosis.tooFast': ({ relativeSpeedMps, maxRelativeSpeedMps }, fmt) =>
+    `You were close enough, and still closing at ${fmt.decimal(relativeSpeedMps, 2)} m/s — ` +
+    `${fmt.decimal(maxRelativeSpeedMps, 2)} m/s is the limit. Getting there is not the same ` +
+    `as matching velocity.`,
+  'debrief.diagnosis.arrivedLate': ({ alongTrackM }, fmt) =>
+    `You arrived behind the target — ${kilometres(alongTrackM, fmt)} km of it, along the orbit. ` +
+    `The path was right; you left too late for it.`,
+  'debrief.diagnosis.arrivedEarly': ({ alongTrackM }, fmt) =>
+    `You got there first, by ${kilometres(alongTrackM, fmt)} km along the orbit. ` +
+    `The path was right; you left too early for it.`,
+  'debrief.diagnosis.undershot': ({ radialM }, fmt) =>
+    `You passed ${kilometres(radialM, fmt)} km below the target. This is an altitude miss, ` +
+    `not a timing one — the transfer did not reach.`,
+  'debrief.diagnosis.overshot': ({ radialM }, fmt) =>
+    `You passed ${kilometres(radialM, fmt)} km above the target. This is an altitude miss, ` +
+    `not a timing one — the transfer went too far.`,
+
   // ── Scenario loading (FR-202) ──────────────────────────────────────────────
   'scenario.error.malformedJson': ({ detail }) => `This scenario is not valid JSON: ${detail}`,
   'scenario.error.unsupportedVersion': ({ version, supported }, fmt) =>
@@ -279,6 +333,17 @@ export const en: Messages = {
   'briefing.objective.rendezvous': ({ target, rangeMetres, relativeSpeedMps }, fmt) =>
     `Rendezvous with ${target} within ${range(rangeMetres, fmt)} at ` +
     `${fmt.decimal(relativeSpeedMps, 2)} m/s or less`,
+  'briefing.objective.station': ({ slotOffsetRad, maxOffsetRad, maxDriftRadPerSec }, fmt) => {
+    // Degrees at the boundary, SI inside (§7.2). A drift limit in radians per second is
+    // correct and unreadable; degrees per day is the unit the trade is actually made in.
+    const east = slotOffsetRad >= 0;
+    return (
+      `Hold a slot ${fmt.decimal(Math.abs(toDegrees(radians(slotOffsetRad))), 2)}° ` +
+      `${east ? 'east' : 'west'} of your current longitude, ` +
+      `within ${fmt.decimal(toDegrees(radians(maxOffsetRad)), 2)}°, ` +
+      `drifting no more than ${fmt.decimal(toDegrees(radians(maxDriftRadPerSec * 86_400)), 2)}°/day`
+    );
+  },
   'briefing.objective.softRendezvous': ({ target, rangeMetres, relativeSpeedMps }, fmt) =>
     `Dock with ${target} within ${range(rangeMetres, fmt)} at ` +
     `${fmt.decimal(relativeSpeedMps, 2)} m/s or less`,

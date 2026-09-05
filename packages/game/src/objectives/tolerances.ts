@@ -108,3 +108,26 @@ export const COMOVING_REL_SPEED_MPS: MetresPerSec = metresPerSec(0.01);
 
 /** Zero, as an angle. Spelled once so the degenerate branches all agree. */
 export const ZERO_ANGLE: Radians = radians(0);
+
+/**
+ * DEP-14 — how far from a geostationary slot still counts as being in it.
+ *
+ * §6.4: *"mean longitude within ±0.05° of a slot"*. Real slot-keeping is held to roughly
+ * this, which makes it one of the less forgiving numbers in the table — the departure is
+ * that the game judges it on a two-body model with no triaxiality and no luni-solar
+ * perturbation, which is what actually makes a real satellite drift out of its box.
+ */
+export const STATION_MAX_OFFSET_RAD: Radians = fromDegrees(0.05);
+
+/**
+ * DEP-14 — the largest secular drift that still counts as being on station, rad/s.
+ *
+ * §6.4's 0.01°/day. Stated here in SI, because everything inside the core is
+ * (`docs/PHYSICS.md` § Conventions), and converted for display at the boundary only.
+ *
+ * The pair is chosen so that the drift limit is what makes "on station" mean "staying
+ * there": at 0.01°/day a satellite takes about ten days to cross the ±0.05° box, so a
+ * moment inside it with admissible drift is a moment that lasts. `station.ts` relies on
+ * that and says so; `slotTraverseSeconds` turns it into a number a test can assert.
+ */
+export const STATION_MAX_DRIFT_RAD_PER_SEC: number = fromDegrees(0.01) / 86_400;

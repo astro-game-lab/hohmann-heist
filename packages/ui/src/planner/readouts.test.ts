@@ -4,10 +4,11 @@ import {
   apoapsisRadius,
   epoch,
   periapsisRadius,
+  rtn,
   type OrbitShape,
 } from '@hh/astro';
 import type { ProximityEvaluation } from '@hh/game';
-import { metres, metresPerSec, radians } from '@hh/math';
+import { V, metres, metresPerSec, radians } from '@hh/math';
 import { APSIS_ECCENTRICITY_FLOOR } from '@hh/propagation';
 import { describe, expect, it } from 'vitest';
 
@@ -116,6 +117,8 @@ const evaluation = (
     epoch: epoch(43_000),
     rangeM: metres(rangeM),
     relativeSpeedMps: metresPerSec(relativeSpeedMps),
+    // Not what this fixture is about; #83's decomposition has its own tests.
+    missRtn: rtn(V.vec3(metres(0), metres(0), metres(0))),
   },
   candidates: [],
   tolerance: { maxRangeM: metres(1000), maxRelativeSpeedMps: metresPerSec(0.5) },

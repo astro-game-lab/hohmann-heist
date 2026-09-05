@@ -59,12 +59,14 @@
  * 12.4 km at T+11:47:03" — which is not necessarily the candidate that came nearest to
  * satisfying a two-sided rendezvous condition. `candidates` carries the rest.
  */
-import type { Epoch, State } from '@hh/astro';
+import type { Epoch, RtnVector, State } from '@hh/astro';
+import { eci, rtn, toRtn } from '@hh/astro';
 import type { Metres, MetresPerSec } from '@hh/math';
-import { metres, metresPerSec } from '@hh/math';
+import { V, metres, metresPerSec } from '@hh/math';
 import type { Arc, ApproachBoundary, CloseApproach, EventOptions } from '@hh/propagation';
-import { createArc, findCloseApproaches } from '@hh/propagation';
+import { createArc, findCloseApproaches, stateAt as stateOnArc } from '@hh/propagation';
 import type { Timeline } from '@hh/sim';
+import { stateAt } from '@hh/sim';
 
 import {
   INTERCEPT_MAX_RANGE_M,
@@ -128,6 +130,23 @@ export interface ProximityAchieved {
   readonly epoch: Epoch;
   readonly rangeM: Metres;
   readonly relativeSpeedMps: MetresPerSec;
+  /**
+   * Where the target was relative to the ship, in the **ship's** RTN frame, at this epoch.
+   *
+   * `rangeM` is its magnitude and says how badly the encounter missed; this says *how* it
+   * missed, which is a different question and the one §8.3.9's diagnosis has to answer.
+   * A miss that is mostly along-track (T̂) is a **timing** error — the ship was on the
+   * right path at the wrong moment. A miss that is mostly radial (R̂) is an **altitude**
+   * error — the right moment on the wrong path. Those want opposite advice, and a scalar
+   * range cannot tell them apart.
+   *
+   * The frame is the ship's rather than the target's because the sentence is addressed to
+   * the player: "you arrived early" is a statement about where *they* were.
+   *
+   * Computed only for the closest approach, not for every candidate. It costs a frame
+   * construction per call and only the reported encounter is ever explained (#83).
+   */
+  readonly missRtn: RtnVector<Metres>;
 }
 
 /** What a proximity evaluation returns. */
@@ -152,6 +171,26 @@ export interface ProximityEvaluation {
  */
 export const targetArc = (state: State, startEpoch: Epoch, horizon: Epoch, mu: number): Arc =>
   createArc({ startEpoch, endEpoch: horizon, state, mu });
+
+/** A miss of nothing, for the case where there is no encounter to decompose. */
+const ZERO_MISS: RtnVector<Metres> = rtn(V.vec3(metres(0), metres(0), metres(0)));
+
+/**
+ * The target's offset from the ship, in the ship's RTN frame, at one epoch.
+ *
+ * Returns a zero miss rather than throwing when either propagation fails to converge —
+ * a non-convergent solve is a return value everywhere else in this repo (`RootResult`,
+ * `KeplerResult`), and a diagnosis that cannot be computed should fall through to bare
+ * numbers rather than take the debrief down with it.
+ */
+const missInRtn = (timeline: Timeline, target: Arc, at: Epoch): RtnVector<Metres> => {
+  const ship = stateAt(timeline, at);
+  const other = stateOnArc(target, at);
+  if (!ship.converged || !other.converged) return ZERO_MISS;
+
+  const separation = V.sub(other.state.position, ship.state.position);
+  return toRtn(eci(separation), ship.state.position, ship.state.velocity);
+};
 
 /** Apply the tolerances to one close approach. */
 const judge = (
@@ -226,11 +265,13 @@ export const evaluateProximity = (
             epoch: timeline.startEpoch,
             rangeM: metres(Number.POSITIVE_INFINITY),
             relativeSpeedMps: metresPerSec(Number.POSITIVE_INFINITY),
+            missRtn: ZERO_MISS,
           }
         : {
             epoch: closest.epoch,
             rangeM: closest.rangeM,
             relativeSpeedMps: closest.relativeSpeedMps,
+            missRtn: missInRtn(timeline, target, closest.epoch),
           },
     candidates,
     tolerance,
