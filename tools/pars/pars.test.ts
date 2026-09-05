@@ -85,7 +85,9 @@ beforeAll(() => {
         : search.kind === 'transfer'
           ? `${String(search.departureSamples)} departure samples and ` +
             `${String(search.refinementIterations)} simplex iterations`
-          : `${String(search.family.length)} drift-family members`;
+          : search.kind === 'phasing'
+            ? `${String(search.membersEnumerated)} phasing members`
+            : `${String(search.family.length)} drift-family members`;
     stdout.write(
       `${file.stem}: ${solution.outcome.dvMps.toFixed(4)} m/s in ` +
         `${String(solution.outcome.burns)} burn(s) at MET ` +

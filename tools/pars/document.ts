@@ -72,10 +72,17 @@ export const derivationFor = (record: ParRecord): string => {
           `${search.impulses === 1 ? '' : 's'}, with the departure epoch swept across one ` +
           `revolution (${String(search.departureSamples)} samples) and refined to the centre ` +
           `of the goal's tolerance band`
-        : `Drift-orbit family indexed by revolution count: ${String(search.family.length)} ` +
-          `members enumerated in closed form up to a ceiling of ` +
-          `${String(search.revolutionCeiling)}, the cheapest whose second burn lands inside ` +
-          `the deadline`;
+        : search.kind === 'phasing'
+          ? `Closed-form phasing sweep over two revolution counts: ` +
+            `${String(search.membersEnumerated)} members enumerated, ` +
+            `${String(search.membersFeasible)} admissible, the cheapest of them flown in ` +
+            `${String(search.shipRevolutions)} ship revolutions against the target's ` +
+            `${String(search.targetRevolutions)}; the Lambert family is degenerate here and ` +
+            `was searched too`
+          : `Drift-orbit family indexed by revolution count: ${String(search.family.length)} ` +
+            `members enumerated in closed form up to a ceiling of ` +
+            `${String(search.revolutionCeiling)}, the cheapest whose second burn lands inside ` +
+            `the deadline`;
   return (
     `${method}, then evaluated as a quantised plan through the game's own timeline. ` +
     `Best known, not a proven optimum (DEP-12). ` +
@@ -279,6 +286,11 @@ scenario file's value is whatever the validation test confirms. Where the solver
 with that table, the solver's figure is the one that ships and the divergence is recorded
 here. \`docs/PRODUCT.md\` is maintained outside this repository and is not edited to match.
 
+Acts I's four contracts reproduce §6.8 to the digit — 109.1177, 216.6823 and 3 853.9598 m/s
+against a table quoting 109, 217 and 3 854 — so the divergences below are all in Act II, and
+all of them are the same divergence: **§6.8's Δv columns price a manoeuvre that meets the
+objective and then tidies up afterwards, and the objective does not ask for the tidying.**
+
 - **C03 "Cold Open" — §6.8 quotes 217 m/s and 48 min; the solver finds about half the Δv.**
   The table's figure is the full two-burn Hohmann transfer, which is what C02 costs. C03 is
   an **\`intercept\`**, and DEP-04 asks only for 1 000 m of range — it says nothing about
@@ -288,6 +300,63 @@ here. \`docs/PRODUCT.md\` is maintained outside this repository and is not edite
   contract's departure phase requires waiting for the window before the transfer starts.
   Which is the lesson §6.8 itself assigns to C03 — *the transfer must arrive when the target
   is there, and departure timing is a free variable.*
+
+- **C05 "Tailgate" and C06 "Overtake" — §6.8 quotes 72 and 44.0 m/s; the solver finds
+  exactly half of each.** Same cause as C03, and the *times* agree to the minute: 12 h 10 m
+  and 12 h 27 m, both on eight revolutions, exactly as the table says. §6.8 prices the
+  two-burn phasing manoeuvre — drop into the phasing orbit, then re-circularise — and the
+  re-circularisation is what an \`intercept\` does not buy. This was raised as a design
+  question rather than settled by the arithmetic, because promoting C05 to a
+  \`rendezvous\` *would* make the second burn necessary and would restore §6.8's figure.
+  The decision was to keep \`intercept\`: C08 *Handshake*'s entire lesson is
+  *"intercept is not rendezvous; you must match velocity too"*, and spending it three
+  contracts early would cost more than the number is worth. C05's teaching claim is about
+  **direction** — burn retrograde to catch something ahead — and one burn teaches it.
+
+- **C07 "Slot Machine" — §6.8 quotes 1.7 m/s over 10 d 4 h; the solver ships 1.4244 m/s
+  over 11.96 d.** Not a disagreement about the physics: §6.8's pair of points, *"1.7 m/s and
+  ten days, or 3.7 m/s and five"*, are members of the family the solver enumerates, and the
+  table below has the first of them at **1.7096 m/s over 9.96 days** — three figures, from
+  the constants. The second is close rather than exact: the family is indexed by whole
+  revolutions, and 3.7 m/s falls between the four-revolution member (4.2793 m/s, 3.98 d)
+  and the five (3.4220 m/s, 4.98 d). The contract's deadline is twelve days, par is the
+  cheapest member that fits inside it, and that is the twelve-revolution member rather than
+  the ten. §6.8 quotes a point on the trade; the contract asks for its end.
+
+## A correction to §6.8's C05/C06 asymmetry
+
+§6.8 says of the phasing pair: *"there the **altitude floor** caps how cheap you can go,
+here the **deadline** does."* The second half is right. The first is backwards, and the
+arithmetic is not close.
+
+Δv falls **monotonically with revolution count** — a longer phasing loop is a smaller
+period change — so a cheaper solution flies a *higher* periapsis, not a lower one. C05's
+winning eight-revolution member has its periapsis at 274.2 km; nine revolutions would put
+it at 288.2 km. The floor is nowhere near either. Where it does bite is the **fast** end:
+three revolutions puts periapsis at 63.2 km, through DEP-08's 100 km floor, and four
+brings it back to 147.8 km.
+
+So the floor bounds how *quickly* C05 can be flown, and the deadline bounds how *cheaply* —
+in both contracts. The asymmetry §6.8 is reaching for is still real and is still worth
+preserving: C05's family runs **downward** into the floor and C06's runs **upward** away
+from it, so only one of the two has a fast end the floor can reach at all. That is what
+\`tools/content/contracts.test.ts\` asserts, in those terms.
+
+## The phasing family, and why Lambert cannot find it
+
+Worth recording because it looks like a tuning problem and is not. C05 and C06 put the ship
+and the target on the **same** circular orbit, so the manoeuvre is not a transfer between
+two places — it is a change of period, flown for a whole number of revolutions, returning
+to the point it started from. Departure and arrival are the same position, and that is
+precisely the geometry Lambert's problem is degenerate at: the transfer angle is zero and
+\`solveLambert\` refuses it.
+
+The transfer search can therefore only creep towards the answer and gets worse as it does.
+On C05 it returned 48.26 m/s from seventeen families with two of them feasible, against a
+closed form of 36.00 — a number that is admissible, reproducible, and 34% too expensive.
+Phasing orbits are a family of their own for that reason, indexed by two integers, and both
+families are searched on every \`intercept\`; each entry below reports what the one that
+lost was worth.
 
 ## Contracts
 `;
@@ -368,6 +437,33 @@ const searchParagraph = (solution: ParSolution): string => {
       `centre of the goal's tolerance band; the refinement ` +
       `${search.refinementConverged ? 'stopped on its tolerance' : '**did not converge**'}. ` +
       biElliptic
+    );
+  }
+
+  if (search.kind === 'phasing') {
+    const degrees = (radians: number): string => fixed((radians * 180) / Math.PI, 1);
+    const direction =
+      search.shipRevolutions < search.targetRevolutions
+        ? 'a lower, faster orbit — the ship catches up by dropping'
+        : 'a higher, slower orbit — the ship falls back by climbing';
+    const lambert =
+      search.lambertBestMps === null
+        ? 'The Lambert family found nothing admissible at all, which is what a degenerate ' +
+          'geometry looks like from inside a transfer search.'
+        : `The Lambert family was searched too and its best was ` +
+          `${fixed(search.lambertBestMps, DV_DIGITS)} m/s — worse, and necessarily so: a ` +
+          `phasing solution departs and arrives at the **same position**, which is the one ` +
+          `geometry Lambert's problem is degenerate at, so the transfer search can only ` +
+          `creep towards this answer and gets worse as it does.`;
+    return (
+      `**Search.** No Δv search: a phasing orbit is a closed form in two integers, how many ` +
+      `revolutions the ship flies and how many the target does. The target starts ` +
+      `${degrees(search.phaseRad)}° ahead, and the winner flies ` +
+      `${String(search.shipRevolutions)} revolutions against the target's ` +
+      `${String(search.targetRevolutions)} — ${direction} — on a period of ` +
+      `${fixed(search.phasingPeriodSeconds, 3)} s, whose other apsis is at ` +
+      `${group(search.otherApsisRadiusM)} m. ${String(search.membersEnumerated)} members ` +
+      `were enumerated and ${String(search.membersFeasible)} were admissible. ${lambert}`
     );
   }
 

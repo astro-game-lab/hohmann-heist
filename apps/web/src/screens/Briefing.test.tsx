@@ -18,11 +18,13 @@ let container: HTMLElement;
  * a shape assertion, and be nonsense. The shipped contract is a 400 km circular LEO with
  * a target 400 km above it, and those are numbers a reader can check by eye.
  */
-const c03 = (): NonNullable<ReturnType<typeof contractById>> => {
-  const scenario = contractById('c03-cold-open');
-  if (scenario === undefined) throw new Error('c03-cold-open is not in the registry');
+const shipped = (id: string): NonNullable<ReturnType<typeof contractById>> => {
+  const scenario = contractById(id);
+  if (scenario === undefined) throw new Error(`${id} is not in the registry`);
   return scenario;
 };
+
+const c03 = (): NonNullable<ReturnType<typeof contractById>> => shipped('c03-cold-open');
 
 const mount = async (props: Partial<Parameters<typeof Briefing>[0]> = {}): Promise<() => void> => {
   const onAccept = vi.fn();
@@ -119,6 +121,27 @@ describe('the §8.3.3 layout', () => {
     expect(row?.querySelector('svg')).not.toBeNull();
     // The icon says nothing the line does not; §8.8's rule about single channels.
     expect(row?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  /**
+   * §6.5's burn-count cap, and the word the line has to carry — #92.
+   *
+   * The cap never disables *Commit*, so the briefing is the first place a player can find
+   * out it exists, and "soft" is the part that makes them weigh the trade rather than
+   * treat it as a wall. §6.5: *"A player never discovers a constraint by failing it."*
+   */
+  it('shows C04’s burn-count cap, and says that it is soft', async () => {
+    await mount({ scenario: shipped('c04-long-haul') });
+    const row = el('constraint-burn_count');
+    expect(row?.textContent).toBe('2 burns — soft: over it you can still fly, but not for Gold');
+    expect(row?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('shows no burn-count row for a contract that declares no cap', async () => {
+    await mount();
+    // Absent, not zero and not "unlimited": a contract without a cap has nothing to say
+    // here, and a row saying so would be noise on six of the seven shipped contracts.
+    expect(el('constraint-burn_count')).toBeNull();
   });
 });
 

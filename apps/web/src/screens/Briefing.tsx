@@ -233,15 +233,24 @@ export const Briefing = ({
    * floor, and in M4 the blackout, eclipse, approach-speed and no-fly rules as the
    * scenario schema grows to carry them.
    */
-  const constraintRows = (): readonly (readonly [kind: string, line: string])[] =>
-    rules.floorAltitudeM === undefined
+  const constraintRows = (): readonly (readonly [kind: string, line: string])[] => [
+    ...(rules.floorAltitudeM === undefined
       ? []
       : [
           [
             'altitude_floor',
             t('briefing.constraint.altitudeFloor', { floorAltitudeM: rules.floorAltitudeM }),
-          ],
-        ];
+          ] as const,
+        ]),
+    // §6.5's burn-count cap, from C04 on. A contract that declares none gets no row —
+    // "no cap" is not "an infinite cap", and a line saying so would be noise on every
+    // other contract's briefing.
+    ...(rules.maxBurns === undefined
+      ? []
+      : [
+          ['burn_count', t('briefing.constraint.burnCount', { maxBurns: rules.maxBurns })] as const,
+        ]),
+  ];
 
   return (
     <div class="hh-briefing">

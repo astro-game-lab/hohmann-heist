@@ -1,0 +1,53 @@
+{
+  "$schema": "https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json",
+  "id": "c07-slot-machine",
+  "version": 1,
+  "act": 2,
+  "index": 7,
+  "title": "Slot Machine",
+  "briefKey": "brief.c07",
+  "clientKey": "client.orbitalMutual",
+  "fee_kcr": 14,
+  "epoch": {
+    "scale": "TAI",
+    "j2000Seconds": 0
+  },
+  "horizonSeconds": 1209600,
+  "ship": {
+    "state": {
+      "kind": "elements",
+      "a_m": 42164172.931157276,
+      "e": 0,
+      "i_rad": 0,
+      "raan_rad": 0,
+      "argp_rad": 0,
+      "nu_rad": 0
+    },
+    "dvBudget_mps": 25
+  },
+  "targets": [],
+  "objective": {
+    "kind": "station",
+    "slotOffset_rad": 0.05235987755982988
+  },
+  "constraints": [
+    {
+      "kind": "altitude_floor",
+      "min_m": 100000
+    },
+    {
+      "kind": "deadline",
+      "seconds": 1036800
+    }
+  ],
+  "par": {
+    "dv_mps": 1.4244,
+    "time_s": 1033251.174,
+    "burns": 2,
+    "derivation": "Drift-orbit family indexed by revolution count: 15 members enumerated in closed form up to a ceiling of 15, the cheapest whose second burn lands inside the deadline, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c07-slot-machine.",
+    "referenceReplay": "{\"a\":0,\"c\":{\"dv\":14,\"t\":1033251},\"e\":1,\"n\":[[0,-7122,0,0],[1058049202,7122,0,0]],\"s\":\"c07-slot-machine\",\"v\":1}"
+  },
+  "unlocks": [],
+  "assistsAllowed": ["closest_approach", "constraints", "elements", "snapping"],
+  "coachMarks": []
+}

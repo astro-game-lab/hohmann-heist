@@ -377,4 +377,71 @@ describe('evaluateOutcome', () => {
       expect(evaluateOutcome(input).objective).toBe(input.objective);
     });
   });
+
+  /**
+   * §6.5's burn-count cap, at each tier — #92.
+   *
+   * *"Soft cap; exceeding it forfeits Gold."* The word that needs testing is **forfeits**,
+   * and specifically that it forfeits exactly one thing. The rule is §6.7's existing
+   * `burns ≤ par_burns` and there is deliberately no second threshold reading the cap, so
+   * these cases are really asserting that nothing was added: a contract that declares a
+   * cap scores identically to one that does not, at every tier below Gold.
+   */
+  describe('the burn-count cap and the medal ladder (§6.5, §6.7)', () => {
+    const CAPPED: LegalityRules = { budgetMps: 300, deadlineSeconds: 10_800, maxBurns: 2 };
+    const PAR_TWO: ParValues = { dvMps: 100, timeSeconds: 4000, burns: 2 };
+
+    /** A run that would be Gold on burn count alone, at a given number of burns. */
+    const atBurns = (burns: number, dvMps: number, metSeconds: number) =>
+      evaluateOutcome(inputFor({ dvMps, metSeconds, burns, par: PAR_TWO, rules: CAPPED }));
+
+    it('awards Gold at the cap exactly', () => {
+      // Inside §6.7's Gold band on both Δv (×1.02) and time (×1.10), and at the cap.
+      expect(atBurns(2, 101, 4200).medal).toBe('clean');
+    });
+
+    it('forfeits Gold one burn over the cap, and stops there', () => {
+      const over = atBurns(3, 101, 4200);
+      // Silver, not Bronze and not nothing: the extra burn costs the top tier and no more.
+      expect(over.medal).toBe('silver');
+    });
+
+    it('leaves Silver untouched at any burn count', () => {
+      // Inside Silver's ×1.10 and ×1.25 bands, far outside Gold's, at four burns.
+      expect(atBurns(4, 108, 4900).medal).toBe('silver');
+      expect(atBurns(2, 108, 4900).medal).toBe('silver');
+    });
+
+    it('leaves Bronze untouched at any burn count', () => {
+      // Objective met, inside budget and deadline, and nowhere near Silver's bands.
+      expect(atBurns(9, 250, 9000).medal).toBe('bronze');
+      expect(atBurns(1, 250, 9000).medal).toBe('bronze');
+    });
+
+    it('scores a capped contract exactly as an uncapped one, tier for tier', () => {
+      // The cap adds no rule. Same run, same par, one contract declaring a cap and the
+      // other not: the ladder cannot tell them apart, which is what "no fourth legality
+      // code and no second threshold" means when it is written down as a test.
+      for (const [dvMps, metSeconds, burns] of [
+        [101, 4200, 2],
+        [101, 4200, 3],
+        [108, 4900, 4],
+        [250, 9000, 9],
+      ] as const) {
+        const capped = evaluateOutcome(
+          inputFor({ dvMps, metSeconds, burns, par: PAR_TWO, rules: CAPPED }),
+        );
+        const uncapped = evaluateOutcome(
+          inputFor({
+            dvMps,
+            metSeconds,
+            burns,
+            par: PAR_TWO,
+            rules: { budgetMps: 300, deadlineSeconds: 10_800 },
+          }),
+        );
+        expect(capped.medal).toBe(uncapped.medal);
+      }
+    });
+  });
 });

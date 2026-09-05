@@ -84,6 +84,28 @@ const QUANTISATION_TOLERANCE_MPS = 1e-3;
  */
 const DRIFT_RELATIVE_TOLERANCE = 5e-3;
 
+/**
+ * How far the phasing relation may sit from the search's answer, as a fraction.
+ *
+ * Not quantisation either. The relation is exact, but it is stated in terms of the
+ * **achieved closest-approach epoch**, and that is deliberately not the same instant as
+ * the nominal return: a close approach is a minimum of *range*, while the construction
+ * returns the ship to its departure point at a minimum of *along-track angle*, and the
+ * two differ by a fraction of a second. C05's differ by about a quarter of one.
+ *
+ * That would not matter except that the derived Δv is stiff in the period — dividing the
+ * elapsed time by eight revolutions means a quarter-second of arrival moves the phasing
+ * period by 0.03 s, and the impulse by about 0.01 m/s. A tenth of a percent covers it
+ * three times over and still catches the errors this exists to find, which are
+ * factor-sized: a wrong revolution count moves the answer by whole m/s, and the
+ * `hohmannTransfer(r, r) = 0` mistake this form replaced moved it by all of it.
+ *
+ * Keying the form to the achieved epoch rather than to the revolution count the search
+ * chose is what buys the independence, so paying a tenth of a percent for it is the
+ * trade, and it is the right way round.
+ */
+const PHASING_RELATIVE_TOLERANCE = 1e-3;
+
 /** A closed-form comparison, whatever geometry produced it. */
 export interface ClosedFormReference {
   /** Which of the four forms this is, for the document to narrow on. */
@@ -142,10 +164,23 @@ export const closedFormFor = (
     const r1 = ship.a_m;
     const goalPeriapsis = goal.a_m * (1 - goal.e);
     const goalApoapsis = goal.a_m * (1 + goal.e);
-    // The same test the strategy makes: a goal whose near apsis is already where the ship
-    // is takes one impulse, and anything else takes the pair.
-    const oneImpulse = Math.abs(goalPeriapsis - r1) <= Math.abs(goalApoapsis - r1);
-    const r2 = oneImpulse ? goalApoapsis : goalPeriapsis;
+
+    // Which manoeuvre the contract asks for: one impulse when one of the goal's apsides is
+    // **already at the ship's radius**, two otherwise. Not "which apsis is nearer" — a
+    // circular goal has both at the same radius, so a nearer-of-the-two test answers "one
+    // impulse" for every circularisation and compares C02's 216.68 m/s against C01's
+    // 109.12. Sharing the branch with the strategy is deliberate and is not sharing an
+    // assumption: which manoeuvre a goal describes is a reading of the contract, while
+    // what it costs is the thing being checked, and only the second is computed twice.
+    const tolerance =
+      scenario.objective.kind === 'reach_orbit' ? scenario.objective.tolerance.radiusM : 0;
+    const circularGoal = goalApoapsis - goalPeriapsis <= 2 * tolerance;
+    const nearIsHere = !circularGoal && Math.abs(goalPeriapsis - r1) <= tolerance;
+    const farIsHere = !circularGoal && Math.abs(goalApoapsis - r1) <= tolerance;
+    const oneImpulse = nearIsHere || farIsHere;
+    if (!circularGoal && !oneImpulse) return null;
+
+    const r2 = nearIsHere ? goalApoapsis : goalPeriapsis;
     const transfer = hohmannTransfer(metres(r1), metres(r2), mu);
 
     return {
@@ -229,8 +264,10 @@ export const closedFormFor = (
       // One impulse: DEP-04 asks for range and nothing about relative velocity, so the
       // re-circularisation a phasing *rendezvous* would need is not bought here.
       expectedMps: perBurn,
-      toleranceMps: QUANTISATION_TOLERANCE_MPS,
-      rationale: 'an exact relation, held to DEP-09’s quantisation noise',
+      toleranceMps: PHASING_RELATIVE_TOLERANCE * perBurn,
+      rationale:
+        'an exact relation keyed to the achieved closest approach, held to the difference ' +
+        'between that instant and the nominal return',
       detail: {
         radiusM: r1,
         revolutions,

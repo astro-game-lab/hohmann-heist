@@ -181,13 +181,33 @@ export const outcomeFor = (scenario: LoadedScenario, plan: Plan): ContractOutcom
 /**
  * Whether an outcome is something a contract may publish as its par.
  *
- * Both halves matter. The objective has to be met, or it is not a solution; and commit
- * has to be allowed, or it is a solution the game would refuse to let a player run. `L6`
- * — objective not met — is a *warning* and never blocks commit, which is why the two are
- * asserted separately rather than through `commitAllowed` alone.
+ * Three halves, and the third one is the one that is easy to leave out.
+ *
+ * The objective has to be **met**, or it is not a solution. Commit has to be **allowed**,
+ * or it is a solution the game would refuse to let a player run — asserted separately
+ * from the first because `L6`, objective not met, is a warning and never blocks commit.
+ *
+ * And the objective has to be met **by the deadline**. §6.7 defines par as *"the delta-v
+ * of the reference optimal solution"*, and §6.7's Bronze is *"objective met, within
+ * budget and deadline"* — so a par that earns no medal is not a par, it is a number no
+ * player would ever want to match. `commitAllowed` does not cover this and cannot:
+ * `outcome.ts`'s own docstring spells out the gap, that `L3` caps the **last burn** while
+ * a plan whose last burn is comfortably early can still arrive long after the deadline
+ * has passed. For a one-impulse `intercept` — every phasing contract in Act II — the only
+ * burn *is* the departure, so `L3` has nothing to bite on and the whole of the deadline's
+ * force on par comes from this line.
+ *
+ * Without it a search over a family whose cost falls with time walks straight to the
+ * planning horizon: C05 came back with par at MET 49 000.000 against a horizon of
+ * 49 000, which is both unbeatable-by-design and an automatic failure of §13.4's
+ * `horizon ≥ par.time × 1.10` row. The fix is not a longer horizon — that just moves the
+ * wall — it is to stop calling a run that scores nothing a reference solution.
  */
-export const isReferenceSolution = (outcome: ContractOutcome): boolean =>
-  outcome.met && outcome.legality.commitAllowed;
+export const isReferenceSolution = (scenario: LoadedScenario, outcome: ContractOutcome): boolean =>
+  outcome.met &&
+  outcome.legality.commitAllowed &&
+  outcome.metSeconds !== null &&
+  outcome.metSeconds <= scenario.rules.deadlineSeconds;
 
 /** The claim §11.6 stores in a replay: Δv in tenths of m/s, time in whole seconds. */
 export const claimFor = (

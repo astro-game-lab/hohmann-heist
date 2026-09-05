@@ -297,6 +297,26 @@ export const en: Messages = {
       : `${fmt.decimal(separationMetres / 1000, 2)} km · ${fmt.decimal(relativeSpeedMps, 2)} m/s`,
 
   'client.withheld': () => 'withheld',
+  'client.ferroCombine': () => 'Ferro Combine',
+  'client.orbitalMutual': () => 'Orbital Mutual',
+
+  // ── Act I — transfers ──────────────────────────────────────────────────────
+  'brief.c01': () =>
+    'Ferro Combine wants a survey pass eight hundred kilometres up, and they want it ' +
+    'cheap. One burn is all you get paid for. The high point of your new orbit will not ' +
+    'be where you light the engine — so think about where you want to end up, then go ' +
+    'and stand somewhere else.',
+  'mark.c01.oppositeSide': () =>
+    'A prograde burn raises the far side of the orbit, not the side you are on. Half a ' +
+    'lap later you will be at the top.',
+
+  'brief.c02': () =>
+    'Same climb, but this time you stay. An orbit that touches eight hundred kilometres ' +
+    'once a lap is not an orbit at eight hundred kilometres, and the survey rig will not ' +
+    'run on a drive-by. Getting up there was one burn. Staying costs a second.',
+  'mark.c02.secondBurn': () =>
+    'You arrive at the top going too slowly for a circle. The second burn is there, half ' +
+    'a period after the first.',
 
   'brief.c03': () =>
     'KESTREL-2 runs a courier loop four hundred kilometres above you, and its cargo does ' +
@@ -305,6 +325,32 @@ export const en: Messages = {
   'mark.c03.departureWindow': () =>
     'The target keeps moving while you climb. When you leave decides where it will be ' +
     'when you get there.',
+
+  'brief.c04': () =>
+    'Orbital Mutual keeps its ledgers in the geostationary belt, thirty-five thousand ' +
+    'kilometres up, and has decided it would like a copy somewhere else. This is the ' +
+    'expensive one. Read the budget before you plan, and note what it is willing to pay ' +
+    'for: two burns, no more.',
+  'mark.c04.scale': () =>
+    'The belt is six times further out than you are. The view will not do it justice; ' +
+    'the Δv bar will.',
+
+  // ── Act II — phasing, and the trade ────────────────────────────────────────
+  'brief.c05': () =>
+    'MERIDIAN-9 is forty degrees ahead of you in your own orbit and pulling no further ' +
+    'away. You have half a day and a quarter of a kilometre per second, which is more ' +
+    'than enough of both. Do not overthink the direction you burn.',
+
+  'brief.c06': () =>
+    'The same rock, the same orbit, twenty-five degrees behind you this time. It will ' +
+    'catch up on its own eventually; eventually is longer than you have. Everything you ' +
+    'learned on the last one still applies, and every sign of it is the other way round.',
+
+  'brief.c07': () =>
+    'Orbital Mutual has bought a slot three degrees east of where you are parked and ' +
+    'would like you in it within twelve days. Twelve days is a long time and the slot is ' +
+    'very close. Both of those are the point: the less of a hurry you are in, the less ' +
+    'this costs.',
 
   // ── The briefing (§8.3.3) ──────────────────────────────────────────────────
   //
@@ -372,6 +418,12 @@ export const en: Messages = {
 
   'briefing.constraint.altitudeFloor': ({ floorAltitudeM }, fmt) =>
     `Never below ${kilometres(floorAltitudeM, fmt)} km`,
+  // "Soft" is doing the work in this line. Every other constraint on this screen stops a
+  // plan; this one lets it fly and takes the medal, and a player who read it as a wall
+  // would never weigh the thing §6.5 put it there to make them weigh.
+  'briefing.constraint.burnCount': ({ maxBurns }, fmt) =>
+    `${fmt.integer(maxBurns)} ${fmt.plural(maxBurns) === 'one' ? 'burn' : 'burns'} — soft: ` +
+    'over it you can still fly, but not for Gold',
 
   'briefing.recordNone': () => 'best: —',
   'briefing.record': ({ bestDvMps, medal }, fmt) =>
@@ -418,6 +470,17 @@ export const en: Messages = {
     if (fraction >= 1) return `Δv over budget — ${spend}`;
     if (fraction >= 0.9) return `Δv near budget — ${spend}`;
     return `Δv within budget — ${spend}`;
+  },
+  'planner.hud.burnsLabel': () => 'Burns',
+  'planner.hud.burns': ({ burns, maxBurns }, fmt) =>
+    `${fmt.integer(burns)} / ${fmt.integer(maxBurns)}`,
+  // The accessible name, and the only channel that says what being over the cap costs.
+  // §8.8's rule again: the readout turns amber, and amber is not a sentence.
+  'planner.hud.burnsStatus': ({ burns, maxBurns }, fmt) => {
+    const spend = `${fmt.integer(burns)} of ${fmt.integer(maxBurns)}`;
+    return burns > maxBurns
+      ? `Burns over the cap — ${spend}, Gold forfeit`
+      : `Burns within cap — ${spend}`;
   },
   'planner.hud.metLabel': () => 'MET',
   'planner.hud.met': ({ metSeconds }, fmt) => fmt.met(metSeconds),

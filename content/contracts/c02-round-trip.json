@@ -1,0 +1,57 @@
+{
+  "$schema": "https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json",
+  "id": "c02-round-trip",
+  "version": 1,
+  "act": 1,
+  "index": 2,
+  "title": "Round Trip",
+  "briefKey": "brief.c02",
+  "clientKey": "client.ferroCombine",
+  "fee_kcr": 3,
+  "epoch": {
+    "scale": "TAI",
+    "j2000Seconds": 0
+  },
+  "horizonSeconds": 10800,
+  "ship": {
+    "state": {
+      "kind": "elements",
+      "a_m": 6778137,
+      "e": 0,
+      "i_rad": 0,
+      "raan_rad": 0,
+      "argp_rad": 0,
+      "nu_rad": 0
+    },
+    "dvBudget_mps": 260
+  },
+  "targets": [],
+  "objective": {
+    "kind": "reach_orbit",
+    "goal": {
+      "a_m": 7178137,
+      "e": 0,
+      "i_rad": 0
+    }
+  },
+  "constraints": [
+    {
+      "kind": "altitude_floor",
+      "min_m": 100000
+    },
+    {
+      "kind": "deadline",
+      "seconds": 5400
+    }
+  ],
+  "par": {
+    "dv_mps": 216.6823,
+    "time_s": 2900.616,
+    "burns": 2,
+    "derivation": "Closed-form hohmann transfer in 2 impulses, with the departure epoch swept across one revolution (1 samples) and refined to the centre of the goal's tolerance band, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c02-round-trip.",
+    "referenceReplay": "{\"a\":0,\"c\":{\"dv\":2167,\"t\":2901},\"e\":1,\"n\":[[0,1091177,0,0],[2970231,1075646,0,0]],\"s\":\"c02-round-trip\",\"v\":1}"
+  },
+  "unlocks": [],
+  "assistsAllowed": ["closest_approach", "coach_marks", "constraints", "elements", "snapping"],
+  "coachMarks": ["mark.c02.secondBurn"]
+}
