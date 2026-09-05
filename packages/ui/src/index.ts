@@ -16,6 +16,7 @@
 export const PACKAGE = '@hh/ui' as const;
 
 export * from './catalogue/index.js';
+export * from './palette/index.js';
 export * from './planner/index.js';
 export * from './execution/index.js';
 export * from './debrief/index.js';
