@@ -17,10 +17,11 @@
  * and both are gameplay decisions rather than rendering ones. §11.2 puts them in the
  * game layer or above, and `apps/web` is the composition point that sees both.
  */
-import { R_EARTH_EQ, elementsFromState, type State } from '@hh/astro';
+import { R_EARTH_EQ, elementsFromState, type Epoch, type OrbitShape, type State } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
 import { V } from '@hh/math';
 import type { HazardShell, MarkerSpec } from '@hh/render';
+import { arcAt, type Timeline } from '@hh/sim';
 
 /**
  * How far past the last drawn orbit the tessellator is allowed to run, in metres.
@@ -50,21 +51,40 @@ export const SUN_DIRECTION = V.normalize({ x: 0.6, y: -0.8, z: 0 });
  */
 export const EARTH_ROTATION_ANGLE = 0.9;
 
-/** How far ahead of a marker its motion trail is drawn, in seconds. */
-export const MARKER_TRAIL_SECONDS = 900;
-
 /** The orbit a state is on. Spelled once; several call sites need it. */
 export const elementsOf = (state: State, mu: number) =>
   elementsFromState(state.position, state.velocity, mu);
 
 /**
- * The contract's target, as a marker, or `undefined` when it has none.
+ * The contract's target, as a marker at `offsetSeconds` along its orbit.
  *
  * The first target only. Every v1.0 contract has at most one, and a view that drew a
  * second would need a way to say which one the objective is about — which is a design
  * question, not an oversight to fix here.
+ *
+ * ## `offsetSeconds` is a position, and used not to be passed one
+ *
+ * `MarkerSpec.offsetSeconds` is *"seconds from the arc's start to the scrub epoch"* —
+ * where the body **is**. This function used to hand it a module constant,
+ * `MARKER_TRAIL_SECONDS = 900`, whose own docstring called it *"how far ahead of a marker
+ * its motion trail is drawn"*. Those are two different quantities, and the constant was
+ * the wrong one: 900 s is a trail length chosen so that `markers.ts`' 600 s trail would
+ * always have room to be fully drawn.
+ *
+ * The consequence was that both markers sat permanently 900 seconds along their opening
+ * orbit and never moved — while scrubbing the planner's timeline, and for the whole of a
+ * playback run. The orbits, the trails and the closest-approach tie line all moved
+ * correctly around two stationary glyphs, which is why it read as the markers being
+ * broken rather than as the epoch not arriving.
+ *
+ * So the offset is now a parameter, and both callers pass the epoch they are drawing.
+ * Nothing here decides it: the planner's is the scrub head and execution's is the
+ * playback epoch, and neither is this module's to guess.
  */
-export const targetMarkerOf = (scenario: LoadedScenario): MarkerSpec | undefined => {
+export const targetMarkerOf = (
+  scenario: LoadedScenario,
+  offsetSeconds: number,
+): MarkerSpec | undefined => {
   const target = scenario.targets[0];
   if (target === undefined) return undefined;
   return {
@@ -72,9 +92,51 @@ export const targetMarkerOf = (scenario: LoadedScenario): MarkerSpec | undefined
     kind: 'target',
     elements: elementsOf(target.state, scenario.mu),
     mu: scenario.mu,
-    offsetSeconds: MARKER_TRAIL_SECONDS,
+    // Never negative: an epoch before the contract starts has no trail behind it, and
+    // `keplerianSampler` would happily propagate backwards into an orbit that has not been flown.
+    offsetSeconds: Math.max(offsetSeconds, 0),
   };
 };
+
+/**
+ * Where the ship is, as a marker, at `epoch`.
+ *
+ * The arc that owns the epoch and the offset into it — which is what `MarkerSpec` asks
+ * for, and is why this cannot be a constant. Both views need it and both had the same
+ * bug, so it is spelled once here rather than twice at the call sites.
+ *
+ * The arc matters as much as the offset: after a burn the ship is on a *different* conic,
+ * and a marker drawn on `arcs[0]` would sit on the parking orbit for the rest of the run.
+ * The trail follows from the same pair, and `trailPoints` clips it at the arc's start so
+ * it never runs back through an impulse (see `markers.ts`).
+ */
+export const shipMarkerOf = (
+  timeline: Timeline,
+  epoch: Epoch,
+  fallbackElements: OrbitShape,
+  mu: number,
+): MarkerSpec => {
+  const arc =
+    timeline.arcs.length === 0 ? undefined : arcAt(timeline, clampToTimeline(timeline, epoch));
+  return {
+    id: 'ship',
+    kind: 'ship',
+    elements: arc?.elements ?? fallbackElements,
+    mu,
+    offsetSeconds:
+      arc === undefined ? 0 : Math.max(clampToTimeline(timeline, epoch) - arc.startEpoch, 0),
+  };
+};
+
+/**
+ * `epoch` brought inside the timeline's span.
+ *
+ * `arcAt` is defined on `[startEpoch, horizon]` and a playback epoch can land a float
+ * past the end on the last frame. Clamping is the honest answer — the run is over, so the
+ * marker belongs at the horizon — and it keeps the lookup a total function.
+ */
+const clampToTimeline = (timeline: Timeline, epoch: Epoch): Epoch =>
+  Math.min(Math.max(epoch, timeline.startEpoch), timeline.horizon) as Epoch;
 
 /**
  * DEP-08's altitude floor, as a shell.

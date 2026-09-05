@@ -61,11 +61,11 @@ import { useEffect, useRef } from 'preact/hooks';
 import { SCENE_COLOURS } from '../planner/colours.js';
 import {
   EARTH_ROTATION_ANGLE,
-  MARKER_TRAIL_SECONDS,
   MAX_RADIUS_M,
   SUN_DIRECTION,
   elementsOf,
   floorShellOf,
+  shipMarkerOf,
   targetMarkerOf,
 } from '../scene/content.js';
 import {
@@ -144,7 +144,9 @@ export const ExecutionView = ({
     const cache = createTessellationCache();
     const basis: ViewBasis = EQUATORIAL_BASIS;
 
-    const targetSpec = targetMarkerOf(scenario);
+    // No hoisted target spec here, unlike the planner: this camera follows the ship and
+    // reads the target through `context.targetAt` below, so the only marker the run needs
+    // is the one built per frame inside `draw`.
     const target = scenario.targets[0];
     const orbitOfTarget =
       target === undefined
@@ -193,6 +195,9 @@ export const ExecutionView = ({
     }
 
     const draw = (at: Epoch): void => {
+      // Rebuilt per frame rather than hoisted with `targetSpec`: the offset is where the
+      // body is, so it changes with the playback epoch and a hoisted spec would freeze it.
+      const targetMarker = targetMarkerOf(scenario, at - scenario.startEpoch);
       const wanted = autoCamera(at);
       const current = followRef.current;
       // No camera yet means the first frame; after that, `followTo` decides — and
@@ -217,14 +222,12 @@ export const ExecutionView = ({
         earthRotationAngle: EARTH_ROTATION_ANGLE,
         sunDirection: SUN_DIRECTION,
         shells: [floorShellOf(scenario)],
-        ship: {
-          id: 'ship',
-          kind: 'ship',
-          elements: timeline.arcs[0]?.elements ?? elementsOf(scenario.ship.state, scenario.mu),
-          mu: scenario.mu,
-          offsetSeconds: MARKER_TRAIL_SECONDS,
-        },
-        ...(targetSpec === undefined ? {} : { targetOrbit: targetSpec }),
+        // Placed at the **playback epoch**, which is the one thing that changes per frame
+        // — so this is what makes the two craft fly. `at` is clamped inside
+        // `shipMarkerOf`; the target's offset is measured from the contract start because
+        // a target coasts on one arc for the whole run (it never manoeuvres, DEP-11).
+        ship: shipMarkerOf(timeline, at, elementsOf(scenario.ship.state, scenario.mu), scenario.mu),
+        ...(targetMarker === undefined ? {} : { targetOrbit: targetMarker }),
         resolve: resolveDynamic,
       });
 

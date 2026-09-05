@@ -62,11 +62,11 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useReducedMotion } from '../motion.js';
 import {
   EARTH_ROTATION_ANGLE,
-  MARKER_TRAIL_SECONDS,
   MAX_RADIUS_M,
   SUN_DIRECTION,
   elementsOf,
   floorShellOf,
+  shipMarkerOf,
   targetMarkerOf,
 } from '../scene/content.js';
 import { SCENE_COLOURS } from './colours.js';
@@ -250,8 +250,15 @@ export const OrbitView = ({
     const drawn = timeline ?? (fallback.ok ? fallback.timeline : null);
     if (drawn === null) return;
 
-    /** The target orbit, when the contract has one. */
-    const targetSpec = targetMarkerOf(scenario);
+    /**
+     * The target orbit, when the contract has one — for the camera's framing union only.
+     *
+     * `frameBounds` reads the elements and tessellates the whole conic, so the offset it
+     * is built with cannot affect the answer; zero says that rather than passing an epoch
+     * that would look meaningful and be ignored. The *marker* is built per draw, inside
+     * `draw`, because there the offset is the whole point.
+     */
+    const targetSpec = targetMarkerOf(scenario, 0);
 
     /**
      * The union the camera frames — #103's first criterion.
@@ -304,6 +311,10 @@ export const OrbitView = ({
       if (framing === null) return;
       const { camera } = framing;
 
+      // Rebuilt per draw rather than hoisted with `targetSpec`: the offset is where the
+      // body is, so it changes with the scrub head and a hoisted spec would freeze it.
+      const targetMarker = targetMarkerOf(scenario, scrubEpoch - scenario.startEpoch);
+
       const nodes: NodeSpec[] = drawn.impulses.map((impulse, i) => {
         const node = drawn.plan.nodes[i];
         const id = node === undefined ? `node:${String(i)}` : nodeIdOf(node);
@@ -322,14 +333,16 @@ export const OrbitView = ({
         earthRotationAngle: EARTH_ROTATION_ANGLE,
         sunDirection: SUN_DIRECTION,
         shells: [floorShellOf(scenario)],
-        ship: {
-          id: 'ship',
-          kind: 'ship',
-          elements: drawn.arcs[0]?.elements ?? elementsOf(scenario.ship.state, scenario.mu),
-          mu: scenario.mu,
-          offsetSeconds: MARKER_TRAIL_SECONDS,
-        },
-        ...(targetSpec === undefined ? {} : { targetOrbit: targetSpec }),
+        // Both markers are placed at the **scrub head**, which is what makes them move
+        // when it does. `targetSpec` above is the same orbit and is kept for the camera's
+        // framing union, where only the elements are read and the offset is irrelevant.
+        ship: shipMarkerOf(
+          drawn,
+          scrubEpoch,
+          elementsOf(scenario.ship.state, scenario.mu),
+          scenario.mu,
+        ),
+        ...(targetMarker === undefined ? {} : { targetOrbit: targetMarker }),
         resolve: resolveDynamic,
       });
 
