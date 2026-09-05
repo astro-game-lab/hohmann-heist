@@ -1,11 +1,25 @@
 /*
- * Structure and motion. Not the look.
+ * Structure, motion, and the four colours it takes to make those legible.
  *
- * §9.2's colour and type, the five palettes, and the design tokens they are expressed in
- * are #99, and none of it is here — a stylesheet that guessed at them now would have to
- * be unpicked rather than extended. What is here is the part that is a *behaviour*
- * rather than a style: how a screen enters, and how that collapses under
- * `prefers-reduced-motion`.
+ * §9.2's colour and type — the thirteen tokens, the five palettes, the contrast work — is
+ * #116, and this is deliberately not a head start on it. What is here is the **ground**:
+ * a page has to have a background and a foreground before anything drawn on it can be
+ * read, and until this file declared one the app borrowed the browser's. That was not a
+ * neutral default. The scene is dark by design (`SCENE_COLOURS.background` is `#05070d`),
+ * §9.2's default palette is dark, and this stylesheet already carried some thirty hex
+ * codes for panels, states and constraint bands chosen against a dark field — but `body`
+ * was left transparent with `color: CanvasText`, so every one of those surfaces painted
+ * near-black text on near-black fill. The node editor and the precision tooltips were
+ * unreadable, and form controls inside them rendered light-mode.
+ *
+ * So: four tokens, named as §9.2 names them, and `color-scheme` so the browser's own
+ * widgets agree. #116 replaces the values and adds the other nine plus the four
+ * alternative palettes; nothing outside this block needs to change when it does, which
+ * is the point of spending the tokens now rather than more hex codes.
+ *
+ * The header used to say "not the look, none of it is here". That stopped being true
+ * long before this change — see the hex codes below — and a comment that misdescribes
+ * its own file is worse than no comment.
  *
  * Loaded from `main.tsx` rather than linked from `index.html`, so Vite hashes and inlines
  * it with the rest of the bundle and it counts against NFR-020's budget where it belongs.
@@ -23,6 +37,36 @@
    * property rather than a literal in the rule.
    */
   --hh-screen-in-duration: 160ms;
+
+  /*
+   * §9.2's ground, and only the four roles that were actually missing.
+   *
+   * `--bg` matches `SCENE_COLOURS.background` exactly, so the canvas has no seam against
+   * the page around it — the orbit view fills its frame and the difference would show as
+   * a rectangle. `--bg-panel` is §9.2's "one step up from ground", and is the value the
+   * node editor already used. `--fg` is the off-white §9.2 asks for; `--fg-dim` is the
+   * annotation grey the scene already uses for the same job.
+   *
+   * `color-scheme: dark` is not decoration. Without it a browser renders `<input>`,
+   * `<button>` and the range thumb in their light-mode skin — white fill, black text —
+   * regardless of what this file says, which is what put white boxes inside the dark node
+   * editor. It also makes the scrollbars and focus rings match.
+   */
+  color-scheme: dark;
+  --bg: #05070d;
+  --bg-panel: #0a0e17;
+  --fg: #e8ecf4;
+  --fg-dim: #8fa3bb;
+}
+
+/*
+ * The ground itself. `min-height` so a short screen still paints it to the bottom rather
+ * than leaving the browser's own canvas showing under the fold.
+ */
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -525,6 +569,10 @@
   cursor: help;
 }
 
+/* The panel fill, one step up from the ground, with an explicit ink on it. Both halves
+   matter: this used to set only the fill, so the reading inherited `CanvasText` and the
+   tooltip painted black on near-black — present in the accessible tree, invisible on
+   screen, which is the failure mode a reveal-on-hover is least likely to have noticed. */
 .hh-value__precise {
   position: absolute;
   left: 0;
@@ -533,7 +581,8 @@
   display: none;
   padding: 2px 6px;
   white-space: nowrap;
-  background: #05070d;
+  background: var(--bg-panel);
+  color: var(--fg);
   border: 1px solid rgba(127, 127, 127, 0.5);
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -595,15 +644,23 @@
    is drawn; docked at the stage's edge when it cannot — an overlay pointing at nothing is
    worse than one that is merely nearby. Never a backdrop and never a scroll lock: it is
    not modal, and the rest of the planner stays usable while it is open. */
+/* 360px rather than 320: the Δv rows carry a label, a full-precision number field and two
+   32 px steppers, and at 320 the row's content box was 300 px against 369 px of content —
+   a horizontal scrollbar on a panel that is only ever a few fields wide. The `min-width`
+   rules below are what make the row *able* to shrink; this is what stops it having to. */
 .hh-editor__anchor {
-  --hh-anchor-width: min(320px, calc(100% - 16px));
+  --hh-anchor-width: min(360px, calc(100% - 16px));
 
   position: absolute;
   z-index: 2;
   width: var(--hh-anchor-width);
   max-height: calc(100% - 16px);
-  overflow: auto;
-  background: #0a0e17;
+  overflow-y: auto;
+  /* Never `auto`. A panel that can scroll sideways is a panel whose layout has already
+     failed, and it hides the failure instead of showing it. */
+  overflow-x: hidden;
+  background: var(--bg-panel);
+  color: var(--fg);
 }
 
 /* Clamped to the stage, so the overlay is beside its node where there is room and at the
@@ -650,10 +707,14 @@
   letter-spacing: 0.06em;
 }
 
+/* `min-width: 0` on a fieldset is load-bearing, not defensive: a `<fieldset>`'s default
+   `min-inline-size` is `min-content`, so it refuses to be narrower than its widest row
+   however little space it is given, and pushes the overflow up to the panel. */
 .hh-editor__group {
   border: 0;
   margin: 0;
   padding: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -680,8 +741,11 @@
   width: 100%;
 }
 
+/* Wraps. Three labelled radios do not fit on one line at every width, and the narrow
+   layout is a real target (§8.3.4) rather than a hypothetical one. */
 .hh-editor__snap {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -689,17 +753,33 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
+/*
+ * The row that was overflowing, and why `min-width: 0` has to be *here*.
+ *
+ * The input already carried it, which looks like it should have been enough and is not:
+ * the label is itself a flex item of the row, and a flex item's automatic minimum size is
+ * its min-content width. So the label refused to shrink below "prograde" plus the input's
+ * own intrinsic width — a number input's default is around 150 px — and the row demanded
+ * 369 px inside a 300 px content box no matter what the child was allowed to do. The
+ * chain has to be unbroken from the panel down, which is why the fieldset above and this
+ * both set it.
+ */
 .hh-editor__field label {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: 1 1 auto;
+  min-width: 0;
 }
 
+/* `width: 0` with `flex-grow` rather than `width: auto`: the field then takes the space
+   the row has left instead of asking for its intrinsic width and being trimmed back. */
 .hh-editor__field input {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   font: inherit;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

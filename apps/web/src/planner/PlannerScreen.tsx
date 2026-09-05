@@ -43,7 +43,7 @@ import { snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
 import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { AssistTray } from './AssistTray.js';
 import { CommitBar } from './CommitBar.js';
@@ -117,6 +117,55 @@ export const PlannerScreen = ({
   // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
   // screen, or when the plan produced no trajectory to draw it on — see below.
   const [anchor, setAnchor] = useState<{ readonly x: number; readonly y: number } | null>(null);
+
+  /**
+   * Whether a pointer is currently held down inside the overlay.
+   *
+   * §8.3.5 anchors the editor to its node, and the editor's own controls *move* that node
+   * — so the two combine into a control that runs away from the finger using it. Dragging
+   * the epoch slider from T+0 to T+40m moved the slider 348 px across the stage and 75 px
+   * down, which is several times its own length: the thumb is released almost immediately
+   * and the drag cannot be completed at all. The same applies in miniature to the
+   * steppers, which walk out from under a repeated click.
+   *
+   * So the anchor is **suspended while the overlay is being operated by pointer**, and
+   * resumes on release. Not while it is merely open: following the node is the behaviour
+   * §8.3.5 asks for, and it is right when the node moves for a reason outside the panel —
+   * a drag in the orbit view, or a nudge from the keyboard, where nothing is being held.
+   * The freeze is scoped to exactly the case where following is self-defeating.
+   *
+   * A ref rather than state: it is read inside a callback that must keep a stable
+   * identity (`onAnchor` is in the orbit view's effect dependencies), and re-rendering on
+   * press would be work for something no one can see.
+   */
+  const anchorHeld = useRef(false);
+
+  /**
+   * The orbit view's anchor report, gated by the freeze above.
+   *
+   * `useCallback` with no dependencies because `onAnchor` is a dependency of the effect
+   * that installs the canvas listeners: a fresh identity per render would tear down and
+   * rebuild the hit index, the framing and every listener sixty times a second.
+   */
+  const reportAnchor = useCallback((at: { readonly x: number; readonly y: number } | null) => {
+    if (anchorHeld.current) return;
+    setAnchor(at);
+  }, []);
+
+  // Released on the window, not the panel: a drag that leaves the slider still ends the
+  // gesture, and a pointer released outside would otherwise leave the anchor frozen for
+  // the rest of the session.
+  useEffect(() => {
+    const release = (): void => {
+      anchorHeld.current = false;
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, []);
 
   const { model } = state;
   // The preview while a gesture is in flight, the settled evaluation otherwise. Every
@@ -391,7 +440,7 @@ export const PlannerScreen = ({
           onCancelDrag={actions.cancelDragging}
           dragging={dragPreview}
           anchorNodeId={state.editorFor}
-          onAnchor={setAnchor}
+          onAnchor={reportAnchor}
         />
 
         <div class="hh-planner__side">
@@ -454,6 +503,12 @@ export const PlannerScreen = ({
           <div
             class="hh-editor__anchor"
             data-anchored={anchor !== null}
+            // Suspends the anchor for the duration of the gesture — see `anchorHeld`.
+            // On the container rather than on each control, so a stepper, a radio, the
+            // slider and a text field all get it without four copies of the same line.
+            onPointerDown={() => {
+              anchorHeld.current = true;
+            }}
             // §8.3.5's "anchored to the node". Absolute over the stage when the orbit
             // view can say where the node is drawn; docked at the edge when it cannot —
             // the node is off screen, or the plan produced no trajectory — because an

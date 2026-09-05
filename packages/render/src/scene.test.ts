@@ -232,6 +232,48 @@ describe('hit targets', () => {
     expect(targets.some((t) => t.kind === 'trajectory')).toBe(true);
   });
 
+  it('include arc 0, so the first node of a plan can be placed by pointer (FR-405)', () => {
+    // The regression this exists for: arc 0 was drawn with the current-orbit stroke and
+    // then skipped before the target was pushed, so the ship's own orbit was the one curve
+    // on screen that could not be clicked. Invisible once a plan has a burn in it —
+    // arcs 1…n cover the same pixels — and fatal on the empty plan, where arc 0 is the
+    // only arc there is and no node could be placed with the pointer at all.
+    const { targets } = buildScene(request());
+    expect(targets.some((t) => t.kind === 'trajectory' && t.id === 'arc:0')).toBe(true);
+  });
+
+  it('make an empty plan clickable, which is the case that had no target at all', () => {
+    const empty = buildTimeline({
+      startEpoch: epoch(0),
+      initialState: stateFromElements(orbit(7_000_000), MU_EARTH),
+      plan: createPlan([]),
+      horizon: epoch(14 * 3600),
+      mu: MU_EARTH,
+    });
+    if (!empty.ok) throw new Error('fixture timeline failed to build');
+
+    const { targets, scene } = buildScene(request({ timeline: empty.timeline, nodes: [] }));
+    const trajectories = targets.filter((t) => t.kind === 'trajectory');
+    expect(trajectories).toHaveLength(1);
+    expect(trajectories[0]?.id).toBe('arc:0');
+
+    // A click anywhere on the drawn curve resolves to it. Taken from the polyline the
+    // scene actually drew rather than from a computed point, so the target and the picture
+    // are asserted to agree rather than assumed to.
+    const drawn = scene.layers['current-orbit']?.[0];
+    if (drawn?.kind !== 'polyline') throw new Error('expected the current orbit to be drawn');
+    const on = drawn.points[Math.floor(drawn.points.length / 3)];
+    expect(on).toBeDefined();
+    expect(hitTest(buildHitIndex(targets), on ?? { x: 0, y: 0 })?.kind).toBe('trajectory');
+  });
+
+  it('leaves arc 0 drawn as the current orbit, not as planned dots', () => {
+    // Hit-testing changed; §9.3's distinction between the orbit you are on and the one you
+    // planned did not. Asserted so a future "make it clickable" cannot quietly restyle it.
+    const { scene } = buildScene(request());
+    expect(scene.layers['current-orbit']?.some((p) => p.kind === 'polyline')).toBe(true);
+  });
+
   it('put a node target at the same point the node is drawn at', () => {
     // The three outputs are built in one pass precisely so they cannot drift; a target two
     // pixels off the mark is a click that selects nothing.

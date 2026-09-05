@@ -60,7 +60,59 @@ they relied on has moved.
   DOP853 oracle: at a returned epoch an independent integrator started from the arc's state must
   arrive back at it.
 
+### Fixed
+- **The ship and the target now move.** Both markers were drawn at a fixed offset along their
+  opening orbit and stayed there — through a scrub of the planner's timeline, and through an
+  entire playback run. `MarkerSpec.offsetSeconds` is *where a body is* ("seconds from the arc's
+  start to the scrub epoch"), and both views were passing `MARKER_TRAIL_SECONDS = 900`, a constant
+  whose own docstring called it *"how far ahead of a marker its motion trail is drawn"*. Two
+  different quantities, and the marker got the wrong one. The orbits, the trails and the
+  closest-approach tie line all moved correctly around two stationary glyphs, which is why it read
+  as the markers being broken rather than as the epoch never arriving. The offset is now the epoch
+  being drawn — the scrub head in the planner, the playback epoch during a run — and for the ship
+  it is measured from **the arc the epoch lands on**, so a marker no longer sits on the parking
+  orbit for the rest of a run after the first burn. `shipMarkerOf` spells that once for both views.
+- **The first node of a plan can be placed with the pointer (FR-405).** §8.5.2 places a node by
+  clicking the trajectory, and `buildScene` registered a hit target for every arc *except arc 0* —
+  the orbit the ship is on now, which was drawn and then skipped. With a plan already in progress
+  this is invisible, because arcs 1…n cover the same pixels; on the **empty plan** arc 0 is the
+  only arc there is, so the first burn of every contract could not be placed by clicking at all
+  while the second one could. Arc 0 is now a hit target. Its drawing is unchanged: it keeps §9.3's
+  current-orbit stroke and does not become planned dots.
+- **The node editor is readable, and no longer scrolls sideways.** Two faults in one panel. The
+  overlay set a near-black panel fill and no foreground, so it inherited the document's black text
+  and painted black on `#0a0e17`; its `<input>`s meanwhile rendered in the browser's light-mode
+  skin, white boxes on a dark panel. And its Δv rows demanded 369 px inside a 300 px content box —
+  a flex item's automatic minimum size is its min-content width, so the label refused to shrink
+  below its text plus a number input's intrinsic width, whatever the input itself was allowed to
+  do. The panel is 360 px wide, the `min-width: 0` chain is unbroken from the fieldset down, the
+  snap radios wrap, and `overflow-x` is `hidden` rather than `auto`: a panel that can scroll
+  sideways is one whose layout has already failed, and `auto` hides the failure instead of showing
+  it.
+- **Full-precision readouts are legible.** FR-406's reveal-on-hover had the same defect as the
+  editor and was harder to notice: `.hh-value__precise` set the panel fill without an ink, so
+  every tooltip on the planner was black text on a near-black box — present in the accessible
+  tree, invisible on screen. Seven of them.
+- **The node editor stays under the pointer while it is being used.** §8.3.5 anchors the overlay to
+  its node, and the overlay's own controls move that node — so dragging the epoch slider dragged
+  the panel out from under the finger holding it. Measured: T+0 to T+40m moved the slider 348 px
+  across the stage and 75 px down, several times its own length, so the thumb was released almost
+  immediately and the drag could not be completed. The anchor is now suspended while a pointer is
+  held down inside the overlay and resumes on release — not while it is merely open, because
+  following the node is the specified behaviour and is right whenever the node moves for a reason
+  outside the panel.
+
 ### Changed
+- **The application declares its own ground.** `app.css` described itself as "structure and motion,
+  not the look" while carrying some thirty hex codes chosen against a dark field — but never set a
+  background or a foreground, so the page took the browser's white ground and black text and every
+  one of those dark surfaces painted black on black. It now defines four of §9.2's tokens (`--bg`,
+  `--bg-panel`, `--fg`, `--fg-dim`) and `color-scheme: dark`, which is what stops form controls
+  rendering light-mode inside dark panels. `--bg` is `SCENE_COLOURS.background` exactly, so the
+  canvas has no seam against the page. This is the *ground*, not the palette: #116 still owns
+  §9.2's thirteen tokens and all five palettes, and replaces these values without anything outside
+  that block changing. The stylesheet's header no longer claims otherwise.
+
 - **A planner restored from a run starts in `EVALUATED`.** Aborting or retrying seeds the planner
   with the committed plan, and §8.5.1 reaches `COMMITTED` only from `EVALUATED` — so leaving it
   `IDLE` rendered an enabled Commit button that did nothing. It is also simply the true state: the

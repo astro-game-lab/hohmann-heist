@@ -161,39 +161,54 @@ export const buildScene = (request: SceneRequest): SceneResult => {
         closed: tessellation.closed,
         stroke: currentOrbitStroke(colours),
       });
-      continue;
-    }
-
-    // The planned trajectory is dots at equal *time*, not a dashed polyline — see
-    // `trajectory.ts` for why a dash array cannot express what §9.3 asks for. The
-    // underlying path is still a hit target, because §8.5.2 places a node by clicking it.
-    const durationSeconds = (arc.endEpoch as number) - (arc.startEpoch as number);
-    if (arc.elements.eccentricity < 1 && durationSeconds > 0) {
-      const dots = equalTimeDots({
-        elements: arc.elements,
-        mu: timeline.mu,
-        durationSeconds,
-      });
-      const fill = plannedDotFill(colours);
-      for (const point of dots.points) {
+    } else {
+      // The planned trajectory is dots at equal *time*, not a dashed polyline — see
+      // `trajectory.ts` for why a dash array cannot express what §9.3 asks for.
+      const durationSeconds = (arc.endEpoch as number) - (arc.startEpoch as number);
+      if (arc.elements.eccentricity < 1 && durationSeconds > 0) {
+        const dots = equalTimeDots({
+          elements: arc.elements,
+          mu: timeline.mu,
+          durationSeconds,
+        });
+        const fill = plannedDotFill(colours);
+        for (const point of dots.points) {
+          plannedTrajectory.push({
+            kind: 'disc',
+            centre: worldToScreen(camera, point),
+            radius: PLANNED_DOT_RADIUS,
+            fill,
+          });
+        }
+      } else {
+        // An open or degenerate arc has no period to divide, so it falls back to a dashed
+        // path rather than disappearing. §6.4's L4 makes it illegal to commit, and the
+        // player should be able to see the thing they are being told about.
         plannedTrajectory.push({
-          kind: 'disc',
-          centre: worldToScreen(camera, point),
-          radius: PLANNED_DOT_RADIUS,
-          fill,
+          kind: 'polyline',
+          points,
+          stroke: { ...targetOrbitStroke(colours), colour: colours.planned },
         });
       }
-    } else {
-      // An open or degenerate arc has no period to divide, so it falls back to a dashed
-      // path rather than disappearing. §6.4's L4 makes it illegal to commit, and the
-      // player should be able to see the thing they are being told about.
-      plannedTrajectory.push({
-        kind: 'polyline',
-        points,
-        stroke: { ...targetOrbitStroke(colours), colour: colours.planned },
-      });
     }
 
+    /*
+     * **Every** arc is a hit target, arc 0 included — §8.5.2 places a node by clicking a
+     * trajectory, and FR-405 requires every node to be creatable by pointer.
+     *
+     * Arc 0 used to be drawn and then `continue`d past this, which made the current orbit
+     * the one curve on screen that could not be clicked. That is invisible as long as a
+     * plan already has a burn in it, because arcs 1…n cover the same pixels; it bites on
+     * the **empty plan**, where arc 0 is the only arc there is. The first node of every
+     * contract therefore could not be placed with the pointer at all — the player had to
+     * find `N` or the plan panel's Add button — while the second one could, which reads
+     * as the click target being unreliable rather than absent.
+     *
+     * Drawing and hit-testing stay separate concerns: arc 0 keeps §9.3's current-orbit
+     * stroke and does not become dots. Only its clickability changes. `pickEpoch` already
+     * searches every arc's span regardless of which one the index named, so nothing
+     * downstream needed to learn about this.
+     */
     targets.push({
       shape: 'path',
       kind: 'trajectory',
