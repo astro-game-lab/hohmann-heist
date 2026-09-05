@@ -684,4 +684,5 @@ export const en: Messages = {
   'debrief.share.failed': () => 'Could not copy — select the code and copy it yourself.',
   'debrief.share.hint': () =>
     'A replay code, not a link: the shareable URL arrives with the replay viewer.',
+  'debrief.build.label': () => 'Build',
 };

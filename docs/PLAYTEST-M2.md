@@ -35,13 +35,24 @@ measures the deployment.
 | | |
 | --- | --- |
 | **URL** | <https://astro-game-lab.github.io/hohmann-heist/> |
-| **`main` SHA** | `88853ce` — *M2 · 6/7 — execution and the debrief (#246)* |
-| **Entry script** | `assets/index-Csh5p3Kl.js` |
-| **Smoke check** | `tools/smoke/smoke.sh https://astro-game-lab.github.io/hohmann-heist/` — **all checks passed**, 2026-09-04 |
+| **Build under test** | *(record at session 1, from the debrief's `Build` line)* |
+| **Smoke check** | `tools/smoke/smoke.sh https://astro-game-lab.github.io/hohmann-heist/` — record the date it last passed |
 
-Re-run the smoke check before each session and record the result on the sheet. If the
-entry script has changed, the build under test has changed, and sessions either side of
-that change are not measuring the same thing.
+**The build says what it is.** §14.4's identifier is printed on the debrief — `Build 0.0.0
+(ae569e9)` — so read it off the screen at the end of each session and write it on the
+sheet. The round's build is whatever session 1 recorded; record it above once, and check
+each later session against it.
+
+Re-run the smoke check before each session. **If the identifier has changed between two
+sessions, the build under test has changed, and those two sessions are not measuring the
+same thing** — say so in the findings rather than averaging across the change.
+
+> **Why this is no longer a hard-coded SHA.** It was one, naming `88853ce` and
+> `index-Csh5p3Kl.js`, and that was correct when this document was written and stopped
+> being correct the next day when #249 deployed. Nothing was measured against the stale
+> pin — no session had run — but a pin that has to be hand-updated after every deploy is a
+> pin that will eventually be wrong at the one moment it matters. The build now reports
+> itself, so the round records what it *saw* rather than restating what it *expected*.
 
 ## Two adaptations, and why they were needed
 

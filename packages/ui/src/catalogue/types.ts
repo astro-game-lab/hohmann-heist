@@ -552,6 +552,15 @@ export interface UiMessageParams {
   readonly 'debrief.share.copied': Record<string, never>;
   readonly 'debrief.share.failed': Record<string, never>;
   readonly 'debrief.share.hint': Record<string, never>;
+  /**
+   * Label for §14.4's build identifier.
+   *
+   * The label only. The identifier itself — `0.0.0 (ae569e9)` — is not a catalogue
+   * string: it is read back verbatim into bug reports and playtest sheets, so there is
+   * nothing in it to translate and a locale that reformatted the digits would break the
+   * one thing it is for. See `apps/web/src/version.ts`.
+   */
+  readonly 'debrief.build.label': Record<string, never>;
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

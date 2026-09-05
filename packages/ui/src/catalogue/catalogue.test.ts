@@ -314,6 +314,7 @@ const samples: AllMessageParams = {
   'debrief.share.copied': {},
   'debrief.share.failed': {},
   'debrief.share.hint': {},
+  'debrief.build.label': {},
 };
 
 const catalogue = createCatalogue();

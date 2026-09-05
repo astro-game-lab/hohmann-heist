@@ -281,4 +281,21 @@ describe('the actions', () => {
     await mount(outcomeOf());
     expect(el('debrief-share-result')).toBeNull();
   });
+
+  // §14.4: "the version is visible on the title screen and in the debrief". The title
+  // screen is #118; this is the half that exists.
+  it('names the build it is running', async () => {
+    await mount(outcomeOf());
+    const build = text('debrief-build');
+    expect(build).toContain('Build');
+    // The identifier's fallback under the test runner, which applies no `define`.
+    expect(build).toContain('0.0.0 (unknown)');
+  });
+
+  it('shows the build on a failed run too, which is when it gets reported', async () => {
+    await mount(
+      outcomeOf({ success: false, failure: 'objectiveMissed', medal: null, parDelta: null }),
+    );
+    expect(text('debrief-build')).toContain('0.0.0 (unknown)');
+  });
 });

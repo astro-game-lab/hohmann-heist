@@ -816,6 +816,18 @@ body {
   gap: 8px;
 }
 
+/* §14.4's build identifier. Dim and small: it is a thing to be found when needed, not
+   part of the result being read. */
+.hh-debrief__build {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: var(--fg-dim);
+}
+
+.hh-debrief__build code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .hh-planner__committed {
   margin: 0;
   padding: 6px 10px;
