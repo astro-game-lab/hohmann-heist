@@ -246,6 +246,7 @@ Catches unit, frame and algebra errors. Cheap and fast.
 | Circular speed | 7 668.6 m/s at 400 km; 3 074.66 m/s at GEO | ✅ `twobody.test.ts`, to 0.05 and 0.005 m/s — half an ulp of each printed digit |
 | Hohmann Δv | LEO 400 km → GEO = 3 854.0 m/s (2 397.5 + 1 456.5) | ✅ `twobody.test.ts`, to 0.05 m/s |
 | Hohmann time of flight | 19 048.6 s = 5.29 h | ✅ `twobody.test.ts`, to 0.05 s |
+| The title screen's background transfer is the real one | §8.3.1 claims the background is *"the actual sim, not an animation"*. Its two burns and time of flight are re-derived from vis-viva **inside the test**, not imported from `hohmannTransfer`, so a bug in the closed form would fail this rather than be confirmed by it; the arrival is then checked through `stateAt` on the propagated timeline | ✅ `apps/web/src/title/background.test.ts` — burns to 1e-9 relative, arrival within 1 km of `R_GEO` and `e < 1e-4`, which are DEP-09's Δv quantisation rather than chosen tolerances |
 | Bi-elliptic threshold | Hohmann wins below r₂/r₁ = 11.94; bi-elliptic above 15.58 | ✅ `twobody.test.ts` — measured at 11.9388 and 15.5817. **The two numbers answer different questions;** see below |
 | Element → Cartesian at periapsis | `r = a(1−e)`, `v = √(μ(1+e)/(a(1−e)))`, purely transverse | ✅ `elements.test.ts` |
 | Converted state satisfies `\|r × v\| = √(μp)` | Definition of the semi-latus rectum | ✅ `elements.test.ts` |

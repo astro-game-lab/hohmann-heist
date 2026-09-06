@@ -160,8 +160,17 @@ body {
  * two sets of headings in the accessibility tree, and a canvas being drawn to while it
  * fades out. The difference is not visible at 160 ms; the cost would be.
  */
+/*
+ * Every screen gets a gutter.
+ *
+ * Until now the frame had no padding at all, so every screen ran flush into the left edge
+ * of the viewport — fine on the planner, whose canvas is meant to bleed, and wrong
+ * everywhere text starts a line. Stated here rather than per screen so a new one inherits
+ * it, and in `rem` so it moves with §8.3.12's UI scale.
+ */
 .hh-screen {
   animation: hh-screen-in var(--hh-screen-in-duration) ease-out;
+  padding-inline: 1.5rem;
 }
 
 @keyframes hh-screen-in {
@@ -1957,4 +1966,526 @@ body {
 .hh-help__remap {
   display: inline-block;
   margin-block-start: 1rem;
+}
+
+/* ── The footer (§8.3.1, #118) ───────────────────────────────────────────────
+ *
+ * Present on every screen §8.3.1 puts it on, which is the title and the board today.
+ * It is a row that wraps rather than a two-column grid, so at narrow widths the build
+ * drops under the attribution instead of squeezing it.
+ */
+.hh-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-block-start: 2.5rem;
+  padding-block-start: 1rem;
+  border-block-start: var(--hh-line) solid var(--grid);
+  font-size: 0.85em;
+  color: var(--fg-dim);
+}
+
+.hh-footer p {
+  margin: 0;
+}
+
+/*
+ * The `·` between the attribution and the link.
+ *
+ * Generated content rather than a text node, because a separator in JSX is literal text
+ * and NFR-028's rule refuses it — see `Footer.tsx`.
+ *
+ * The `/ ''` is the alternative text for that generated content, and it is load-bearing
+ * rather than decoration: without it the separator joins the link's accessible name and
+ * a screen reader announces *"· the physics"*. Verified in the browser, which is where it
+ * was found. An engine that does not understand the alt syntax drops the whole
+ * declaration and renders no separator, which degrades to plain rather than to wrong.
+ */
+.hh-footer__physics::before {
+  content: ' · ' / '';
+  color: var(--grid);
+}
+
+/* §14.4's build. Focusable so the commit in its `title` is reachable without a pointer —
+ * `Footer.tsx` says why — and therefore it needs the focus ring §8.8 never suppresses. */
+.hh-footer__build {
+  font-variant-numeric: tabular-nums;
+  border-radius: 2px;
+}
+
+.hh-footer__build:focus-visible {
+  outline: var(--hh-line-strong) solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── The title screen (§8.3.1, #118) ─────────────────────────────────────────
+ *
+ * A grid rather than absolute positioning, so the content sits over the background
+ * without either of them being taken out of flow: the background is a grid item that
+ * fills the whole area, the content is another in the same cell, and the footer is a row
+ * beneath both. At 200% zoom (§8.8) the content column wraps under nothing and the page
+ * still scrolls only vertically, because nothing here has a fixed width.
+ */
+.hh-title {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-block-size: 60vh;
+}
+
+.hh-title__background,
+.hh-title__content {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+/*
+ * Decorative, and it behaves like it (§8.3.1, §8.8).
+ *
+ * `pointer-events: none` is load-bearing rather than tidy: the canvas covers the whole
+ * cell and the entries sit on top of it, so without this it would swallow every click
+ * meant for them. It carries `aria-hidden` in the markup; this is the pointer half of the
+ * same statement.
+ */
+.hh-title__background {
+  pointer-events: none;
+  position: relative;
+  min-block-size: 18rem;
+}
+
+.hh-title__canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/*
+ * Content starts under the heading, it does not float in the middle of the row.
+ *
+ * This used to be `justify-content: center`, which centred the tagline and the menu inside
+ * a `60vh` grid row and left a large hole between the wordmark — which is the screen's
+ * `<h1>`, and lives above this element — and the first line of text. The row is still tall,
+ * because the background needs the room; only the text stops being centred in it.
+ */
+.hh-title__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 1.25rem;
+  padding-block-start: 0.25rem;
+}
+
+.hh-title__tagline {
+  margin: 0;
+  max-inline-size: 22rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+
+/*
+ * `align-items: flex-start` is what stops an entry stretching.
+ *
+ * A column flex container stretches its items to full width by default, so each `<li>` —
+ * and the `<a>` filling it — spanned the whole content column. The hover background then
+ * painted a band right across the orbit animation behind it, which read as a bug rather
+ * than as a highlight. Shrinking each item to its own text means the highlight hugs the
+ * word it belongs to.
+ */
+.hh-title__menu ul {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * §8.8's input row: *"≥ 44 × 44 px on touch, ≥ 32 × 32 px hit areas on desktop"*. The
+ * `min-block-size` is the desktop floor stated once; the padding is what carries it past
+ * 44 px at a touch-sized root font.
+ */
+.hh-title__entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-block-size: 2rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.hh-title__entry:hover {
+  background: var(--bg-panel);
+}
+
+.hh-title__entry:focus-visible {
+  outline: var(--hh-line-strong) solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* §8.3.1's `▸`. It points at the entry it belongs to and means nothing on its own, so it
+ * is `aria-hidden` by `Icon`'s default and dimmed until the entry is the one in play. */
+.hh-title__marker {
+  flex: none;
+  inline-size: 0.9em;
+  block-size: 0.9em;
+  color: var(--accent);
+}
+
+.hh-title__entry-label {
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* §8.3.1's `(Act II)` beside CONTINUE. */
+.hh-title__entry-detail {
+  font-size: 0.85em;
+  color: var(--fg-dim);
+}
+
+/* ── The contract board (§8.3.2, #119) ───────────────────────────────────────
+ */
+.hh-board {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.hh-board__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding-block-end: 0.75rem;
+  border-block-end: var(--hh-line) solid var(--grid);
+}
+
+.hh-board__back,
+.hh-board__settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-block-size: 2rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 3px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.hh-board__back:focus-visible,
+.hh-board__settings:focus-visible {
+  outline: var(--hh-line-strong) solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* §8.3.2's `◂`. One glyph in the set, turned here rather than drawn twice — see
+ * `icons/index.tsx` on why a mirrored copy would be a second entry to keep in step. */
+.hh-board__back-glyph {
+  transform: rotate(180deg);
+  inline-size: 0.9em;
+  block-size: 0.9em;
+}
+
+.hh-board__credits {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.hh-board__credits-label {
+  font-size: 0.8em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-board__credits-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Acts ────────────────────────────────────────────────────────────────── */
+
+.hh-act__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  margin-block-end: 0.75rem;
+}
+
+.hh-act__heading {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hh-act__progress {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-dim);
+}
+
+.hh-act__lock {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  margin-inline-start: auto;
+  font-size: 0.9em;
+  color: var(--warn);
+}
+
+.hh-act__lock-glyph,
+.hh-card__lock-glyph,
+.hh-state__glyph {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+/*
+ * §8.3.2's row of cards, as a grid that reflows — explicitly *not* a horizontal scroller.
+ *
+ * `auto-fill` with a `minmax` floor means the number of columns is decided by the width
+ * available rather than by a breakpoint, so the same rule serves wide and narrow and
+ * there is no width at which a card is cut in half. `min()` on the floor is what keeps
+ * that true at 200% zoom (§8.8): below about 14rem of available inline size the track
+ * collapses to the container instead of overflowing it, so the page never scrolls
+ * sideways.
+ */
+.hh-act__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+
+.hh-card__link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  block-size: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 3px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+a.hh-card__link:hover {
+  border-color: var(--fg-dim);
+}
+
+a.hh-card__link:focus-visible {
+  outline: var(--hh-line-strong) solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* §8.3.2's `NEXT`. The accent border is reinforcement; the marker below carries the word,
+ * so the distinction survives greyscale (NFR-019). */
+.hh-card[data-next='true'] .hh-card__link {
+  border-color: var(--accent);
+}
+
+.hh-card__number {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  letter-spacing: 0.1em;
+  color: var(--fg-dim);
+}
+
+.hh-card__title {
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hh-card__next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hh-card__next-glyph {
+  inline-size: 0.9em;
+  block-size: 0.9em;
+}
+
+.hh-card__record {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-block-start: auto;
+  font-size: 0.9em;
+}
+
+.hh-card__best,
+.hh-card__par {
+  font-variant-numeric: tabular-nums;
+}
+
+.hh-card__par,
+.hh-card__unplayed {
+  color: var(--fg-dim);
+}
+
+/*
+ * A locked card. Dashed, dimmed, and not a link — §8.3.3's *"unreachable by UI"* is
+ * enforced in the markup (`LockedCard` renders a `div`), and this only makes it look the
+ * way it behaves.
+ */
+.hh-card--locked .hh-card__link {
+  border-style: dashed;
+  background: none;
+  color: var(--fg-dim);
+}
+
+.hh-card__lock {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hh-card__rule {
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+/* ── Medals (§8.3.2, §8.8, NFR-019) ──────────────────────────────────────────
+ *
+ * Shape, label and colour. The colour is last and least: `--medal-*` is published on the
+ * root by `palette.ts` for whichever of §9.2's five palettes is selected, and if it fails
+ * to resolve the glyph falls back to the surrounding ink and the word is still there.
+ * That fallback is the rule working — nothing here is conveyed by colour alone.
+ */
+.hh-medal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hh-medal__glyph {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  color: var(--medal-bronze, currentColor);
+}
+
+.hh-medal[data-medal='silver'] .hh-medal__glyph {
+  color: var(--medal-silver, currentColor);
+}
+
+.hh-medal[data-medal='gold'] .hh-medal__glyph {
+  color: var(--medal-gold, currentColor);
+}
+
+.hh-medal[data-medal='clean'] .hh-medal__glyph {
+  color: var(--medal-clean, currentColor);
+}
+
+.hh-medal__label {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── The daily strip (§8.3.2) ────────────────────────────────────────────── */
+
+.hh-daily {
+  padding-block-start: 1rem;
+  border-block-start: var(--hh-line) solid var(--grid);
+  color: var(--fg-dim);
+}
+
+.hh-daily__heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.hh-daily p {
+  margin: 0;
+  font-size: 0.9em;
+}
+
+/* ── §8.7's states (#125) ────────────────────────────────────────────────────
+ *
+ * One block for all of them, because they are the same object: a notice with a heading, a
+ * sentence, optionally some detail, and a way out. None of them is a modal and none traps
+ * focus — NFR-014, and the reason they are `<section>`s in the flow rather than overlays.
+ */
+.hh-state {
+  margin-block: 1rem;
+  padding: 0.75rem 1rem;
+  border: var(--hh-line) solid var(--grid);
+  border-inline-start: var(--hh-rule) solid var(--warn);
+  border-radius: 3px;
+  background: var(--bg-panel);
+}
+
+.hh-state--error {
+  border-inline-start-color: var(--bad);
+}
+
+.hh-state__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.hh-state__body,
+.hh-state__detail {
+  margin: 0 0 0.5rem;
+  line-height: 1.5;
+}
+
+.hh-state__detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  color: var(--fg-dim);
+}
+
+.hh-state__fields,
+.hh-state__matrix {
+  margin: 0 0 0.5rem;
+  padding-inline-start: 1.1rem;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
+
+.hh-state__fields {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.hh-state__action {
+  display: inline-block;
+  min-block-size: 2rem;
+  padding-block: 0.3rem;
+  color: var(--accent);
 }

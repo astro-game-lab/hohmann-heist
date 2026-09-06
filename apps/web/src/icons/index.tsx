@@ -99,6 +99,43 @@ const PATHS = {
    * would be the only one in the set.
    */
   more: ['M12 5.5v.5', 'M12 11.75v.5', 'M12 18v.5'],
+  /**
+   * A medal — §8.3.2's ▲, §6.7.
+   *
+   * **One glyph for all four tiers, not four.** §8.8 asks that medals be told apart by
+   * shape and label rather than colour, and it is the *label* that does the telling here:
+   * §8.3.2's own mockup draws the same ▲ over `GOLD`, `SILVER` and `BRONZE`, and the card
+   * renders the tier's name beside this in text. Four near-identical triangles would spend
+   * three of §9.6's twenty glyphs on a distinction the word already makes, and would make
+   * the tiers *harder* to tell apart at 16 px, not easier — which is the opposite of what
+   * the rule is for.
+   *
+   * The colour arrives from `data-medal` on the element around it, so this stays
+   * `currentColor` like everything else in the set.
+   */
+  medal: ['M12 4 3.5 19h17z', 'M12 10.5 8.75 16h6.5z'],
+  /** A locked contract or act — §8.3.2's 🔒, §6.8. */
+  lock: ['M6 11h12v9H6z', 'M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11'],
+  /**
+   * A direction — §8.3.2's `▸` on the `NEXT` marker and the `◂` back to the title.
+   *
+   * One glyph, turned by CSS at the two sites that need it pointing the other way. A
+   * mirrored copy would be a second entry in this table whose only difference from the
+   * first is a sign, and the day the stroke weight changes someone updates one of them.
+   */
+  chevron: ['M10 5.5 16.5 12 10 18.5'],
+  /** Settings — §8.3.2's ⚙, §8.3.12. */
+  settings: [
+    'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+    'M12 2.5v3',
+    'M12 18.5v3',
+    'M21.5 12h-3',
+    'M5.5 12h-3',
+    'M18.7 5.3 16.6 7.4',
+    'M7.4 16.6l-2.1 2.1',
+    'M18.7 18.7 16.6 16.6',
+    'M7.4 7.4 5.3 5.3',
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 /** Every glyph the application draws. */

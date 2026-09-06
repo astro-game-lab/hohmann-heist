@@ -12,6 +12,41 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **§8.3.1's title screen and §8.3.2's contract board, with §8.7's states behind them
+  (#118, #119, #125, #126).** The two screens that turn seven contracts into a game: before
+  this the campaign was a set of URLs and `#/` was a placeholder holding a temporary list of
+  links. The **title** is now the real screen — wordmark, tagline, §8.2's five entries and the
+  footer — and its background is *a genuinely propagated LEO→GEO Hohmann transfer*, built from
+  `@hh/astro`'s closed form and stepped by `@hh/sim`'s timeline at ~2 000×. Nothing about it is
+  keyframed: the only thing that animates is the scrub epoch, and every frame reads the ship's
+  position out of the same propagation a committed plan would use, which is what makes §8.3.1's
+  *"the first honesty signal"* a claim the repository can keep — `background.test.ts` re-derives
+  both burns from vis-viva independently and checks the arrival lands circular at GEO. It is
+  decorative and behaves like it: `aria-hidden`, never focusable, and **stopped entirely** under
+  `prefers-reduced-motion` or §8.3.12's background-animation setting, which this is the first
+  consumer of. FR-901's two clicks are now counted by a test — **Start goes straight to the C01
+  briefing**, not to the board, because §8.3.1 is explicit that there are no menus between a
+  stranger and the game.
+  The **board** renders acts, cards, medals, locks, `NEXT`, §6.10's career credits and an
+  honest daily strip that says what it does not know rather than implying a leaderboard that is
+  M7. It contains **no rules**: every gate comes from #82's one `progression()` call, so §6.8's
+  ⌈2/3⌉ threshold exists in exactly one place and the board, the title's *Continue* and §8.3.3's
+  direct-URL guard cannot disagree. A locked card shows the act and the unlock rule and **never
+  the contract title** — the titles are the reveal — and the guard now keeps that promise in the
+  screen *heading* too, which was leaking the name over the refusal.
+  §8.7's rows arrive with them: a first-load skeleton whose progress bar appears only past
+  800 ms and is a delayed CSS animation rather than a timer, a scenario refusal that names the
+  failing field and offers a prefilled report, invalid and future-schema replay codes told apart
+  because re-copying an intact code from a newer build is a loop with no exit, a
+  canvas-unavailable notice carrying §11.15's matrix, and an **error boundary** that turns an
+  unhandled throw into a recoverable state instead of a blank document — while still re-throwing
+  in development, because a boundary that swallows errors is a boundary that hides bugs.
+  Finally, §11.15's **pre-boot capability check** ships inline in `index.html`, written in ES5
+  and detecting by feature rather than by `eval` of modern syntax, because a check written in
+  the syntax it is testing for cannot run on the browsers it exists for. `CompressionStream` is
+  deliberately **not** in the blocking set: §11.15 gives it an `fflate` fallback, and blocking on
+  it would lock out players who could play.
+
 - **§8.3.12's settings screen, and everything behind it (#186, #122, #187, #185, #184, #124).**
   FR-704 asks that every setting persist and apply immediately without a reload; before this
   `SaveV1.settings` was `Record<string, SettingValue>` — a deliberate hole in an otherwise
@@ -170,6 +205,15 @@ they relied on has moved.
   one the transfer search was answering 34% too expensively.
 
 ### Changed
+- **The contract registry reports a refused scenario instead of throwing (#125).** It used to
+  throw at module load, so that a bad contract was a build failure rather than a board with a
+  silent hole in it. The first half of that is still enforced — by `tools/content/`, which
+  refuses to let an invalid contract merge and fails in CI with the file named, which is a
+  better place for it than a browser with a blank page. What the throw could not do was §8.7's
+  row: it happened before anything was mounted, and stringifying `parseScenario`'s JSON pointers
+  into an `Error` threw away the field-level detail FR-202 exists to produce. The hole is no
+  longer silent either way — a contract that failed to parse is now *visible on the board as a
+  failure* rather than absent from it.
 - **The debrief can explain a missed `station` run (#94).** `diagnosis.ts` handled
   `reach_orbit` and the three proximity kinds and returned nothing for a slot, so C07 —
   the only `station` contract in v1.0 — was the one contract whose failures the game could

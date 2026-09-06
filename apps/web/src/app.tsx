@@ -7,13 +7,19 @@
  *
  * ## Every route resolves, including the ones nobody has built
  *
- * §8.2's table has nine routes and M2 builds two of them. The rest render
- * `Placeholder` inside the real frame rather than being absent from the switch, because
- * #117's first criterion is that every route in the table *resolves* — and a route that
- * falls through to not-found cannot be told apart from a typo by the person looking at
- * it. Each placeholder still shows its own heading and its own captured parameters, which
- * is what makes "deep links to a contract and to a Codex entry work from a cold load"
- * checkable before either screen exists.
+ * §8.2's table has nine routes. M3 builds the title (#118), the board (#119), the briefing,
+ * the planner, the execution phase, the debrief and settings; the daily, the leaderboard,
+ * the codex and the replay *viewer* are M6–M7 and render `Placeholder` inside the real
+ * frame rather than being absent from the switch, because #117's first criterion is that
+ * every route in the table *resolves* — and a route that falls through to not-found cannot
+ * be told apart from a typo by the person looking at it.
+ *
+ * ## Everything below is wrapped in an error boundary
+ *
+ * #125. An unhandled throw in any screen renders a recoverable state naming what failed,
+ * rather than unmounting the tree and leaving an empty document. It sits inside `Screen`,
+ * so a failure keeps the heading, the skip link and the footer — the frame is the part
+ * most likely to still be sound, and it is what carries the route back out.
  *
  * ## Every string here comes from the catalogue
  *
@@ -23,11 +29,13 @@
  * rendered against a different message set in a test without touching a global.
  */
 import { createCatalogue, type Catalogue } from '@hh/ui';
+import type { PaletteId } from '@hh/ui';
+import { progression, type LockReason, type ProgressionContract } from '@hh/game';
 import type { Outcome } from '@hh/game';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
-import { contractById } from './contracts/registry.js';
+import { contractById, contracts } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
 import { onRouteChange, parseHash, type Route } from './router.js';
 import {
@@ -50,9 +58,16 @@ import { SettingsScreen } from './settings/SettingsScreen.js';
 import { SettingsProvider, useSettings } from './settings/context.js';
 import { applyDocumentSettings } from './settings/document.js';
 import { UnknownContract } from './screens/Briefing.js';
+import { BoardScreen } from './board/BoardScreen.js';
+import { CanvasUnavailable } from './screens/CanvasUnavailable.js';
 import { ContractScreen } from './screens/ContractScreen.js';
+import { ErrorBoundary } from './screens/ErrorBoundary.js';
+import { LockedContract } from './screens/LockedContract.js';
 import { NotFound } from './screens/NotFound.js';
 import { Placeholder } from './screens/Placeholder.js';
+import { ReplayProblem } from './screens/ReplayProblem.js';
+import { TitleScreen } from './title/TitleScreen.js';
+import { diagnoseReplay } from './replay/diagnose.js';
 import { SaveNotice } from './screens/SaveNotice.js';
 import { StorageNotice, type StorageProblem } from './screens/StorageNotice.js';
 import { Screen } from './screens/Screen.js';
@@ -75,23 +90,26 @@ const catalogue = createCatalogue({
 });
 const t = catalogue.resolve;
 
-/**
- * Links offered from the title route.
- *
- * Temporary. §8.2 routes the player title → board → briefing, and neither the title
- * screen (#101) nor the board (#102) exists; until they do this is the only way to reach
- * a route without typing its hash, and it goes with them.
- */
-const NAV: readonly (readonly [path: string, label: string])[] = [
-  ['/board', t('nav.board', {})],
-  ['/contract/c03-cold-open', t('nav.contract', { index: 3 })],
-  ['/daily', t('nav.daily', {})],
-  ['/codex/phasing', t('nav.codex', {})],
-  ['/settings', t('nav.settings', {})],
-];
-
 /** A captured route parameter. Absent is empty rather than `undefined` — it is text. */
 const param = (route: Route, name: string): string => route.params[name] ?? '';
+
+/**
+ * §6.8's progression, computed once from the contracts the registry actually ships.
+ *
+ * The **one** call. The title's *Continue*, the board's locks and `NEXT`, and the
+ * direct-URL guard below all read this result, which is what makes it impossible for the
+ * three of them to disagree about whether a contract is open — see `progression.ts` and
+ * §8.3.3.
+ */
+const progressionFor = (save: SaveV1) => {
+  const shipped = contracts();
+  const asContracts: readonly ProgressionContract[] = shipped.map((scenario) => ({
+    id: scenario.id,
+    act: scenario.document.act,
+    index: scenario.document.index,
+  }));
+  return progression(asContracts, save.contracts);
+};
 
 /**
  * The screen's `<h1>`.
@@ -101,7 +119,7 @@ const param = (route: Route, name: string): string => route.params[name] ?? '';
  * having here, since half of these headings carry a captured segment and half take none.
  * A `Record<RouteName, MessageKey>` would type-check the *names* and lose that.
  */
-const headingFor = (route: Route, resolve: Catalogue['resolve']): string => {
+const headingFor = (route: Route, resolve: Catalogue['resolve'], save: SaveV1): string => {
   switch (route.name) {
     case 'title':
       return resolve('app.title', {});
@@ -113,12 +131,21 @@ const headingFor = (route: Route, resolve: Catalogue['resolve']): string => {
       // one that quotes the link that failed.
       const id = param(route, 'id');
       const scenario = contractById(id);
-      return scenario === undefined
-        ? resolve('screen.contract.heading', { id })
-        : resolve('briefing.heading', {
-            index: scenario.document.index,
-            title: scenario.document.title,
-          });
+      if (scenario === undefined) return resolve('screen.contract.heading', { id });
+
+      // A **locked** contract's title stays hidden here too. §8.3.2 keeps it off the card
+      // to preserve the reveal, and a heading that printed it over the unlock rule would
+      // give away by the back door exactly what the card is careful not to say. The
+      // number is fine — the board shows that much — so this falls back to the neutral
+      // heading, which quotes the id rather than the name.
+      if (progressionFor(save).locks[id] !== undefined) {
+        return resolve('screen.contract.heading', { id });
+      }
+
+      return resolve('briefing.heading', {
+        index: scenario.document.index,
+        title: scenario.document.title,
+      });
     }
     case 'daily':
       return resolve('screen.daily.heading', {});
@@ -146,23 +173,105 @@ const headingFor = (route: Route, resolve: Catalogue['resolve']): string => {
  */
 const storage = browserStorage();
 
+/** What `bodyFor` needs beyond the route. Grown past a positional list. */
+interface BodyContext {
+  readonly resolve: Catalogue['resolve'];
+  readonly save: SaveV1;
+  readonly palette: PaletteId;
+  /** §9.4 and §8.3.12 together: whether decorative motion is allowed. */
+  readonly still: boolean;
+  readonly canvasUnavailable: boolean;
+  readonly onCanvasUnavailable: () => void;
+  readonly onAccept: (id: string) => void;
+  readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
+}
+
+/** §8.7's replay rows, for `/#/replay?s=…&r=…`. */
+const replayBody = (route: Route, resolve: Catalogue['resolve']): JSX.Element => {
+  const code = new URLSearchParams(route.search).get('r');
+  // No code at all is not a failure — it is the bare route, which the viewer (M6) will
+  // own. A failure state here would call an empty address malformed.
+  if (code === null || code === '') return <Placeholder t={resolve} />;
+
+  const diagnosis = diagnoseReplay(code);
+  if (diagnosis.kind === 'ok') return <Placeholder t={resolve} />;
+  return (
+    <ReplayProblem
+      t={resolve}
+      problem={
+        diagnosis.kind === 'futureVersion'
+          ? { kind: 'futureVersion', found: diagnosis.found, supported: diagnosis.supported }
+          : { kind: 'invalid' }
+      }
+    />
+  );
+};
+
 /** What goes under the heading. */
-const bodyFor = (
-  route: Route,
-  resolve: Catalogue['resolve'],
-  save: SaveV1,
-  onAccept: (id: string) => void,
-  onComplete: (id: string, outcome: Outcome, replay: string) => void,
-): JSX.Element => {
+const bodyFor = (route: Route, context: BodyContext): JSX.Element => {
+  const { resolve, save } = context;
+
   switch (route.name) {
     case 'notFound':
       return <NotFound t={resolve} path={route.path} />;
-    case 'title':
-      return <Placeholder t={resolve} links={NAV} />;
+    case 'title': {
+      const state = progressionFor(save);
+
+      /*
+       * §8.3.1: *"Continue appears only with saved progress."*
+       *
+       * **Two conditions, not one.** `next` alone is not enough, and assuming it was is a
+       * bug the browser caught: on a completely fresh save `progression().next` is C01 —
+       * correctly, because it is the first unstarted unlocked contract — so the title
+       * offered *Continue* to a first-time player, pointing at the same contract Start
+       * did. Two entries, one destination, and one of them promising progress that does
+       * not exist.
+       *
+       * So the entry needs something to *resume*: at least one contract the player has
+       * touched. `attempts` is the marker, since §11.7 counts one per accepted briefing —
+       * a contract opened and abandoned is still somewhere to go back to.
+       *
+       * `next` is still the destination, and still the only one (#82). It is null again
+       * once every unlocked contract is Bronzed, and the entry is absent for that too.
+       */
+      const hasProgress = Object.values(save.contracts).some((record) => record.attempts > 0);
+      const continueId = hasProgress ? state.next : null;
+      const act = continueId === null ? null : (contractById(continueId)?.document.act ?? null);
+      return (
+        <>
+          {context.canvasUnavailable ? <CanvasUnavailable t={resolve} /> : null}
+          <TitleScreen
+            t={resolve}
+            resolveDynamic={catalogue.resolveDynamic}
+            continueId={continueId}
+            continueAct={act}
+            palette={context.palette}
+            still={context.still}
+            onCanvasUnavailable={context.onCanvasUnavailable}
+          />
+        </>
+      );
+    }
+    case 'board':
+      return (
+        <BoardScreen
+          t={resolve}
+          resolveDynamic={catalogue.resolveDynamic}
+          records={save.contracts}
+        />
+      );
+    case 'replay':
+      return replayBody(route, resolve);
     case 'contract': {
       const id = param(route, 'id');
       const scenario = contractById(id);
       if (scenario === undefined) return <UnknownContract t={resolve} id={id} />;
+
+      // §8.3.3: *"locked (unreachable by UI; direct-URL access shows the unlock rule)"*.
+      // The same `progression` result the board renders from, so the two cannot disagree.
+      const lock: LockReason | undefined = progressionFor(save).locks[id];
+      if (lock !== undefined) return <LockedContract t={resolve} lock={lock} />;
+
       const progress = save.contracts[id];
       return (
         <ContractScreen
@@ -171,10 +280,10 @@ const bodyFor = (
           scenario={scenario}
           {...(progress === undefined ? {} : { progress })}
           onAccept={() => {
-            onAccept(id);
+            context.onAccept(id);
           }}
           onComplete={(outcome, replay) => {
-            onComplete(id, outcome, replay);
+            context.onComplete(id, outcome, replay);
           }}
         />
       );
@@ -283,6 +392,30 @@ const AppShell = ({
   const { settings, keybindings, set, resetAll, setKeybindings } = useSettings();
   const reducedMotion = useReducedMotion(settings['accessibility.reduceMotion']);
 
+  const palette = settings['accessibility.palette'];
+
+  /**
+   * Whether decorative motion is allowed — §9.4, §8.8, §8.3.12.
+   *
+   * Two independent reasons to stop, and either is sufficient: §8.8 says the title
+   * background stops under `prefers-reduced-motion`, and §8.3.12's `backgroundAnimation`
+   * is a separate control for a player who wants the animation off without declaring a
+   * motion sensitivity to their operating system. This is that setting's first consumer.
+   */
+  const still = reducedMotion || !settings['accessibility.backgroundAnimation'];
+
+  /**
+   * §8.7's canvas-unavailable row (#125), reported upward by whatever tried to draw.
+   *
+   * Latched rather than re-probed: a browser that refused a 2-D context once will refuse
+   * the next one, and re-asking per screen would mean the notice appearing and vanishing
+   * as the player moved around. It stays for the session.
+   */
+  const [canvasUnavailable, setCanvasUnavailable] = useState(false);
+  const reportCanvasUnavailable = useCallback(() => {
+    setCanvasUnavailable(true);
+  }, []);
+
   /**
    * §8.5.3's `?` — the help overlay (#124).
    *
@@ -389,6 +522,21 @@ const AppShell = ({
   const beneath = route.name === 'settings' ? cameFrom.current : null;
   const framed = beneath ?? route;
 
+  /**
+   * Whether the shell moves focus to the heading on this route change.
+   *
+   * Everywhere except the board. §8.3.2 lands keyboard entry on `NEXT`, so the board moves
+   * focus itself — and without standing down here the two fight and the shell wins, because
+   * Preact runs child effects before parent ones and the shell's is the parent's. The board
+   * opened with focus on its heading as a result.
+   *
+   * Found by driving the running app, not by reading the code: under jsdom the board's own
+   * test mounts it directly, with no shell above it to be overridden by. `BoardScreen`
+   * carries the rest of the reasoning, including what it focuses when there is no next
+   * contract to land on.
+   */
+  const shellMovesFocus = focusHeading && framed.name !== 'board';
+
   return (
     <KeyboardScopeProvider value={scopeApi}>
       {/* Keyed by path, so a route change unmounts one screen and mounts the next: that is
@@ -398,8 +546,8 @@ const AppShell = ({
       <Screen
         key={framed.path}
         name={framed.name}
-        heading={headingFor(framed, t)}
-        focusHeading={focusHeading}
+        heading={headingFor(framed, t, saved.save)}
+        focusHeading={shellMovesFocus}
         transitionMs={screenTransitionMs(reducedMotion)}
         t={t}
       >
@@ -412,11 +560,28 @@ const AppShell = ({
             onDismiss={onDismissStorageNotice}
           />
         )}
-        {route.name === 'settings' && beneath === null ? (
-          <SettingsScreen {...settingsProps} />
-        ) : (
-          bodyFor(framed, t, saved.save, onAccept, onComplete)
-        )}
+        {/*
+          #125's boundary, inside the frame rather than around it. A screen that throws
+          keeps its heading, its skip link and the route back — the frame is the part most
+          likely to still be sound, and wrapping the whole `Screen` would take the escape
+          hatch down with the failure. Keyed by path so navigating away clears it.
+        */}
+        <ErrorBoundary t={t} resetKey={framed.path}>
+          {route.name === 'settings' && beneath === null ? (
+            <SettingsScreen {...settingsProps} />
+          ) : (
+            bodyFor(framed, {
+              resolve: t,
+              save: saved.save,
+              palette,
+              still,
+              canvasUnavailable,
+              onCanvasUnavailable: reportCanvasUnavailable,
+              onAccept,
+              onComplete,
+            })
+          )}
+        </ErrorBoundary>
         {/*
         §8.5.3's `?` needs a pointer route too — the keyboard-only path cannot be the only
         path (#124). One affordance in the shell rather than one per screen, for the same

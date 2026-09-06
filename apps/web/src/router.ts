@@ -18,6 +18,16 @@ export interface Route {
   readonly name: RouteName;
   readonly params: Readonly<Record<string, string>>;
   readonly path: string;
+  /**
+   * The query string after the `?`, without it. Empty when there is none.
+   *
+   * Kept because §8.2's replay route *is* its query — `/#/replay?s=…&r=…` is the share URL
+   * (§11.6), and the code is the whole payload. It is deliberately raw rather than parsed
+   * into a record: a share code is a single opaque value, and the one screen that reads it
+   * can use `URLSearchParams` itself rather than every route paying for a parse it does not
+   * want. `path` continues to exclude it, so nothing that matches on `path` changes.
+   */
+  readonly search: string;
 }
 
 export type RouteName =
@@ -90,12 +100,13 @@ export const parseHash = (hash: string): Route => {
   const withoutHash = hash.startsWith('#') ? hash.slice(1) : hash;
   const query = withoutHash.indexOf('?');
   const path = query === -1 ? withoutHash : withoutHash.slice(0, query);
+  const search = query === -1 ? '' : withoutHash.slice(query + 1);
 
   for (const [pattern, name] of ROUTES) {
     const params = matchPattern(pattern, path);
-    if (params !== undefined) return { name, params, path };
+    if (params !== undefined) return { name, params, path, search };
   }
-  return { name: 'notFound', params: {}, path };
+  return { name: 'notFound', params: {}, path, search };
 };
 
 /** Build a hash for a route, for use in an `href`. */
