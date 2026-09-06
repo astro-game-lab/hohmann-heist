@@ -321,3 +321,58 @@ describe('no text on the canvas', () => {
     expect(geometry.handles[0]?.labelAt).toBeDefined();
   });
 });
+
+describe('DEP-07’s snap mark on the marker (#136)', () => {
+  /** The same node, with and without the mark, so only the mark differs. */
+  const snapped = (kind: 'periapsis' | 'apoapsis' | null): NodeSpec => ({
+    ...node(0.1, 0),
+    snappedTo: kind,
+  });
+  const geometry = nodeGeometry(camera, node(0.1, 0));
+  const drawn = (kind: 'periapsis' | 'apoapsis' | null) =>
+    nodePrimitives(geometry, snapped(kind), COLOURS);
+
+  it('draws nothing extra for an unsnapped node', () => {
+    // An absent field and an explicit `null` mean the same thing, so a caller that does
+    // not know about the mark draws exactly what it drew before.
+    expect(nodePrimitives(geometry, node(0.1, 0), COLOURS)).toHaveLength(1);
+    expect(drawn(null)).toHaveLength(1);
+  });
+
+  it('adds one caret for a snapped node', () => {
+    expect(drawn('apoapsis')).toHaveLength(2);
+    expect(drawn('periapsis')).toHaveLength(2);
+  });
+
+  it('points the caret the way the orbit does', () => {
+    const above = drawn('apoapsis')[1];
+    const below = drawn('periapsis')[1];
+    if (above?.kind !== 'polyline' || below?.kind !== 'polyline') {
+      throw new Error('expected the caret to be a polyline');
+    }
+    // Apoapsis is the high point of the orbit and is drawn above the diamond; screen y
+    // grows downward, so its tip is the smaller y. The pairing carries the meaning rather
+    // than being arbitrary — see `snapCaret`.
+    expect(above.points[1]?.y).toBeLessThan(geometry.centre.y);
+    expect(below.points[1]?.y).toBeGreaterThan(geometry.centre.y);
+  });
+
+  it('sits clear of the selection ring rather than on top of it', () => {
+    const caret = drawn('apoapsis')[1];
+    if (caret?.kind !== 'polyline') throw new Error('expected a polyline');
+    const reach = Math.max(...caret.points.map((at) => Math.abs(at.y - geometry.centre.y)));
+    // Inside the ring, so a selected snapped node draws both without one crossing the
+    // other — which is the whole reason the offset is a stated constant.
+    expect(reach).toBeLessThan(SELECTION_RING_PX);
+  });
+
+  it('keeps the selection ring as well, so a snapped node can still be selected', () => {
+    const both = nodePrimitives(
+      geometry,
+      { ...node(0.1, 0, true), snappedTo: 'periapsis' },
+      COLOURS,
+    );
+    // Diamond, ring, caret — the mark is additional to the selection, not instead of it.
+    expect(both).toHaveLength(3);
+  });
+});

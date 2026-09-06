@@ -37,15 +37,16 @@
  * there is no narrow variant of `PlanPanel` that could quietly drop the delete button.
  */
 import { arcAt, type Plan, type Timeline } from '@hh/sim';
-import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
+import { R_EARTH_EQ, elementsFromState, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
-import { isProximityEvaluation, snapToNamedApsis } from '@hh/game';
+import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
 import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { AssistTray } from './AssistTray.js';
+import { NodeContextMenu } from './NodeContextMenu.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
 import { actionFor, isTypingTarget } from './keys.js';
@@ -117,6 +118,19 @@ export const PlannerScreen = ({
   // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
   // screen, or when the plan produced no trajectory to draw it on — see below.
   const [anchor, setAnchor] = useState<{ readonly x: number; readonly y: number } | null>(null);
+  /**
+   * §8.5.2's context menu: which node it is acting on, and where it is anchored (#136).
+   *
+   * The position is carried here rather than derived from `anchor`, because the two answer
+   * different questions. `anchor` is *where the node is drawn*, which is what §8.3.5's
+   * overlay follows; a menu opens *where the player asked*, which for a right-click two
+   * pixels off the marker is two pixels off the marker. The keyboard route has no pointer
+   * position and falls back to the node's own — see `openMenuForSelected` below.
+   */
+  const [menu, setMenu] = useState<{
+    readonly nodeId: NodeId;
+    readonly at: { readonly x: number; readonly y: number };
+  } | null>(null);
 
   /**
    * Whether a pointer is currently held down inside the overlay.
@@ -273,6 +287,44 @@ export const PlannerScreen = ({
     );
   })();
 
+  /**
+   * Which apsis each node is sitting on — DEP-07 made visible (#136).
+   *
+   * §8.5.2 and #136 both ask for a snapped node to be *distinguishable from one that
+   * happens to be near an apsis*, because DEP-07 moves a burn to an epoch the player did
+   * not choose and a departure the player cannot see is one they cannot account for.
+   *
+   * Derived rather than stored. A flag set when the snap happened would have to be cleared
+   * every time the node moved for any other reason — a nudge, a typed epoch, an earlier
+   * burn reshaping the arc this one sits on — and the first one missed would leave a node
+   * claiming to be on an apsis it had left. `apsisAt` asks the geometry instead, so the
+   * mark cannot be stale by construction.
+   */
+  const snappedKinds =
+    evaluation.timeline === null
+      ? []
+      : model.plan.nodes.map((node) =>
+          evaluation.timeline === null ? null : apsisAt(evaluation.timeline, node.epoch),
+        );
+
+  /**
+   * Whether this orbit has apsides at all, for the context menu's snap entries.
+   *
+   * Asked at the *selected* node's epoch, because a plan can cross several arcs and only
+   * the one the menu is acting on matters. Every Act I contract starts on a near-circular
+   * orbit, so `false` here is the common case rather than an edge one — see
+   * `NodeContextMenu.tsx` on why that makes the entries disabled rather than absent.
+   */
+  const menuIndex = menu === null ? null : indexOfNodeId(model.plan, menu.nodeId);
+  const menuNode = menuIndex === null ? undefined : model.plan.nodes[menuIndex];
+  const menuApsides = ((): boolean => {
+    const { timeline } = evaluation;
+    if (menuNode === undefined || timeline === null) return false;
+    return (['periapsis', 'apoapsis'] as const).some(
+      (kind) => snapToNamedApsis(timeline, menuNode.epoch, kind) !== null,
+    );
+  })();
+
   // §8.3.4's closest-approach block belongs to an encounter with a second body. A
   // `reach_orbit` goal compares element sets and a `station` goal measures a longitude;
   // neither has an approach to read out (#77).
@@ -315,12 +367,11 @@ export const PlannerScreen = ({
           break;
         }
         case 'nudgeEpoch':
-          if (at !== null) {
-            const node = model.plan.nodes[at];
-            if (node !== undefined) {
-              actions.setEpoch(at, metAt(scenario.startEpoch, node.epoch) + action.seconds);
-            }
-          }
+          // Through `nudgeEpochBy` rather than `setEpoch`, because DEP-07 applies to a
+          // nudge and the snap has to know which way the player pushed — see `snap.ts`'s
+          // `snapNudge` and #136. A nudge routed through `setEpoch` would either not snap
+          // at all or snap the node straight back onto the apsis it was leaving.
+          if (at !== null) actions.nudgeEpochBy(at, action.seconds);
           break;
         case 'nudgeDeltaV':
           if (at !== null) {
@@ -345,14 +396,32 @@ export const PlannerScreen = ({
               : ((scenario.startEpoch + scenario.rules.deadlineSeconds) as Epoch),
           );
           break;
+        case 'nodeMenu':
+          // §8.8's canvas-parity rule: every pointer action on the orbit view has a
+          // keyboard route, and this is the menu's. Anchored at the node's drawn position
+          // when the orbit view has reported one, and docked at the stage's corner when it
+          // has not — a menu that opened at (0, 0) because the node is off screen would be
+          // worse than one that admits it does not know.
+          if (at !== null) {
+            const node = model.plan.nodes[at];
+            if (node !== undefined)
+              setMenu({ nodeId: nodeIdOf(node), at: anchor ?? { x: 16, y: 16 } });
+          }
+          break;
         case 'commit':
           actions.commit();
           break;
         case 'cancel':
-          // Escape closes the overlay if it is open, and otherwise clears the selection.
-          // A drag's Escape is the orbit view's, which sees it first because it is
-          // holding the pointer capture (#134, #135).
-          if (state.editorFor !== null) actions.closeEditor();
+          // Escape closes the innermost thing that is open, then the overlay, and only
+          // then clears the selection. The menu is checked first because it is the most
+          // recently opened and the most modal — a player pressing Escape with a menu up
+          // means the menu. A drag's Escape is the orbit view's, which sees it first
+          // because it is holding the pointer capture (#134, #135).
+          //
+          // The menu's *own* handler also stops propagation, so this arm is what runs when
+          // focus has left the menu without it closing.
+          if (menu !== null) setMenu(null);
+          else if (state.editorFor !== null) actions.closeEditor();
           else actions.deselect();
           break;
         case 'zoom':
@@ -369,7 +438,7 @@ export const PlannerScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, model, scenario, state]);
+  }, [actions, anchor, menu, model, scenario, state]);
 
   /**
    * §8.5.1's exit to EXECUTION.
@@ -441,6 +510,7 @@ export const PlannerScreen = ({
           timeline={evaluation.timeline}
           scrubEpoch={model.scrub.epoch}
           selectedNodeId={selectedNodeId}
+          snappedKinds={snappedKinds}
           onSelectNode={(id) => {
             const at = model.plan.nodes.findIndex((node) => nodeIdOf(node) === id);
             if (at !== -1) actions.selectIndex(at);
@@ -450,6 +520,9 @@ export const PlannerScreen = ({
           onOpenEditor={(id) => {
             const at = indexOfNodeId(model.plan, id);
             if (at !== null) actions.openEditor(at);
+          }}
+          onOpenNodeMenu={(id, at) => {
+            setMenu({ nodeId: id, at });
           }}
           onBeginEpochDrag={(id) => {
             const at = indexOfNodeId(model.plan, id);
@@ -501,9 +574,16 @@ export const PlannerScreen = ({
               plan={model.plan}
               startEpoch={scenario.startEpoch}
               selectedIndex={index}
+              snappedKinds={snappedKinds}
               onSelect={actions.selectIndex}
               onDelete={actions.deleteIndex}
               onExpand={actions.openEditor}
+              onOpenMenu={(nodeIndex) => {
+                const node = model.plan.nodes[nodeIndex];
+                if (node !== undefined) {
+                  setMenu({ nodeId: nodeIdOf(node), at: anchor ?? { x: 16, y: 16 } });
+                }
+              }}
               onAdd={() => {
                 // §8.5.3's `N`: add a node at the scrub head. The pointer route — clicking
                 // the trajectory — is #133 and lands with the rest of the interactions.
@@ -524,6 +604,26 @@ export const PlannerScreen = ({
             />,
           )}
         </div>
+        {menu === null || menuIndex === null ? null : (
+          <NodeContextMenu
+            t={t}
+            at={menu.at}
+            nodeIndex={menuIndex}
+            apsidesAvailable={menuApsides}
+            onSnap={(kind) => {
+              actions.snapNode(menuIndex, kind);
+            }}
+            onZeroDeltaV={() => {
+              actions.zeroDeltaV(menuIndex);
+            }}
+            onDelete={() => {
+              actions.deleteIndex(menuIndex);
+            }}
+            onClose={() => {
+              setMenu(null);
+            }}
+          />
+        )}
         {editorNode === undefined || editorIndex === null ? null : (
           <div
             class="hh-editor__anchor"
@@ -564,6 +664,9 @@ export const PlannerScreen = ({
               referenceRadiusM={R_EARTH_EQ}
               onEpoch={(metSeconds) => {
                 actions.setEpoch(editorIndex, metSeconds);
+              }}
+              onEpochSlide={(metSeconds) => {
+                actions.slideEpochTo(editorIndex, metSeconds);
               }}
               onDeltaV={(progradeMps, radialMps) => {
                 actions.setDeltaV(editorIndex, progradeMps, radialMps);

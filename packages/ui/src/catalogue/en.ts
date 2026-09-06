@@ -630,6 +630,15 @@ export const en: Messages = {
     `Outside the ${range(maxRangeMetres, fmt)} objective tolerance`,
   'planner.approach.none': () => 'No approach within the mission horizon',
 
+  'planner.nodeMenu.label': ({ index }, fmt) => `Actions for burn ${fmt.integer(index)}`,
+  'planner.nodeMenu.snapPeriapsis': () => 'Snap to periapsis',
+  'planner.nodeMenu.snapApoapsis': () => 'Snap to apoapsis',
+  'planner.nodeMenu.noApsides': () => 'This orbit is circular — it has no apsides.',
+  'planner.nodeMenu.zeroDeltaV': () => 'Zero \u0394v',
+  'planner.nodeMenu.delete': () => 'Delete burn',
+  'planner.nodeMenu.open': ({ index }, fmt) => `Open actions for burn ${fmt.integer(index)}`,
+  'planner.plan.snappedTo': ({ kind }) => `snapped to ${kind}`,
+
   'planner.assists.heading': () => 'Assists',
   'planner.assists.snapToApsis': () => 'Snap burns to apsis',
   'planner.assists.snapToApsisHint': ({ windowSeconds }, fmt) =>

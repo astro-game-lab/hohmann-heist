@@ -46,7 +46,9 @@ export type PlannerAction =
   | { readonly kind: 'zoom'; readonly factor: number }
   | { readonly kind: 'recentre' }
   | { readonly kind: 'commit' }
-  | { readonly kind: 'cancel' };
+  | { readonly kind: 'cancel' }
+  /** §8.5.2's context menu on the selected node — #136, and NFR-016's keyboard route to it. */
+  | { readonly kind: 'nodeMenu' };
 
 export interface Modifiers {
   readonly shift: boolean;
@@ -157,6 +159,17 @@ export const actionFor = (key: string, modifiers: Modifiers): PlannerAction | nu
     case 'f':
     case 'F':
       return { kind: 'recentre' };
+
+    // §8.5.2's context menu, by keyboard. `ContextMenu` is the dedicated key where a
+    // keyboard has one; `F10` with Shift is the binding every desktop platform also
+    // accepts, and is the one a laptop without the dedicated key can actually press.
+    // Both, because §8.8's canvas-parity rule makes this the *only* keyboard route to
+    // "snap to apoapsis" outside the node editor, and a route that needs a key half of
+    // keyboards lack is not a route.
+    case 'ContextMenu':
+      return { kind: 'nodeMenu' };
+    case 'F10':
+      return modifiers.shift ? { kind: 'nodeMenu' } : null;
 
     case 'Enter':
       return { kind: 'commit' };

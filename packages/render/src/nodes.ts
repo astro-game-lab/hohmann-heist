@@ -105,6 +105,15 @@ export interface NodeSpec {
   readonly state: State;
   /** Whether this node carries the selection ring. */
   readonly selected: boolean;
+  /**
+   * Which apsis DEP-07 snapped this burn to, or `null` — #136.
+   *
+   * The snap moves a burn to an epoch the player did not choose, and §8.5.2 asks for that
+   * to be visible on the marker as well as in the plan panel. Optional so that a caller
+   * that does not know — the scene harness, a test building a bare spec — draws an
+   * unmarked node rather than having to say "not snapped" in every fixture.
+   */
+  readonly snappedTo?: 'periapsis' | 'apoapsis' | null;
 }
 
 /** Where a handle's grab point is, and which axis it belongs to. */
@@ -229,16 +238,64 @@ const ring = (centre: ScreenPoint, radiusPx: number, colour: string): PolylinePr
   return { kind: 'polyline', points, closed: true, stroke: { colour, width: 1.5 } };
 };
 
-/** The node's own marks: diamond, and the ring when selected. */
+/**
+ * How far above or below the diamond DEP-07's caret sits.
+ *
+ * Outside `NODE_RADIUS_PX` so it reads as a mark *on* the node rather than as part of the
+ * diamond, and inside `SELECTION_RING_PX` so a selected snapped node does not draw the
+ * caret on top of its own ring.
+ */
+const SNAP_CARET_OFFSET_PX = 8;
+
+/** Half the caret's width. Small: it is a tick, not a chevron. */
+const SNAP_CARET_HALF_PX = 3.5;
+
+/**
+ * DEP-07's mark on the marker — #136.
+ *
+ * A caret above for apoapsis and below for periapsis, pointing the way the orbit does:
+ * apoapsis is the high point and periapsis the low one, so "up" and "down" carry the
+ * meaning rather than being an arbitrary pairing a player has to memorise.
+ *
+ * **The same glyphs the plan panel's row uses**, deliberately. A snapped burn is marked in
+ * two places and a player should not have to learn that they are the same statement.
+ *
+ * It is never the only channel (NFR-019): the plan panel says "snapped to apoapsis" in
+ * words for the same node, which is §8.8's canvas-parity rule met by the region that
+ * already exists rather than by a label competing for §11.8's budget of forty.
+ */
+const snapCaret = (
+  centre: ScreenPoint,
+  kind: 'periapsis' | 'apoapsis',
+  colour: string,
+): PolylinePrimitive => {
+  // Screen y grows downward, so apoapsis — drawn above — is the negative offset.
+  const tipY =
+    kind === 'apoapsis' ? centre.y - SNAP_CARET_OFFSET_PX : centre.y + SNAP_CARET_OFFSET_PX;
+  const baseY = kind === 'apoapsis' ? tipY + SNAP_CARET_HALF_PX : tipY - SNAP_CARET_HALF_PX;
+  return {
+    kind: 'polyline',
+    points: [
+      { x: centre.x - SNAP_CARET_HALF_PX, y: baseY },
+      { x: centre.x, y: tipY },
+      { x: centre.x + SNAP_CARET_HALF_PX, y: baseY },
+    ],
+    stroke: { colour, width: 1.5 },
+  };
+};
+
+/** The node's own marks: diamond, the ring when selected, and DEP-07's caret when snapped. */
 export const nodePrimitives = (
   geometry: NodeGeometry,
   node: NodeSpec,
   colours: SceneColours,
 ): Primitive[] => {
-  const diamond = nodeDiamond(geometry.centre, node.selected ? colours.nodeSelected : colours.node);
-  return node.selected
-    ? [diamond, ring(geometry.centre, SELECTION_RING_PX, colours.nodeSelected)]
-    : [diamond];
+  const colour = node.selected ? colours.nodeSelected : colours.node;
+  const out: Primitive[] = [nodeDiamond(geometry.centre, colour)];
+  if (node.selected) out.push(ring(geometry.centre, SELECTION_RING_PX, colours.nodeSelected));
+  const snapped = node.snappedTo ?? null;
+  if (snapped !== null) out.push(snapCaret(geometry.centre, snapped, colour));
+  return out;
 };
 
 /**

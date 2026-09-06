@@ -145,6 +145,9 @@ const BUTTON_ZOOM_FACTOR = 1.4;
 /** A press that moves more than this is a drag; less, and it is a click. */
 const DRAG_THRESHOLD_PX = 4;
 
+/** §8.5.4's long-press, in milliseconds. The platform's own convention on both mobiles. */
+const LONG_PRESS_MS = 500;
+
 /** What the press started on, and therefore what moving it means. */
 type Gesture =
   | { readonly kind: 'camera' }
@@ -184,12 +187,28 @@ export interface OrbitViewProps {
   readonly timeline: Timeline | null;
   readonly scrubEpoch: Epoch;
   readonly selectedNodeId: string | null;
+  /**
+   * Which apsis each node sits on, parallel to the plan's nodes — DEP-07's mark (#136).
+   *
+   * Decided by the caller, which is the same division of labour `PlanPanel`'s
+   * `snappedKinds` and `NodeEditor`'s `snappedTo` already use: where an arc's apsides are
+   * is a question for `@hh/game`, and this component draws rather than rules.
+   */
+  readonly snappedKinds: readonly ('periapsis' | 'apoapsis' | null)[];
   readonly onSelectNode: (nodeId: string) => void;
   readonly onDeselect: () => void;
   /** §8.5.2: clicking the planned trajectory places a node there (#133). */
   readonly onPlaceNode: (epoch: Epoch) => void;
   /** Double-click a node marker: §8.3.5's third way in (#137). */
   readonly onOpenEditor: (nodeId: string) => void;
+  /**
+   * §8.5.2's context menu was asked for on a node — right-click, or §8.5.4's long-press.
+   *
+   * The position comes with it, because the menu is anchored where the player asked rather
+   * than where the node is drawn: a right-click two pixels off the marker centre should
+   * not open a menu two pixels away from the pointer.
+   */
+  readonly onOpenNodeMenu: (nodeId: string, at: ScreenPoint) => void;
   /** A node marker was grabbed (#134), or one of its Δv handles (#135). */
   readonly onBeginEpochDrag: (nodeId: string) => void;
   readonly onBeginDeltaVDrag: (nodeId: string, axis: HandleAxis) => void;
@@ -229,10 +248,12 @@ export const OrbitView = ({
   timeline,
   scrubEpoch,
   selectedNodeId,
+  snappedKinds,
   onSelectNode,
   onDeselect,
   onPlaceNode,
   onOpenEditor,
+  onOpenNodeMenu,
   onBeginEpochDrag,
   onBeginDeltaVDrag,
   onDragEpochTo,
@@ -283,12 +304,14 @@ export const OrbitView = ({
     timeline,
     scrubEpoch,
     selectedNodeId,
+    snappedKinds,
     dragging,
     anchorNodeId,
     onSelectNode,
     onDeselect,
     onPlaceNode,
     onOpenEditor,
+    onOpenNodeMenu,
     onBeginEpochDrag,
     onBeginDeltaVDrag,
     onDragEpochTo,
@@ -436,7 +459,7 @@ export const OrbitView = ({
       // The plan, the scrub head, the selection and the anchor as of *this* frame. The
       // effect no longer re-runs for any of them — see `latestRef` — so they are read
       // here rather than closed over, and one read keeps the whole frame consistent.
-      const { scrubEpoch, selectedNodeId, anchorNodeId, onAnchor, resolveDynamic } =
+      const { scrubEpoch, selectedNodeId, anchorNodeId, onAnchor, resolveDynamic, snappedKinds } =
         latestRef.current;
       const drawn = drawnNow();
       if (drawn === null) return;
@@ -448,7 +471,15 @@ export const OrbitView = ({
       const nodes: NodeSpec[] = drawn.impulses.map((impulse, i) => {
         const node = drawn.plan.nodes[i];
         const id = node === undefined ? `node:${String(i)}` : nodeIdOf(node);
-        return { id, state: impulse.after, selected: id === selectedNodeId };
+        return {
+          id,
+          state: impulse.after,
+          selected: id === selectedNodeId,
+          // DEP-07's mark (#136), decided by the caller for the same reason the plan
+          // panel's is: asking where an arc's apsides are is `@hh/game`'s question, and
+          // the renderer is geometry rather than rules.
+          snappedTo: snappedKinds[i] ?? null,
+        };
       });
 
       const built = buildScene({
@@ -631,6 +662,7 @@ export const OrbitView = ({
       // selection at all.
       if (gesture.kind !== 'camera') latestRef.current.onSelectNode(gesture.nodeId);
       canvas.setPointerCapture(event.pointerId);
+      if (gesture.kind !== 'camera') armLongPress(event, localPoint(event));
     };
 
     const onPointerMove = (event: PointerEvent): void => {
@@ -639,6 +671,9 @@ export const OrbitView = ({
       const dx = event.clientX - pressed.x;
       const dy = event.clientY - pressed.y;
       if (!pressed.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      // Past the threshold, so this is a drag and not a long-press. §8.5.4's menu must
+      // never steal the primary gesture, which on a touch screen is also the only one.
+      cancelLongPress();
       pressedRef.current = { ...pressed, moved: true };
 
       const framing = framingRef.current;
@@ -715,6 +750,7 @@ export const OrbitView = ({
     const onPointerUp = (event: PointerEvent): void => {
       const press = pressedRef.current;
       pressedRef.current = null;
+      cancelLongPress();
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (press === null) return;
       const { scrubEpoch, onReleaseDrag, onPlaceNode, onDeselect } = latestRef.current;
@@ -747,6 +783,59 @@ export const OrbitView = ({
       const box = canvas.getBoundingClientRect();
       const hit = hitTest(index, { x: event.clientX - box.left, y: event.clientY - box.top });
       if (hit?.kind === 'node') latestRef.current.onOpenEditor(hit.id);
+    };
+
+    /**
+     * §8.5.2's right-click, and §8.5.4's long-press, funnelled to one place (#136).
+     *
+     * `preventDefault` only when the press actually landed on a node: right-clicking empty
+     * canvas should still give the player the browser's own menu, because there is nothing
+     * of ours to offer there and suppressing it would take away "save image" for no gain.
+     */
+    const openMenuAt = (point: ScreenPoint): boolean => {
+      const hit = hitTest(index, point);
+      const id = hit?.kind === 'node' ? hit.id : hit?.kind === 'handle' ? nodeOf(hit.id) : null;
+      if (id === null) return false;
+      latestRef.current.onOpenNodeMenu(id, point);
+      return true;
+    };
+
+    const onContextMenu = (event: MouseEvent): void => {
+      const box = canvas.getBoundingClientRect();
+      if (openMenuAt({ x: event.clientX - box.left, y: event.clientY - box.top })) {
+        event.preventDefault();
+      }
+    };
+
+    /**
+     * §8.5.4's long-press, which is the same menu reached by the only gesture a touch
+     * screen has for "tell me about this".
+     *
+     * The timer is cancelled by a move past the drag threshold and by the release, so a
+     * touch-drag of a node is still a drag — the menu must not steal the primary gesture,
+     * which on touch is also the only one. 500 ms is the platform's own long-press
+     * convention on both Android and iOS; a shorter delay makes a deliberate drag feel
+     * like it opens menus, and a longer one is not discoverable.
+     */
+    let longPress = 0;
+    const cancelLongPress = (): void => {
+      if (longPress !== 0) {
+        window.clearTimeout(longPress);
+        longPress = 0;
+      }
+    };
+    const armLongPress = (event: PointerEvent, point: ScreenPoint): void => {
+      if (event.pointerType !== 'touch') return;
+      cancelLongPress();
+      longPress = window.setTimeout(() => {
+        longPress = 0;
+        // Only if the press is still down and has not become a drag. `pressedRef` is the
+        // authority on both, which is another thing the ref buys over the old closure.
+        if (pressedRef.current?.moved === false) {
+          pressedRef.current = null;
+          openMenuAt(point);
+        }
+      }, LONG_PRESS_MS);
     };
 
     const onWheel = (event: WheelEvent): void => {
@@ -816,6 +905,7 @@ export const OrbitView = ({
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
     canvas.addEventListener('dblclick', onDoubleClick);
+    canvas.addEventListener('contextmenu', onContextMenu);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     // On the window rather than the canvas: a pointer capture keeps the events coming,
     // but focus may be anywhere, and Escape has to reach a drag from wherever it is.
@@ -834,7 +924,9 @@ export const OrbitView = ({
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('dblclick', onDoubleClick);
+      canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('wheel', onWheel);
+      cancelLongPress();
       window.removeEventListener('keydown', onKeyDown);
     };
     // **Three dependencies, and #263's fix is mostly this line.**
@@ -870,7 +962,7 @@ export const OrbitView = ({
 
   useEffect(() => {
     drawRef.current?.();
-  }, [scrubEpoch, selectedNodeId, dragging, anchorNodeId, t, resolveDynamic]);
+  }, [scrubEpoch, selectedNodeId, snappedKinds, dragging, anchorNodeId, t, resolveDynamic]);
 
   return (
     <div class="hh-orbit" ref={frameRef} data-testid="orbit-view">

@@ -1,10 +1,18 @@
 import { MU_EARTH, epoch } from '@hh/astro';
 import { createArc, findApsisCrossings } from '@hh/propagation';
-import { EMPTY_PLAN } from '@hh/sim';
+import { EMPTY_PLAN, fromEpochTicks, toEpochTicks } from '@hh/sim';
 import { describe, expect, it } from 'vitest';
 
-import { SNAP_WINDOW_SECONDS, snapToApsis, snapToApsisOnArc } from './snap.js';
-import { HORIZON, START, circular, elliptical, planOf, timelineFor } from './test-support.js';
+import { SNAP_WINDOW_SECONDS, apsisAt, snapNudge, snapToApsis, snapToApsisOnArc } from './snap.js';
+import {
+  HORIZON,
+  LEO_RADIUS_M,
+  START,
+  circular,
+  elliptical,
+  planOf,
+  timelineFor,
+} from './test-support.js';
 
 /** A 400 × 800 km ellipse: two clearly separated apsides, well above the suppression floor. */
 const ELLIPSE = elliptical(6_778_137, 7_178_137);
@@ -139,5 +147,90 @@ describe('determinism (§11.4)', () => {
     // happens to be true for most crossings and is false for any that lands on a tick.
     const at = (firstCrossing.epoch - 5) as ReturnType<typeof epoch>;
     expect(snapToApsisOnArc(ellipseArc, at).epoch).toBe(firstCrossing.epoch);
+  });
+});
+
+describe('nudge snapping, and the rule that lets a player escape (#136)', () => {
+  const timeline = timelineFor(EMPTY_PLAN, { initialState: ELLIPSE });
+  const apsis = firstCrossing.epoch;
+  const at = (seconds: number): ReturnType<typeof epoch> =>
+    (apsis + seconds) as ReturnType<typeof epoch>;
+
+  it('snaps a nudge that carries the node into the window', () => {
+    // From 30 s out to 29 s: clear of the window's boundary on both sides, so this is
+    // about the direction rule rather than about where the window's edge falls — the
+    // boundary itself is `snapToApsisOnArc`'s and is tested above.
+    const result = snapNudge(timeline, at(-30), at(-29), true);
+    expect(result.kind).not.toBeNull();
+    expect(result.epoch).toBe(apsis);
+  });
+
+  it('does not hold a node that is nudged off the apsis it is sitting on', () => {
+    // The case the rule exists for. Without it `snapToApsis` finds the apsis one second
+    // away and puts the node straight back, so `.` does nothing however many times it is
+    // pressed.
+    const result = snapNudge(timeline, at(0), at(1), true);
+    expect(result.kind).toBeNull();
+    expect(result.epoch).toBe(at(1));
+  });
+
+  it('lets a node keep walking away rather than snapping back on the second press', () => {
+    // One second past an apsis is not *on* it, so a rule phrased as "ignore the apsis we
+    // are on" would snap this one back and the node would oscillate. The direction rule
+    // does not.
+    for (const seconds of [1, 2, 3, 10, 25]) {
+      const result = snapNudge(timeline, at(seconds), at(seconds + 1), true);
+      expect(result.kind).toBeNull();
+      expect(result.epoch).toBe(at(seconds + 1));
+    }
+  });
+
+  it('is symmetric — the same holds nudging the other way', () => {
+    expect(snapNudge(timeline, at(0), at(-1), true).epoch).toBe(at(-1));
+    expect(snapNudge(timeline, at(-1), at(-2), true).epoch).toBe(at(-2));
+    // And approaching from the far side still snaps.
+    expect(snapNudge(timeline, at(30), at(29), true).epoch).toBe(apsis);
+  });
+
+  it('does nothing at all with the assist off', () => {
+    const result = snapNudge(timeline, at(-30), at(-29), false);
+    expect(result.kind).toBeNull();
+    expect(result.epoch).toBe(at(-29));
+  });
+
+  it('leaves a circular orbit’s nudges alone, because it has no apsides', () => {
+    const round = timelineFor(EMPTY_PLAN, { initialState: circular(LEO_RADIUS_M) });
+    const result = snapNudge(round, epoch(1000), epoch(1001), true);
+    expect(result.kind).toBeNull();
+    expect(result.epoch).toBe(epoch(1001));
+  });
+});
+
+describe('reporting that a node is on an apsis (#136)', () => {
+  const timeline = timelineFor(EMPTY_PLAN, { initialState: ELLIPSE });
+
+  it('names the apsis a quantised, snapped epoch landed on', () => {
+    // The round trip a real placement takes: snap, then quantise at node construction.
+    // An exact comparison against the crossing fails here, which is the whole reason the
+    // window is a tick wide rather than zero.
+    const snapped = snapToApsis(
+      timeline,
+      (firstCrossing.epoch - 5) as ReturnType<typeof epoch>,
+      true,
+    );
+    const quantised = fromEpochTicks(toEpochTicks(snapped.epoch));
+    expect(quantised).not.toBe(snapped.epoch);
+    expect(apsisAt(timeline, quantised)).toBe(firstCrossing.kind);
+  });
+
+  it('says nothing for a node that is merely near one', () => {
+    // Two seconds off is well inside DEP-07's 30 s window — this node *would* snap — but
+    // it is not snapped, and the mark reports what is rather than what could be.
+    expect(apsisAt(timeline, (firstCrossing.epoch - 2) as ReturnType<typeof epoch>)).toBeNull();
+  });
+
+  it('says nothing on a circular orbit, which has no apsides', () => {
+    const round = timelineFor(EMPTY_PLAN, { initialState: circular(LEO_RADIUS_M) });
+    expect(apsisAt(round, epoch(1000))).toBeNull();
   });
 });

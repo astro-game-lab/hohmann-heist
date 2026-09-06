@@ -73,6 +73,7 @@ const spies = () => ({
   onDeselect: vi.fn(),
   onPlaceNode: vi.fn<(epoch: Epoch) => void>(),
   onOpenEditor: vi.fn<(nodeId: string) => void>(),
+  onOpenNodeMenu: vi.fn<(nodeId: string, at: ScreenPoint) => void>(),
   onBeginEpochDrag: vi.fn<(nodeId: string) => void>(),
   onBeginDeltaVDrag: vi.fn<(nodeId: string, axis: HandleAxis) => void>(),
   onDragEpochTo: vi.fn<(epoch: Epoch) => void>(),
@@ -127,6 +128,7 @@ const Harness = ({
       timeline={timeline}
       scrubEpoch={scenario.startEpoch}
       selectedNodeId={selectedNodeId}
+      snappedKinds={[]}
       onSelectNode={(id) => {
         handlers.onSelectNode(id);
         setSelectedNodeId(id);
@@ -134,6 +136,7 @@ const Harness = ({
       onDeselect={handlers.onDeselect}
       onPlaceNode={handlers.onPlaceNode}
       onOpenEditor={handlers.onOpenEditor}
+      onOpenNodeMenu={handlers.onOpenNodeMenu}
       onBeginEpochDrag={handlers.onBeginEpochDrag}
       onBeginDeltaVDrag={handlers.onBeginDeltaVDrag}
       onDragEpochTo={handlers.onDragEpochTo}

@@ -96,9 +96,13 @@ describe('the departures registry', () => {
   it('exposes the player-visible rows the briefing and Codex render', () => {
     const visible = playerVisibleDepartures().map((departure) => departure.id);
     expect(visible).toContain('DEP-03');
-    // DEP-07 (node snapping) and DEP-09 (quantisation) are the two the table marks
-    // internal; the assist tray lists the first and nothing shows the second.
-    expect(visible).not.toContain('DEP-07');
+    // DEP-07 became visible with #136. The assist tray always listed the *toggle*, but
+    // until a snapped burn was marked as snapped a player could not tell one the rule had
+    // moved from one that merely sat near an apsis — and a departure that silently changes
+    // an epoch the player chose is exactly the kind that has to be observable.
+    expect(visible).toContain('DEP-07');
+    // DEP-09 (quantisation) is the one row still marked internal: nothing shows it, and
+    // nothing should — it is a representation choice with no player-facing consequence.
     expect(visible).not.toContain('DEP-09');
   });
 });

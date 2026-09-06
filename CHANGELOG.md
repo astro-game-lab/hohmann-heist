@@ -12,6 +12,34 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **DEP-07's snap now applies to every gesture that places a burn (#136).** `releaseDragging`
+  called `moveNode` with the raw dragged tick while `addNodeAt` snapped, so a node placed by
+  clicking landed on the apsis and the same node dragged one pixel came off it — the exact
+  failure DEP-07's own docstring warns about, *"the kind of rule players correctly experience
+  as the game being unreliable"*. The drag now snaps **during** the gesture rather than on
+  release, so the preview already shows where the burn will land and there is no jump when the
+  pointer is let go. §8.3.5's epoch slider snaps too; the numeric MET fields deliberately do
+  not, because a typed number is a statement and a dragged slider is a gesture.
+- **Keyboard nudges snap, and can escape (#136).** `,` and `.` go through a new `snapNudge`,
+  which accepts a snap only when it carries the node **further in the direction the player
+  pushed it**. Without that rule a node on an apsis is pinned there — the snap finds the same
+  apsis a second away and puts it straight back, so `.` does nothing however many times it is
+  pressed. Phrasing the rule as "ignore the apsis we are on" fixes only the first press: a node
+  one second past an apsis is not on it, so the second press snaps back and the node
+  oscillates. The direction test is one comparison and covers both.
+- **§8.5.2's node context menu (#136).** Delete, snap to periapsis, snap to apoapsis and zero
+  Δv — none of which had a single home before: delete was on the row and on `Delete`, the two
+  snaps were only inside §8.3.5's overlay, and zero Δv existed nowhere. Right-click on desktop,
+  §8.5.4's long-press on touch, a control on every plan row, and `ContextMenu` or `Shift+F10`
+  from the keyboard. On a near-circular orbit the snap entries are **disabled with a reason**
+  rather than hidden: every Act I contract starts on one, so that is the first thing a player
+  meets, and a menu whose entries come and go teaches them the game is inconsistent where a
+  dimmed entry saying "this orbit is circular — it has no apsides" teaches them something true.
+- **A snapped burn is marked as snapped (#136).** In the plan panel's row, as a caret in the
+  epoch cell and as words in the sentence a screen reader is given (NFR-019). Derived from the
+  geometry through `apsisAt` rather than from a flag set when the snap happened — a flag would
+  have to be cleared every time the node moved for any other reason, and the first one missed
+  would leave a node claiming to be on an apsis it had left.
 - **Acts I and II, as playable content (#90, #92, #93, #94).** Six new contracts — C01
   *Shakedown*, C02 *Round Trip*, C04 *Long Haul*, C05 *Tailgate*, C06 *Overtake* and C07
   *Slot Machine* — with computed pars, reference replays and briefs. Act I reproduces

@@ -425,6 +425,17 @@ export interface UiMessageParams {
   readonly 'planner.approach.notMet': { readonly maxRangeMetres: number };
   readonly 'planner.approach.none': Record<string, never>;
 
+  // §8.5.2's node context menu (#136).
+  readonly 'planner.nodeMenu.label': { readonly index: number };
+  readonly 'planner.nodeMenu.snapPeriapsis': Record<string, never>;
+  readonly 'planner.nodeMenu.snapApoapsis': Record<string, never>;
+  readonly 'planner.nodeMenu.noApsides': Record<string, never>;
+  readonly 'planner.nodeMenu.zeroDeltaV': Record<string, never>;
+  readonly 'planner.nodeMenu.delete': Record<string, never>;
+  readonly 'planner.nodeMenu.open': { readonly index: number };
+  /** DEP-07 made visible: this burn is sitting on an apsis because it was snapped there. */
+  readonly 'planner.plan.snappedTo': { readonly kind: string };
+
   // ⑤ Assist tray (#133's snap toggle only; #140 brings the rest in M3)
   readonly 'planner.assists.heading': Record<string, never>;
   readonly 'planner.assists.snapToApsis': Record<string, never>;

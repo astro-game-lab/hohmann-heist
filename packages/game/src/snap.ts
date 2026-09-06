@@ -127,6 +127,83 @@ export const snapToApsis = (
   enabled ? snapToApsisOnArc(arcAt(timeline, at), at, windowSeconds) : unsnapped(at);
 
 /**
+ * Which apsis a node is sitting on, or `null` — #136's *"say what it did"*.
+ *
+ * DEP-07 moves a burn to an epoch the player did not choose, so §8.5.2 and #136 both ask
+ * for the result to be visible: a snapped node must be distinguishable from one that
+ * merely happens to be near an apsis. This is what the plan panel and the node marker ask.
+ *
+ * ## Why the window is one quantisation tick
+ *
+ * A snapped epoch does not survive as the finder returned it. FR-105 quantises at node
+ * construction, so a burn placed on an apsis lands on the nearest 1/1024 s tick and is
+ * then up to half a tick away from the crossing — an exact comparison would report every
+ * snapped node as unsnapped. One tick is the smallest window that cannot produce a false
+ * negative, and it is far too narrow to produce a false positive: the next epoch a player
+ * could have chosen deliberately is a whole tick away, and DEP-07's own window is thirty
+ * thousand times wider.
+ *
+ * ## Why not `snapToNamedApsis`
+ *
+ * That searches a full revolution either side and would answer "which apsis is nearest",
+ * which is a different question and an expensive one — two searches per node per render,
+ * against NFR-011's frame budget, to answer something a one-tick window settles.
+ */
+export const apsisAt = (timeline: Timeline, at: Epoch): 'periapsis' | 'apoapsis' | null =>
+  snapToApsisOnArc(arcAt(timeline, at), at, 1 / 1024).kind;
+
+/**
+ * Snap the result of a keyboard nudge — §8.5.3's `,` and `.` (#136).
+ *
+ * ## Why a nudge cannot use {@link snapToApsis} directly
+ *
+ * It would never leave the apsis. A node sitting exactly on one is nudged a second later,
+ * the snap finds that same apsis one second away, and puts the node back. Press `.` fifty
+ * times and nothing moves — the node is held by the assist that was supposed to help place
+ * it, and the only way out is to turn the assist off. #136 asks for a stated escape rule
+ * and this is it.
+ *
+ * ## The rule: a snap may not reverse the nudge
+ *
+ * The nudge moves the node from `from` to `to`. The snap is accepted only if it carries
+ * the node **further in the direction the player pushed it**, or leaves it exactly where
+ * the nudge put it. A snap that would move it back the way it came is refused, and the raw
+ * nudged epoch is used.
+ *
+ * That single comparison covers every case worth naming:
+ *
+ * - On the apsis, nudged forward: the snap would move it back to where it was — refused,
+ *   so the node steps off. The next nudge is refused for the same reason, and the one
+ *   after that, so the node walks away one step at a time instead of being pinned.
+ * - Approaching an apsis from outside the window: the first nudge that brings it within
+ *   30 s snaps it the rest of the way, which is the behaviour #136 asks for — *"a nudge
+ *   that lands inside the window snaps"*.
+ * - Leaving an apsis in the other direction: symmetric, because the test is on sign rather
+ *   than on which apsis it is.
+ *
+ * It is stated as a direction rather than as "ignore the apsis we are on" because the
+ * latter only fixes the first press. A node one second past an apsis is not *on* it, so
+ * the second nudge would snap straight back and the node would oscillate.
+ */
+export const snapNudge = (
+  timeline: Timeline,
+  from: Epoch,
+  to: Epoch,
+  enabled: boolean,
+  windowSeconds: number = SNAP_WINDOW_SECONDS,
+): SnapResult => {
+  const snapped = snapToApsis(timeline, to, enabled, windowSeconds);
+  if (snapped.kind === null) return snapped;
+
+  const nudged = to - from;
+  const proposed = snapped.epoch - from;
+  // Same direction, or no movement asked for at all. `Math.sign` compares cleanly here
+  // because a zero nudge cannot arise from a binding — `epochNudge` never returns 0 — and
+  // if one ever did, a snap in either direction would be equally arbitrary.
+  return Math.sign(proposed) === Math.sign(nudged) ? snapped : unsnapped(to);
+};
+
+/**
  * Move `at` to the nearest crossing of a **named** apsis — §8.3.5's snap radios.
  *
  * A different operation from DEP-07's assist, and deliberately not a parameterisation of

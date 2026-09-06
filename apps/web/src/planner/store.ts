@@ -35,6 +35,7 @@ import {
   deleteNode,
   moveNode,
   setNodeDeltaV,
+  snapNudge,
   snapToApsis,
   snapToNamedApsis,
 } from '@hh/game';
@@ -120,11 +121,35 @@ export interface PlannerActions {
   // ── #137's overlay ─────────────────────────────────────────────────────────
   readonly openEditor: (index: number) => void;
   readonly closeEditor: () => void;
-  /** Move a node to a mission-elapsed time. Quantised at entry by `createManeuverNode`. */
+  /**
+   * Move a node to an exact mission-elapsed time. Quantised at entry by
+   * `createManeuverNode`, and **never snapped** — the numeric fields are how a player says
+   * what they mean, and §8.3.5 gives them the snap radios for the other intent.
+   */
   readonly setEpoch: (index: number, metSeconds: number) => void;
+  /**
+   * §8.3.5's epoch slider: *"continuous drag; snaps to apsis within 30 s unless the snap
+   * assist is off"* (#136).
+   *
+   * Separate from {@link setEpoch} because they are different operations rather than one
+   * with a flag: a slider is a gesture and gets DEP-07's tolerance, a typed number is a
+   * statement and does not.
+   */
+  readonly slideEpochTo: (index: number, metSeconds: number) => void;
+  /**
+   * §8.5.3's `,` / `.` — nudge the epoch, with DEP-07 applied through `snapNudge` (#136).
+   *
+   * Takes a delta rather than a destination because the snap rule needs to know which way
+   * the player pushed: a nudge that would be snapped back the way it came is refused, so
+   * a node can be walked off an apsis instead of being pinned to it. `snap.ts` states the
+   * rule in full.
+   */
+  readonly nudgeEpochBy: (index: number, seconds: number) => void;
   readonly setDeltaV: (index: number, progradeMps: number, radialMps: number) => void;
   /** §8.3.5's snap radios — a command, not DEP-07's tolerance. */
   readonly snapNode: (index: number, kind: 'periapsis' | 'apoapsis') => void;
+  /** §8.5.2's context menu: zero this burn without deleting it. */
+  readonly zeroDeltaV: (index: number) => void;
 
   // ── #134, #135: a gesture in flight ────────────────────────────────────────
   readonly beginEpochDrag: (index: number) => void;
@@ -395,6 +420,36 @@ export const usePlanner = (
         );
       },
 
+      slideEpochTo: (index, metSeconds) => {
+        apply((current) => {
+          if (current.model.plan.nodes[index] === undefined) return null;
+          const at = (scenario.startEpoch + metSeconds) as Epoch;
+          const { timeline } = current.evaluation;
+          // The same fallback `addNodeAt` takes: with no timeline there is nothing to find
+          // apsides on, and the raw epoch is the answer the assist-off path gives anyway.
+          const to = timeline === null ? at : snapToApsis(timeline, at, current.snapToApsis).epoch;
+          return moveNode(current.model.plan, index, to);
+        });
+      },
+
+      nudgeEpochBy: (index, seconds) => {
+        apply((current) => {
+          const node = current.model.plan.nodes[index];
+          if (node === undefined) return null;
+          const to = (node.epoch + seconds) as Epoch;
+          const { timeline } = current.evaluation;
+          // Clamped before the snap, not after: `snapNudge` calls `arcAt`, which throws
+          // outside the horizon, and `.` at the end of the mission is a key a player will
+          // press. Clamping after would also let the snap carry the node past the wall.
+          const clamped = Math.min(Math.max(to, scenario.startEpoch), scenario.horizon) as Epoch;
+          const at =
+            timeline === null
+              ? clamped
+              : snapNudge(timeline, node.epoch, clamped, current.snapToApsis).epoch;
+          return moveNode(current.model.plan, index, at);
+        });
+      },
+
       setDeltaV: (index, progradeMps, radialMps) => {
         apply((current) =>
           current.model.plan.nodes[index] === undefined
@@ -414,6 +469,14 @@ export const usePlanner = (
           // arbitrary point on a circle would be motion with no meaning.
           return at === null ? null : moveNode(current.model.plan, index, at);
         });
+      },
+
+      zeroDeltaV: (index) => {
+        apply((current) =>
+          current.model.plan.nodes[index] === undefined
+            ? null
+            : setNodeDeltaV(current.model.plan, index, 0, 0),
+        );
       },
 
       // ── #134, #135 ───────────────────────────────────────────────────────
@@ -461,7 +524,24 @@ export const usePlanner = (
           // Ticks, continuously. The *value* is quantised here because ticks are the
           // unit the drag carries — see `machine.ts` — but the **plan** is not touched
           // until release, which is what FR-105 and #134 actually ask for.
-          const at = Math.min(Math.max(epoch, scenario.startEpoch), scenario.horizon) as Epoch;
+          const raw = Math.min(Math.max(epoch, scenario.startEpoch), scenario.horizon) as Epoch;
+          // **DEP-07 applies during the gesture, not on release — #136.**
+          //
+          // `releaseDragging` used to call `moveNode` with the raw dragged tick while
+          // `addNodeAt` snapped, so a node placed by clicking landed on the apsis and the
+          // same node dragged one pixel came off it. Snapping *here* fixes that and fixes
+          // the second half of #136 at the same time: the drag carries the snapped value,
+          // so the preview already shows where the burn will land and there is no jump on
+          // release. Snapping on release instead would leave the node visibly moving after
+          // the player let go.
+          //
+          // Searched against the settled timeline rather than the drag preview, which is
+          // what `addNodeAt` does too: the apsides a player is aiming at are the ones on
+          // the trajectory they grabbed, and re-deriving them from a preview that changes
+          // with every pixel would make the target move as it was approached.
+          const { timeline } = current.evaluation;
+          const at =
+            timeline === null ? raw : snapToApsis(timeline, raw, current.snapToApsis).epoch;
           const index = indexOfNodeId(current.model.plan, dragging.nodeId);
           return {
             ...current,
