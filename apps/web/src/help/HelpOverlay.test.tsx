@@ -89,11 +89,14 @@ describe('the content', () => {
     expect(el('help-playPause')?.querySelectorAll('kbd')).toHaveLength(1);
   });
 
-  it('marks a binding whose feature is not built rather than hiding it', async () => {
+  it('drops the “not built yet” marker when the feature lands', async () => {
     await mount();
-    // `C` for the Codex is #161's, and §8.5.3 lists it. Hiding it would make the overlay
-    // disagree with the printed map; showing it as working would be a lie.
-    expect(el('help-codex')?.textContent).toContain('Not built yet');
+    // `C` for the Codex carried it until #161, as `?` did until #124. The row is still
+    // listed — hiding it would make the overlay disagree with §8.5.3's printed map — and
+    // now reads as a working binding, because it is one.
+    expect(el('help-codex')).not.toBeNull();
+    expect(el('help-codex')?.textContent).not.toContain('Not built yet');
+    expect(el('help-codex')?.querySelectorAll('kbd').length).toBeGreaterThan(0);
   });
 });
 

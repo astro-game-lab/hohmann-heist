@@ -42,8 +42,12 @@ describe('the rebindable set', () => {
     expect(rebindable.map((binding) => binding.id)).toStrictEqual(
       BINDINGS.map((binding) => binding.id),
     );
-    // And the pending rows really are in there, or the assertion above is vacuous.
-    expect(BINDINGS.some((binding) => binding.pending !== undefined)).toBe(true);
+    // This used to end by asserting that at least one row *was* pending, so that the
+    // "pending rows included" clause could not pass vacuously. #161 closed the last one,
+    // so that guard now asserts the absence of a state nothing is in. The clause it was
+    // guarding is unconditional — every row, whatever its state — and a pending row added
+    // later is covered by it without the guard being restored.
+    expect(rebindable.length).toBe(BINDINGS.length);
   });
 
   it('gives every binding a distinct id, since a rebind is stored against it', () => {
