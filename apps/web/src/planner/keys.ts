@@ -47,6 +47,9 @@ export type PlannerAction =
   | { readonly kind: 'recentre' }
   | { readonly kind: 'commit' }
   | { readonly kind: 'cancel' }
+  /** FR-110's undo stack — §8.5.3's `Ctrl+Z` and `Ctrl+Shift+Z` (#138). */
+  | { readonly kind: 'undo' }
+  | { readonly kind: 'redo' }
   /** §8.5.2's context menu on the selected node — #136, and NFR-016's keyboard route to it. */
   | { readonly kind: 'nodeMenu' };
 
@@ -159,6 +162,19 @@ export const actionFor = (key: string, modifiers: Modifiers): PlannerAction | nu
     case 'f':
     case 'F':
       return { kind: 'recentre' };
+
+    // §8.5.3's undo and redo (#138). `Ctrl+Shift+Z` for redo rather than `Ctrl+Y`, which
+    // is §8.5.3's own choice: `Ctrl+Y` is a Windows convention and this game runs in a
+    // browser on every platform, where `Ctrl+Shift+Z` is the one that is understood
+    // everywhere. Both cases of the letter, because `Shift+Z` reports `Z`.
+    //
+    // These are the only bindings here that read a modifier as part of *which* action they
+    // are rather than how big its step is, so they are checked before the unmodified map
+    // below could claim the key.
+    case 'z':
+    case 'Z':
+      if (!modifiers.ctrl) return null;
+      return modifiers.shift ? { kind: 'redo' } : { kind: 'undo' };
 
     // §8.5.2's context menu, by keyboard. `ContextMenu` is the dedicated key where a
     // keyboard has one; `F10` with Shift is the binding every desktop platform also

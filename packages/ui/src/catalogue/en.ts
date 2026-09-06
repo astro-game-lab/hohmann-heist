@@ -630,6 +630,11 @@ export const en: Messages = {
     `Outside the ${range(maxRangeMetres, fmt)} objective tolerance`,
   'planner.approach.none': () => 'No approach within the mission horizon',
 
+  'planner.history.undo': () => '\u27f2 UNDO',
+  'planner.history.redo': () => '\u27f3 REDO',
+  'planner.history.nothingToUndo': () => 'Nothing to undo.',
+  'planner.history.nothingToRedo': () => 'Nothing to redo.',
+
   'planner.nodeMenu.label': ({ index }, fmt) => `Actions for burn ${fmt.integer(index)}`,
   'planner.nodeMenu.snapPeriapsis': () => 'Snap to periapsis',
   'planner.nodeMenu.snapApoapsis': () => 'Snap to apoapsis',

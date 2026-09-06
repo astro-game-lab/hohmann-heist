@@ -54,6 +54,9 @@ export {
   updateEpochDrag,
 } from './machine.js';
 
+export type { History, HistoryEntry, HistoryMove } from './history.js';
+export { EMPTY_HISTORY, UNDO_DEPTH, canRedo, canUndo, record, redo, undo } from './history.js';
+
 export type { ApproachReadout, OrbitReadout } from './readouts.js';
 export { approachReadout, orbitReadout } from './readouts.js';
 

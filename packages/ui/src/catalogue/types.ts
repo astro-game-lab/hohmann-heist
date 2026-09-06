@@ -425,6 +425,12 @@ export interface UiMessageParams {
   readonly 'planner.approach.notMet': { readonly maxRangeMetres: number };
   readonly 'planner.approach.none': Record<string, never>;
 
+  // FR-110's undo stack, in §8.3.4's commit bar (#138).
+  readonly 'planner.history.undo': Record<string, never>;
+  readonly 'planner.history.redo': Record<string, never>;
+  readonly 'planner.history.nothingToUndo': Record<string, never>;
+  readonly 'planner.history.nothingToRedo': Record<string, never>;
+
   // §8.5.2's node context menu (#136).
   readonly 'planner.nodeMenu.label': { readonly index: number };
   readonly 'planner.nodeMenu.snapPeriapsis': Record<string, never>;

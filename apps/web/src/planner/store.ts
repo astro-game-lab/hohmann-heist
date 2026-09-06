@@ -47,6 +47,8 @@ import type {
   DraggingState,
   EpochDrag,
   HandleAxis,
+  History,
+  HistoryEntry,
   Interaction,
   NodeId,
   PlannerModel,
@@ -54,6 +56,7 @@ import type {
 import type { DeltaVCounts } from '@hh/sim';
 import { fromDeltaVCounts, fromEpochTicks, toDeltaVCounts, toEpochTicks } from '@hh/sim';
 import {
+  EMPTY_HISTORY,
   IDLE,
   activeNodeId,
   beginDrag,
@@ -66,6 +69,9 @@ import {
   releaseDrag,
   scrubTo as scrubModel,
   select as selectInteraction,
+  record as recordHistory,
+  redo as redoHistory,
+  undo as undoHistory,
   updateDeltaVDrag,
   updateEpochDrag,
 } from '@hh/ui';
@@ -106,6 +112,14 @@ export interface PlannerState {
    * knows a preview exists.
    */
   readonly preview: Evaluation | null;
+  /**
+   * FR-110's undo stack — where the player has been, not where they are (#138).
+   *
+   * The reducer is in `@hh/ui`, deliberately holding no present of its own: this state
+   * *is* the present, and a second copy of the plan here would immediately raise the
+   * question of which one is authoritative. `history.ts` argues it at length.
+   */
+  readonly history: History;
 }
 
 export interface PlannerActions {
@@ -161,11 +175,31 @@ export interface PlannerActions {
   readonly releaseDragging: () => void;
   /** Escape: restores the pre-drag value and changes nothing. */
   readonly cancelDragging: () => void;
+
+  // ── #138's undo stack ──────────────────────────────────────────────────────
+  /** §8.5.3's `Ctrl+Z`. A no-op when there is nothing to undo, or mid-gesture. */
+  readonly undo: () => void;
+  /** §8.5.3's `Ctrl+Shift+Z`. */
+  readonly redo: () => void;
 }
 
 /** The selected node's index, or `null`. Derived, never stored — see the docstring. */
 export const selectedIndex = (state: PlannerState): number | null =>
   indexOfNodeId(state.model.plan, activeNodeId(state.model.interaction));
+
+/**
+ * The point in history this state represents — #138.
+ *
+ * The plan, the selection and the editor's target, which is §6.11's *"enough interaction
+ * state that undo does not strand the player"*. Not the scrub head: FR-403 makes scrubbing
+ * a view operation, and an undoable scrub would make `Ctrl+Z` appear to do nothing after a
+ * player had merely looked around.
+ */
+const entryOf = (state: PlannerState): HistoryEntry => ({
+  plan: state.model.plan,
+  selectedNodeId: activeNodeId(state.model.interaction),
+  editorFor: state.editorFor,
+});
 
 /**
  * The interaction state after a plan edit that was not a drag.
@@ -242,6 +276,55 @@ export interface PlannerSeed {
   readonly selectedNodeId?: NodeId | null;
 }
 
+/**
+ * The state after stepping to another point in history — #138.
+ *
+ * Shared by undo and redo because they differ only in which entry they move to; writing it
+ * twice is how the two would come to disagree about, say, whether the editor target is
+ * restored.
+ *
+ * Three things are deliberately *not* taken from the entry. The **scrub head** stays where
+ * it is, because it was never recorded (FR-403). The **assist flags** stay, because they
+ * are a setting rather than an edit and §6.6 does not make them part of the plan. And
+ * `lastRefusal` is cleared, because the refusal being shown was about an edit that is no
+ * longer the most recent thing that happened.
+ *
+ * The interaction becomes EVALUATED rather than IDLE, and that matters: §8.5.1 reaches
+ * COMMITTED only from EVALUATED, so an undone plan left IDLE would render a Commit button
+ * that could not fire. It is also simply true — the line below evaluates the plan.
+ */
+const restored = (
+  scenario: LoadedScenario,
+  current: PlannerState,
+  entry: HistoryEntry,
+  history: History,
+): PlannerState => {
+  // A restored selection has to name a node the restored plan actually contains. It
+  // always does, because the entry recorded them together — the check is what keeps a
+  // stale id out of the machine if that ever stops being true.
+  const selected =
+    entry.selectedNodeId !== null && indexOfNodeId(entry.plan, entry.selectedNodeId) !== null
+      ? entry.selectedNodeId
+      : null;
+
+  return {
+    model: {
+      plan: entry.plan,
+      interaction: evaluated(IDLE, selected),
+      scrub: current.model.scrub,
+    },
+    evaluation: evaluatePlan(scenario, entry.plan, current.evaluation.timeline),
+    snapToApsis: current.snapToApsis,
+    lastRefusal: null,
+    editorFor:
+      entry.editorFor !== null && indexOfNodeId(entry.plan, entry.editorFor) !== null
+        ? entry.editorFor
+        : null,
+    preview: null,
+    history,
+  };
+};
+
 export const usePlanner = (
   scenario: LoadedScenario,
   seed: PlannerSeed = {},
@@ -276,6 +359,11 @@ export const usePlanner = (
       lastRefusal: null,
       editorFor: null,
       preview: null,
+      // Empty even when a plan was seeded. A retry or an abort restores the plan the
+      // player committed (§6.11, FR-603); it does not restore the session in which they
+      // built it, and offering to undo edits made before a run would be offering to undo
+      // something that is no longer on screen.
+      history: EMPTY_HISTORY,
     };
   });
 
@@ -309,6 +397,11 @@ export const usePlanner = (
           snapToApsis: current.snapToApsis,
           lastRefusal: null,
           preview: null,
+          // One entry per accepted edit -- §6.11's rule, and it is recorded *here*
+          // rather than at each call site precisely because this is the single funnel
+          // every non-drag mutation goes through. The refusal arm above returns before
+          // reaching this, so an `L5` pushes nothing and leaves redo alone.
+          history: recordHistory(current.history, entryOf(current)),
           // The overlay follows the node it was opened for. An edit that moved the node
           // changed its id — ids are derived from the epoch, see the docstring — so
           // carrying the old one forward would close the editor on every epoch change.
@@ -636,6 +729,10 @@ export const usePlanner = (
             snapToApsis: current.snapToApsis,
             lastRefusal: null,
             preview: null,
+            // **One drag is one entry**, however many pointer events it produced. That is
+            // structural rather than something to be careful about: the plan is not
+            // touched until this release, so this is the only place a drag can record.
+            history: recordHistory(current.history, entryOf(current)),
             editorFor:
               current.editorFor === null || node === undefined ? current.editorFor : nodeIdOf(node),
           };
@@ -654,6 +751,26 @@ export const usePlanner = (
             model: { ...current.model, interaction: cancelDrag(interaction) },
             preview: null,
           };
+        });
+      },
+
+      // ── #138 ─────────────────────────────────────────────────────────────
+      undo: () => {
+        setState((current) => {
+          // Never mid-gesture. §8.5.1 requires a drag to be released or cancelled, and
+          // undoing out from under one would leave the machine in DRAGGING against a plan
+          // the drag was not started on. `Escape` is the way out of a drag.
+          if (current.model.interaction.phase === 'DRAGGING') return current;
+          const move = undoHistory(current.history, entryOf(current));
+          return move === null ? current : restored(scenario, current, move.entry, move.history);
+        });
+      },
+
+      redo: () => {
+        setState((current) => {
+          if (current.model.interaction.phase === 'DRAGGING') return current;
+          const move = redoHistory(current.history, entryOf(current));
+          return move === null ? current : restored(scenario, current, move.entry, move.history);
         });
       },
 

@@ -754,6 +754,30 @@ body {
   gap: 6px;
 }
 
+.hh-commit__controls {
+  display: flex;
+  gap: 6px;
+}
+
+/* §8.3.4's commit bar already reserved space for these (#138). Sized like the Commit
+   button's siblings rather than like a panel control: they are the same class of action,
+   and a player reaching for UNDO after a bad drag should not have to find a smaller
+   target than the one they are undoing. */
+.hh-commit__history {
+  padding: 8px 12px;
+  background: none;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hh-commit__history:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .hh-commit__reasons {
   margin: 0;
   padding: 0 0 0 18px;

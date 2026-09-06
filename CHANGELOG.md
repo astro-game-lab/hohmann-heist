@@ -12,6 +12,21 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **Undo and redo over plan edits (#138).** FR-110's fifty deep, `Ctrl+Z` / `Ctrl+Shift+Z`, and
+  the `⟲ UNDO` / `⟳ REDO` controls §8.3.4's commit bar had already reserved space for. Every
+  accepted mutation — add, move, delete, Δv change, snap, context-menu action — is exactly one
+  entry, and **one drag is one entry however many pointer events it produced**, which is
+  structural rather than something to be careful about: the plan is not touched until the drag
+  is released, so a release is the only place a drag can record. A refused edit (`L5`) records
+  nothing and does not clear the redo stack, because §6.11 counts mutations and a refusal
+  mutated nothing. An entry carries the plan, the selection and the node editor's target, so
+  undo does not strand a player looking at an overlay for a node the restored plan does not
+  contain — but **not the scrub head**: FR-403 makes scrubbing a view operation, and an
+  undoable scrub would make `Ctrl+Z` appear to do nothing after a player had merely looked
+  around. The reducer lives in `@hh/ui` beside §8.5.1's machine, holds two stacks and no
+  present of its own — the planner's state is the present, and a second copy of the plan would
+  immediately raise the question of which is authoritative — and is tested as plain values,
+  which is what makes §13.5's E7 assertable by canonical JSON rather than by driving a screen.
 - **DEP-07's snap now applies to every gesture that places a burn (#136).** `releaseDragging`
   called `moveNode` with the raw dragged tick while `addNodeAt` snapped, so a node placed by
   clicking landed on the apsis and the same node dragged one pixel came off it — the exact

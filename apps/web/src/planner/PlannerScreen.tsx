@@ -41,7 +41,7 @@ import { R_EARTH_EQ, elementsFromState, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
 import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
-import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
+import { approachReadout, canRedo, canUndo, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
@@ -396,6 +396,12 @@ export const PlannerScreen = ({
               : ((scenario.startEpoch + scenario.rules.deadlineSeconds) as Epoch),
           );
           break;
+        case 'undo':
+          actions.undo();
+          break;
+        case 'redo':
+          actions.redo();
+          break;
         case 'nodeMenu':
           // §8.8's canvas-parity rule: every pointer action on the orbit view has a
           // keyboard route, and this is the menu's. Anchored at the node's drawn position
@@ -706,6 +712,10 @@ export const PlannerScreen = ({
         resolveDynamic={resolveDynamic}
         legality={legality}
         onCommit={actions.commit}
+        canUndo={canUndo(state.history)}
+        canRedo={canRedo(state.history)}
+        onUndo={actions.undo}
+        onRedo={actions.redo}
       />
 
       {state.lastRefusal === null ? null : (
