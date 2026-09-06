@@ -20,8 +20,15 @@
 import type { Epoch } from '@hh/astro';
 import type { EpochInterval } from '@hh/propagation';
 
-/** The constraint types this milestone evaluates. §6.5's other five arrive with their contracts. */
-export type ConstraintKind = 'dv_budget' | 'deadline' | 'altitude_floor';
+/**
+ * The constraint types this milestone evaluates. §6.5's remaining four arrive with their
+ * contracts.
+ *
+ * `burn_count` joined with C04 (#92) and is the first member that never blocks a commit —
+ * see `./burn-count.ts`. It is in this union anyway because it is a constraint in every
+ * other respect: evaluated during planning, drawn as a band, shown before it is failed.
+ */
+export type ConstraintKind = 'dv_budget' | 'deadline' | 'altitude_floor' | 'burn_count';
 
 /**
  * One span of time during which a constraint was violated.

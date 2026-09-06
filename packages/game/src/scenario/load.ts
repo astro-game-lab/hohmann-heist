@@ -24,8 +24,8 @@
  *    the contributor's intent quietly did nothing (G6).
  * 4. **Semantics.** The things a schema genuinely cannot check — an objective naming a
  *    target that is not there, a deadline past the horizon, two constraints of the same
- *    kind, a start below the floor, a tolerance looser than the departure table
- *    permits. Same error shape, same specificity.
+ *    kind, a start below the floor, a tolerance looser than the departure table permits,
+ *    Same error shape, same specificity.
  *
  * Each gate reports *all* of its own failures and then stops. Running the semantic
  * checks on a document that failed the schema would mean reading fields that may not
@@ -53,6 +53,7 @@ import { V, metres, metresPerSec, radians, seconds } from '@hh/math';
 import type { LegalityRules } from '../legality.js';
 import { gameMessage } from '../messages.js';
 import type {
+  GoalOrientation,
   OrbitTolerance,
   ProximityKind,
   ProximityTolerance,
@@ -85,7 +86,22 @@ export interface LoadedTarget {
 
 /** The objective, in the shape the evaluators take. */
 export type LoadedObjective =
-  | { readonly kind: 'reach_orbit'; readonly goal: OrbitShape; readonly tolerance: OrbitTolerance }
+  | {
+      readonly kind: 'reach_orbit';
+      readonly goal: OrbitShape;
+      readonly tolerance: OrbitTolerance;
+      /**
+       * Which orientations the goal actually constrained.
+       *
+       * Read from whether the document *stated* the field, never from its value: the
+       * schema makes both angles optional so a contract can ask for a shape in any
+       * orientation, and `orbitShapeOf` defaults an absent one to zero. Without this the
+       * evaluator could not tell "aligned with the x-axis" from "I do not care" and would
+       * compare against the default — which is how C01 came to demand alignment with an
+       * inertial axis that nothing in the game draws and no player can find.
+       */
+      readonly oriented: GoalOrientation;
+    }
   | {
       readonly kind: ProximityKind;
       readonly targetId: string;
@@ -140,13 +156,24 @@ export type LoadResult =
 
 const failure = (errors: readonly ScenarioError[]): LoadResult => ({ ok: false, errors });
 
-/** `p = a(1 − e²)`. Total for `0 ≤ e < 1`, which the schema guarantees. */
+/**
+ * `p = a(1 − e²)`. Total for `0 ≤ e < 1`, which the schema guarantees.
+ *
+ * The two orientation angles fall back to zero because an {@link OrbitGoal} may omit
+ * them — a circular goal has no apse line and an equatorial one no node line, so the
+ * schema stopped requiring an author to invent a value for an angle their goal does not
+ * have. The zero never reaches a comparison: {@link LoadedObjective}'s `oriented` records
+ * which angles the document actually stated, and `evaluateReachOrbit` skips the ones it
+ * did not — so "unspecified" stays distinguishable from "aligned with the x-axis", which
+ * is a requirement no contract has ever meant to make. A `StateSpec` requires both, so
+ * this branch is unreachable for a ship or a target.
+ */
 const orbitShapeOf = (spec: StateSpec | OrbitGoal, trueAnomalyRad: number): OrbitShape => ({
   semiLatusRectum: metres(spec.a_m * (1 - spec.e * spec.e)),
   eccentricity: spec.e,
   inclination: radians(spec.i_rad),
-  raan: radians(spec.raan_rad),
-  argp: radians(spec.argp_rad),
+  raan: radians(spec.raan_rad ?? 0),
+  argp: radians(spec.argp_rad ?? 0),
   trueAnomaly: radians(trueAnomalyRad),
 });
 
@@ -226,12 +253,17 @@ const interpret = (document: Scenario): LoadResult => {
 
   const deadline = rawConstraints.find((constraint) => constraint.kind === 'deadline');
   const floor = rawConstraints.find((constraint) => constraint.kind === 'altitude_floor');
+  const burnCap = rawConstraints.find((constraint) => constraint.kind === 'burn_count');
 
   // A contract with no explicit deadline is bounded by its own horizon, which is what
   // §6.3 says the horizon *is* — the deadline plus a margin. Defaulting to it keeps
   // `rules` total without inventing a number.
   const deadlineSeconds = deadline?.kind === 'deadline' ? deadline.seconds : horizonSeconds;
   const floorAltitudeM = floor?.kind === 'altitude_floor' ? floor.min_m : ALTITUDE_FLOOR_M;
+  // No default. §6.5's cap is per contract and most contracts have none, so "absent"
+  // has to stay distinguishable from "generous" — `evaluateBurnCount` reports a `null`
+  // cap for the first and a number for the second, and the HUD draws nothing for the one.
+  const maxBurns = burnCap?.kind === 'burn_count' ? burnCap.max : undefined;
 
   if (deadlineSeconds > horizonSeconds) {
     const path = '/constraints';
@@ -264,6 +296,10 @@ const interpret = (document: Scenario): LoadResult => {
       return {
         kind: 'reach_orbit',
         goal: orbitShapeOf(raw.goal, 0),
+        oriented: {
+          raan: raw.goal.raan_rad !== undefined,
+          argp: raw.goal.argp_rad !== undefined,
+        },
         tolerance: {
           radiusM: metres(
             boundedTolerance(
@@ -361,6 +397,7 @@ const interpret = (document: Scenario): LoadResult => {
         budgetMps: document.ship.dvBudget_mps,
         deadlineSeconds,
         floorAltitudeM,
+        ...(maxBurns === undefined ? {} : { maxBurns }),
       },
     },
   };

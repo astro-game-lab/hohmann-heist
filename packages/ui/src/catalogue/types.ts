@@ -124,7 +124,18 @@ export interface UiMessageParams {
   // the scenario file, so contract *text* is translated and reviewed separately from
   // contract *logic* (§11.5). The scenario names the key; this is where the sentence
   // lives, and `tools/content/content.test.ts` fails a contract whose key is not here.
+  // Act I — transfers. Every key here is named by a contract's own JSON (`briefKey`,
+  // `clientKey`, `coachMarks`), so it is resolved through `resolveDynamic` and checked by
+  // §13.4's brief-keys row rather than by a call site the compiler can see.
+  readonly 'brief.c01': Record<string, never>;
+  readonly 'brief.c02': Record<string, never>;
   readonly 'brief.c03': Record<string, never>;
+  readonly 'brief.c04': Record<string, never>;
+
+  // Act II — phasing, and the trade.
+  readonly 'brief.c05': Record<string, never>;
+  readonly 'brief.c06': Record<string, never>;
+  readonly 'brief.c07': Record<string, never>;
   /**
    * A contract's client (§8.3.3), named by `clientKey` in the scenario.
    *
@@ -133,7 +144,15 @@ export interface UiMessageParams {
    * and a key nobody has to invent is a key nobody gets wrong.
    */
   readonly 'client.withheld': Record<string, never>;
+  readonly 'client.ferroCombine': Record<string, never>;
+  readonly 'client.orbitalMutual': Record<string, never>;
+
+  // Coach marks. FR-902 allows them in C01–C04 only, at most three per contract, so this
+  // list is closed at four and does not grow with Act II.
+  readonly 'mark.c01.oppositeSide': Record<string, never>;
+  readonly 'mark.c02.secondBurn': Record<string, never>;
   readonly 'mark.c03.departureWindow': Record<string, never>;
+  readonly 'mark.c04.scale': Record<string, never>;
 
   // ── The briefing (§8.3.3, #120) ────────────────────────────────────────────
   //
@@ -230,6 +249,14 @@ export interface UiMessageParams {
   // §6.5's constraints, one line each. Only the two the scenario schema carries today have
   // a key; the other six arrive with the rules that evaluate them.
   readonly 'briefing.constraint.altitudeFloor': { readonly floorAltitudeM: number };
+  /**
+   * §6.5's burn-count cap, in the briefing (#92).
+   *
+   * The wording has to carry that it is **soft**, because it is the first constraint on
+   * this screen that does not stop a plan and a player who read it as a hard rule would
+   * not attempt the thing it is there to make them weigh.
+   */
+  readonly 'briefing.constraint.burnCount': { readonly maxBurns: number };
 
   // The footer, and §8.3.3's four states.
   readonly 'briefing.recordNone': Record<string, never>;
@@ -301,6 +328,22 @@ export interface UiMessageParams {
     readonly usedMps: number;
     readonly budgetMps: number;
   };
+  readonly 'planner.hud.burnsLabel': Record<string, never>;
+  /**
+   * "2 / 2 burns" — the cap while planning, so it is seen before it is exceeded (§6.5).
+   *
+   * Shown only by a contract that declares a cap; `maxBurns` is never `null` here, because
+   * the component renders nothing at all rather than passing an absence to a message.
+   */
+  readonly 'planner.hud.burns': { readonly burns: number; readonly maxBurns: number };
+  /**
+   * The same, as a sentence, for the element's accessible name.
+   *
+   * The two counts and not a verdict, so the message decides where the line is — the same
+   * arrangement `planner.hud.dvBar` uses for its three levels, and for the same reason:
+   * one place states the threshold and the component does not restate it.
+   */
+  readonly 'planner.hud.burnsStatus': { readonly burns: number; readonly maxBurns: number };
   readonly 'planner.hud.metLabel': Record<string, never>;
   readonly 'planner.hud.met': { readonly metSeconds: number };
   readonly 'planner.hud.settings': Record<string, never>;

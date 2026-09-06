@@ -239,6 +239,88 @@ describe('reach_orbit names the element that missed', () => {
   });
 });
 
+/**
+ * `station` — the two ways to miss a slot, and why they read different quantities.
+ *
+ * DEP-14 asks for two conditions at one epoch, so there are two failures and they want
+ * opposite advice: a ship that never stopped needs a bigger second burn, and one that
+ * stopped in the wrong place needs a different coast. C07 is the only station contract in
+ * v1.0, so until it shipped a station miss produced no explanation at all — which is what
+ * a player reported.
+ */
+describe('station tells "never stopped" from "stopped in the wrong place"', () => {
+  const DRIFT_LIMIT = 2.0201e-9; // DEP-14's 0.01°/day in rad/s.
+  const SLOT = 8.727e-4; // DEP-14's ±0.05° in rad.
+
+  const station = (over: {
+    readonly offsetRad?: number;
+    readonly achievedDrift?: number;
+    readonly finalDrift: number;
+  }): never =>
+    ({
+      kind: 'station',
+      met: false,
+      atEpoch: null,
+      achieved: {
+        offsetRad: over.offsetRad ?? 0,
+        driftRadPerSec: over.achievedDrift ?? 0,
+        withinSlot: Math.abs(over.offsetRad ?? 0) <= SLOT,
+        withinDrift: Math.abs(over.achievedDrift ?? 0) <= DRIFT_LIMIT,
+      },
+      finalDriftRadPerSec: over.finalDrift,
+      goal: { slotOffsetRad: 0.0524, maxOffsetRad: SLOT, maxDriftRadPerSec: DRIFT_LIMIT },
+    }) as never;
+
+  it('reports the drift when the plan ends on an orbit that is still sliding', () => {
+    const result = diagnose(factsFor({ objective: station({ finalDrift: 5e-8 }) }));
+    expect(result?.message.key).toBe('debrief.diagnosis.stillDrifting');
+  });
+
+  /**
+   * The case that made this rule read the **final** arc rather than `achieved`.
+   *
+   * A plan with one burn and no second one has an admissible-drift instant at the very
+   * start — before it left geostationary — so `achieved` reports that instant as its best
+   * moment. A rule reading `achieved.withinDrift` therefore concluded the ship had
+   * stopped, and told the player their coast was short while they slid away for the rest
+   * of the horizon. The best moment a run managed and the orbit it ended on are different
+   * questions, and only the second one answers "did you stop".
+   */
+  it('is not fooled by an admissible moment that predates the manoeuvre', () => {
+    const result = diagnose(
+      factsFor({
+        objective: station({
+          // The best moment: at the start, geostationary, 3° from the slot.
+          offsetRad: 0.0524,
+          achievedDrift: 0,
+          // The orbit it actually ends on: sliding east at 0.25°/day.
+          finalDrift: 5e-8,
+        }),
+      }),
+    );
+    expect(result?.message.key).toBe('debrief.diagnosis.stillDrifting');
+  });
+
+  it('reports the offset, signed, when the plan did stop but in the wrong place', () => {
+    const result = diagnose(
+      factsFor({ objective: station({ offsetRad: -0.0484, finalDrift: 1e-11 }) }),
+    );
+    expect(result?.message.key).toBe('debrief.diagnosis.wrongLongitude');
+    // Signed, because the sign is the advice: west means the coast was cut short.
+    expect(result?.message.params).toMatchObject({ offsetRad: -0.0484 });
+  });
+
+  it('says nothing when the drift could not be measured at all', () => {
+    // A timeline that did not propagate. §8.3.9: no explanation beats a wrong one.
+    expect(diagnose(factsFor({ objective: station({ finalDrift: Number.NaN }) }))).toBeNull();
+  });
+
+  it('says nothing about a run that met the objective', () => {
+    const met = { ...(station({ finalDrift: 0 }) as object), met: true } as never;
+    expect(diagnose(factsFor({ objective: met }))).toBeNull();
+  });
+});
+
 describe('the fallback is silence', () => {
   it('says nothing when there is no objective to reason about', () => {
     expect(diagnose(factsFor({ objective: null }))).toBeNull();

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json",
+  "id": "c04-long-haul",
+  "version": 1,
+  "act": 1,
+  "index": 4,
+  "title": "Long Haul",
+  "briefKey": "brief.c04",
+  "clientKey": "client.orbitalMutual",
+  "fee_kcr": 18,
+  "epoch": {
+    "scale": "TAI",
+    "j2000Seconds": 0
+  },
+  "horizonSeconds": 28800,
+  "ship": {
+    "state": {
+      "kind": "elements",
+      "a_m": 6778137,
+      "e": 0,
+      "i_rad": 0,
+      "raan_rad": 0,
+      "argp_rad": 0,
+      "nu_rad": 0
+    },
+    "dvBudget_mps": 4500
+  },
+  "targets": [],
+  "objective": {
+    "kind": "reach_orbit",
+    "goal": {
+      "a_m": 42164172.931157276,
+      "e": 0,
+      "i_rad": 0
+    }
+  },
+  "constraints": [
+    {
+      "kind": "altitude_floor",
+      "min_m": 100000
+    },
+    {
+      "kind": "deadline",
+      "seconds": 21600
+    },
+    {
+      "kind": "burn_count",
+      "max": 2
+    }
+  ],
+  "par": {
+    "dv_mps": 3853.9598,
+    "time_s": 19048.583,
+    "burns": 2,
+    "derivation": "Closed-form hohmann transfer in 2 impulses, with the departure epoch swept across one revolution (1 samples) and refined to the centre of the goal's tolerance band, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c04-long-haul.",
+    "referenceReplay": "{\"a\":0,\"c\":{\"dv\":38540,\"t\":19049},\"e\":1,\"n\":[[0,23974731,0,0],[19505749,14564867,-1,0]],\"s\":\"c04-long-haul\",\"v\":1}"
+  },
+  "unlocks": [],
+  "assistsAllowed": ["closest_approach", "coach_marks", "constraints", "elements", "snapping"],
+  "coachMarks": ["mark.c04.scale"]
+}

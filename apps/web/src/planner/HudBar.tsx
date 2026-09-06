@@ -18,6 +18,15 @@
  * over-budget is a legality reason, and if this component decided "over" on its own it
  * could disagree with the reason list two regions away.
  *
+ * ## The burn count is shown because it is soft, not in spite of it
+ *
+ * §6.5's cap never disables *Commit* — `constraints/burn-count.ts` says why at length —
+ * so the only thing that makes it a constraint rather than a hidden Gold threshold is
+ * that a player can see it while they plan. §6.5's own closing line is *"a player never
+ * discovers a constraint by failing it"*, and for a soft one this readout is the whole of
+ * that promise. A contract with no cap renders nothing here rather than a blank or an
+ * infinity, which is the same distinction the evaluation keeps in its `null`.
+ *
  * ## MET tracks the scrub head, not the wall clock
  *
  * FR-403 makes scrubbing a pure view operation, and #127's third criterion says MET
@@ -26,7 +35,7 @@
  * back and forth show the same reading each time.
  */
 import { metAt, type Epoch } from '@hh/astro';
-import type { BudgetEvaluation } from '@hh/game';
+import type { BudgetEvaluation, BurnCountEvaluation } from '@hh/game';
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 
@@ -38,6 +47,13 @@ export interface HudBarProps {
   readonly contractIndex: number;
   readonly contractTitle: string;
   readonly budget: BudgetEvaluation;
+  /**
+   * §6.5's burn-count cap, evaluated on every plan change.
+   *
+   * Rendered only when the contract declares one — `maxBurns` is `null` otherwise, and
+   * there is nothing to show a player about a limit that does not exist.
+   */
+  readonly burnCount: BurnCountEvaluation;
   /** The timeline's start, so MET can be measured from it. */
   readonly startEpoch: Epoch;
   /** Where the scrub head is. MET is read from here, never from a clock (FR-403). */
@@ -50,6 +66,7 @@ export const HudBar = ({
   contractIndex,
   contractTitle,
   budget,
+  burnCount,
   startEpoch,
   scrubEpoch,
   onOpenHelp,
@@ -100,6 +117,22 @@ export const HudBar = ({
           <div class="hh-dv-bar__fill" style={{ width: `${String(fillPercent)}%` }} />
         </div>
       </div>
+
+      {burnCount.maxBurns === null ? null : (
+        <div class="hh-hud__burns">
+          <span class="hh-hud__label">{t('planner.hud.burnsLabel', {})}</span>
+          <span
+            data-testid="hud-burns"
+            data-exceeded={String(burnCount.exceeded)}
+            aria-label={t('planner.hud.burnsStatus', {
+              burns: burnCount.burns,
+              maxBurns: burnCount.maxBurns,
+            })}
+          >
+            {t('planner.hud.burns', { burns: burnCount.burns, maxBurns: burnCount.maxBurns })}
+          </span>
+        </div>
+      )}
 
       <div class="hh-hud__met">
         <span class="hh-hud__label">{t('planner.hud.metLabel', {})}</span>

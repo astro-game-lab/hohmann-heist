@@ -15,6 +15,7 @@
  */
 import { radians, toDegrees } from '@hh/math';
 import type { MessageFormatters, Messages } from './types.js';
+import type { ComparedElement } from '@hh/game';
 
 /**
  * Shared renderings, so that "412.3" is rounded the same way wherever it appears.
@@ -31,12 +32,20 @@ import type { MessageFormatters, Messages } from './types.js';
  * not what anyone says out loud. Absent from this table, the identifier is used as-is,
  * which is ugly rather than wrong.
  */
-const ELEMENT_NAMES: Readonly<Record<string, string>> = Object.freeze({
+/**
+ * Element names, keyed by `reach_orbit`'s own `ComparedElement` union.
+ *
+ * `Record<ComparedElement, string>` and not `Record<string, string>`: the loose type is
+ * how this table came to have an `argp` key that nothing ever looked up, so an argument-of-
+ * periapsis miss printed the raw identifier at the player. A total record over the union
+ * makes a missing key a compile error and an extra one too.
+ */
+const ELEMENT_NAMES: Readonly<Record<ComparedElement, string>> = Object.freeze({
   periapsisRadius: 'periapsis',
   apoapsisRadius: 'apoapsis',
   inclination: 'inclination',
   raan: 'right ascension of the ascending node',
-  argp: 'argument of periapsis',
+  argumentOfPeriapsis: 'argument of periapsis',
 });
 
 const kilometres = (metres: number, fmt: MessageFormatters): string => {
@@ -59,14 +68,29 @@ const kilometres = (metres: number, fmt: MessageFormatters): string => {
 const range = (metres: number, fmt: MessageFormatters): string =>
   metres < 1000 ? `${fmt.integer(metres)} m` : `${fmt.decimal(metres / 1000, 1)} km`;
 
-/** §8.3.3's `h:mm`. Whole minutes: a deadline is not a stopwatch. */
+/**
+ * §8.3.3's `h:mm`, with a day field once there are days.
+ *
+ * Whole minutes: a deadline is not a stopwatch. Days appear above 24 h and not below,
+ * which is `@hh/astro`'s `formatMet` rule for a mission elapsed time — the same span
+ * should not read as `11d 23:00` on the timeline and `287 h 01 m` in the briefing.
+ *
+ * The threshold exists because C07 crossed it. Every contract before it ran for hours, so
+ * "288 h 00 m" was a rendering nothing had produced; it is the deadline of a twelve-day
+ * contract, and twelve days is a fact about the job that a reader should not have to do
+ * arithmetic to recover.
+ */
 const hoursAndMinutes = (seconds: number, fmt: MessageFormatters): string => {
   const totalMinutes = Math.round(seconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  return (
-    `${fmt.integer(hours)} h ` +
-    `${fmt.number(totalMinutes % 60, { minimumIntegerDigits: 2, useGrouping: false })} m`
-  );
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = fmt.number(totalMinutes % 60, {
+    minimumIntegerDigits: 2,
+    useGrouping: false,
+  });
+  return days === 0
+    ? `${fmt.integer(Math.floor(totalMinutes / 60))} h ${minutes} m`
+    : `${fmt.integer(days)} d ${fmt.integer(hours)} h ${minutes} m`;
 };
 
 /** Radians in, degrees out — the conversion happens at this boundary and nowhere else. */
@@ -197,14 +221,39 @@ export const en: Messages = {
   'debrief.diagnosis.wrongOrbit': ({ element, difference, tolerance }, fmt) => {
     // Radii are metres and angles are radians, so the unit follows the element rather
     // than the value — the alternative is guessing from magnitude, which breaks at GEO.
-    const angular = element === 'inclination' || element === 'raan' || element === 'argp';
+    const angular =
+      element === 'inclination' || element === 'raan' || element === 'argumentOfPeriapsis';
     const off = angular
       ? `${fmt.decimal(toDegrees(radians(Math.abs(difference))), 3)}°`
       : `${kilometres(Math.abs(difference), fmt)} km`;
     const allowed = angular
       ? `${fmt.decimal(toDegrees(radians(tolerance)), 3)}°`
       : `${kilometres(tolerance, fmt)} km`;
-    return `Your ${ELEMENT_NAMES[element] ?? element} was ${off} out, against ${allowed} allowed.`;
+    return `Your ${ELEMENT_NAMES[element]} was ${off} out, against ${allowed} allowed.`;
+  },
+  // Degrees per day, because that is the unit DEP-14 states the limit in and the unit the
+  // briefing showed the player. Three decimals: the limit is 0.01°/day, so two would round
+  // the whole budget to a single digit and a run at 0.014 would read as 0.01.
+  'debrief.diagnosis.stillDrifting': ({ driftRadPerSec, maxDriftRadPerSec }, fmt) => {
+    const perDay = (rate: number): string =>
+      `${fmt.decimal(toDegrees(radians(Math.abs(rate))) * 86_400, 3)}°/day`;
+    const sense = driftRadPerSec >= 0 ? 'east' : 'west';
+    return (
+      `You passed the slot but never stopped: your longitude was still sliding ${sense} at ` +
+      `${perDay(driftRadPerSec)}, against ${perDay(maxDriftRadPerSec)} allowed. A slot is ` +
+      'somewhere you stay, not somewhere you cross.'
+    );
+  },
+  // The sign is the advice, so it is a word rather than a minus: east of the slot means
+  // the drift ran too long, west means it was stopped too early.
+  'debrief.diagnosis.wrongLongitude': ({ offsetRad, maxOffsetRad }, fmt) => {
+    const degrees = (rad: number): string =>
+      `${fmt.decimal(toDegrees(radians(Math.abs(rad))), 3)}°`;
+    return (
+      `You stopped ${degrees(offsetRad)} ${offsetRad >= 0 ? 'east' : 'west'} of the slot, ` +
+      `against ±${degrees(maxOffsetRad)} allowed — the drift was right, the coast was ` +
+      `${offsetRad >= 0 ? 'too long' : 'cut short'}.`
+    );
   },
   'debrief.diagnosis.tooFast': ({ relativeSpeedMps, maxRelativeSpeedMps }, fmt) =>
     `You were close enough, and still closing at ${fmt.decimal(relativeSpeedMps, 2)} m/s — ` +
@@ -288,6 +337,26 @@ export const en: Messages = {
       : `${fmt.decimal(separationMetres / 1000, 2)} km · ${fmt.decimal(relativeSpeedMps, 2)} m/s`,
 
   'client.withheld': () => 'withheld',
+  'client.ferroCombine': () => 'Ferro Combine',
+  'client.orbitalMutual': () => 'Orbital Mutual',
+
+  // ── Act I — transfers ──────────────────────────────────────────────────────
+  'brief.c01': () =>
+    'Ferro Combine wants a survey pass eight hundred kilometres up, and they want it ' +
+    'cheap. One burn is all you get paid for. The high point of your new orbit will not ' +
+    'be where you light the engine — so think about where you want to end up, then go ' +
+    'and stand somewhere else.',
+  'mark.c01.oppositeSide': () =>
+    'A prograde burn raises the far side of the orbit, not the side you are on. Half a ' +
+    'lap later you will be at the top.',
+
+  'brief.c02': () =>
+    'Same climb, but this time you stay. An orbit that touches eight hundred kilometres ' +
+    'once a lap is not an orbit at eight hundred kilometres, and the survey rig will not ' +
+    'run on a drive-by. Getting up there was one burn. Staying costs a second.',
+  'mark.c02.secondBurn': () =>
+    'You arrive at the top going too slowly for a circle. The second burn is there, half ' +
+    'a period after the first.',
 
   'brief.c03': () =>
     'KESTREL-2 runs a courier loop four hundred kilometres above you, and its cargo does ' +
@@ -296,6 +365,32 @@ export const en: Messages = {
   'mark.c03.departureWindow': () =>
     'The target keeps moving while you climb. When you leave decides where it will be ' +
     'when you get there.',
+
+  'brief.c04': () =>
+    'Orbital Mutual keeps its ledgers in the geostationary belt, thirty-five thousand ' +
+    'kilometres up, and has decided it would like a copy somewhere else. This is the ' +
+    'expensive one. Read the budget before you plan, and note what it is willing to pay ' +
+    'for: two burns, no more.',
+  'mark.c04.scale': () =>
+    'The belt is six times further out than you are. The view will not do it justice; ' +
+    'the Δv bar will.',
+
+  // ── Act II — phasing, and the trade ────────────────────────────────────────
+  'brief.c05': () =>
+    'MERIDIAN-9 is forty degrees ahead of you in your own orbit and pulling no further ' +
+    'away. You have half a day and a quarter of a kilometre per second, which is more ' +
+    'than enough of both. Do not overthink the direction you burn.',
+
+  'brief.c06': () =>
+    'The same rock, the same orbit, twenty-five degrees behind you this time. It will ' +
+    'catch up on its own eventually; eventually is longer than you have. Everything you ' +
+    'learned on the last one still applies, and every sign of it is the other way round.',
+
+  'brief.c07': () =>
+    'Orbital Mutual has bought a slot three degrees east of where you are parked and ' +
+    'would like you in it within twelve days. Twelve days is a long time and the slot is ' +
+    'very close. Both of those are the point: the less of a hurry you are in, the less ' +
+    'this costs.',
 
   // ── The briefing (§8.3.3) ──────────────────────────────────────────────────
   //
@@ -326,8 +421,15 @@ export const en: Messages = {
     `${fmt.decimal(dvMps, 1)} m/s · ${hoursAndMinutes(timeSeconds, fmt)} · ` +
     `${fmt.integer(burns)} ${fmt.plural(burns) === 'one' ? 'burn' : 'burns'}`,
 
+  // A circular goal reads as one number, not the same number twice. The message decides
+  // that rather than the screen, for the reason the whole catalogue exists: "800 km
+  // circular" and "400 × 800 km" are different sentences, not one sentence with a
+  // different value in it, and a language that builds them differently should be able to.
+  // The threshold is the same one `briefing.setup.circular` uses on a state.
   'briefing.objective.reachOrbit': ({ periapsisAltitudeMetres, apoapsisAltitudeMetres }, fmt) =>
-    `Reach a ${kilometres(periapsisAltitudeMetres, fmt)} × ${kilometres(apoapsisAltitudeMetres, fmt)} km orbit`,
+    Math.abs(apoapsisAltitudeMetres - periapsisAltitudeMetres) < 1000
+      ? `Reach a ${kilometres(apoapsisAltitudeMetres, fmt)} km circular orbit`
+      : `Reach a ${kilometres(periapsisAltitudeMetres, fmt)} × ${kilometres(apoapsisAltitudeMetres, fmt)} km orbit`,
   'briefing.objective.intercept': ({ target, rangeMetres }, fmt) =>
     `Intercept ${target} within ${range(rangeMetres, fmt)}`,
   'briefing.objective.rendezvous': ({ target, rangeMetres, relativeSpeedMps }, fmt) =>
@@ -363,6 +465,12 @@ export const en: Messages = {
 
   'briefing.constraint.altitudeFloor': ({ floorAltitudeM }, fmt) =>
     `Never below ${kilometres(floorAltitudeM, fmt)} km`,
+  // "Soft" is doing the work in this line. Every other constraint on this screen stops a
+  // plan; this one lets it fly and takes the medal, and a player who read it as a wall
+  // would never weigh the thing §6.5 put it there to make them weigh.
+  'briefing.constraint.burnCount': ({ maxBurns }, fmt) =>
+    `${fmt.integer(maxBurns)} ${fmt.plural(maxBurns) === 'one' ? 'burn' : 'burns'} — soft: ` +
+    'over it you can still fly, but not for Gold',
 
   'briefing.recordNone': () => 'best: —',
   'briefing.record': ({ bestDvMps, medal }, fmt) =>
@@ -410,6 +518,17 @@ export const en: Messages = {
     if (fraction >= 0.9) return `Δv near budget — ${spend}`;
     return `Δv within budget — ${spend}`;
   },
+  'planner.hud.burnsLabel': () => 'Burns',
+  'planner.hud.burns': ({ burns, maxBurns }, fmt) =>
+    `${fmt.integer(burns)} / ${fmt.integer(maxBurns)}`,
+  // The accessible name, and the only channel that says what being over the cap costs.
+  // §8.8's rule again: the readout turns amber, and amber is not a sentence.
+  'planner.hud.burnsStatus': ({ burns, maxBurns }, fmt) => {
+    const spend = `${fmt.integer(burns)} of ${fmt.integer(maxBurns)}`;
+    return burns > maxBurns
+      ? `Burns over the cap — ${spend}, Gold forfeit`
+      : `Burns within cap — ${spend}`;
+  },
   'planner.hud.metLabel': () => 'MET',
   'planner.hud.met': ({ metSeconds }, fmt) => fmt.met(metSeconds),
   'planner.hud.settings': () => 'Settings',
@@ -417,8 +536,17 @@ export const en: Messages = {
 
   'planner.timeline.label': () => 'Mission timeline',
   'planner.timeline.scrubAt': ({ metSeconds }, fmt) => `Scrub head at ${fmt.met(metSeconds)}`,
-  'planner.timeline.stepHint': ({ stepSeconds }, fmt) =>
-    `Arrow keys move the scrub head by ${fmt.integer(stepSeconds)} s; hold Shift for a tenth, Ctrl for a minute`,
+  // The step is derived from the mission window, so this reads it rather than naming a
+  // constant — and says it in the unit a player would: "40 min", not "2400 s".
+  'planner.timeline.stepHint': ({ stepSeconds }, fmt) => {
+    const step =
+      stepSeconds < 60
+        ? `${fmt.integer(stepSeconds)} s`
+        : stepSeconds < 3600
+          ? `${fmt.integer(stepSeconds / 60)} min`
+          : `${fmt.decimal(stepSeconds / 3600, 1)} h`;
+    return `Arrow keys move the scrub head by ${step}; hold Shift for a tenth, Ctrl for a minute`;
+  },
   'planner.timeline.deadline': ({ metSeconds }, fmt) => `Deadline ${fmt.met(metSeconds)}`,
   'planner.timeline.node': ({ index, metSeconds }, fmt) =>
     `Node ${fmt.integer(index)} at ${fmt.met(metSeconds)}`,
@@ -429,7 +557,7 @@ export const en: Messages = {
   // Order matches `ConstraintKind`: dv_budget, deadline, altitude_floor. A kind outside
   // the list falls back to the generic sentence rather than to `undefined`.
   'planner.timeline.band': ({ kind, startMetSeconds, endMetSeconds }, fmt) => {
-    const names = ['Δv budget', 'deadline', 'altitude floor'];
+    const names = ['Δv budget', 'deadline', 'altitude floor', 'burn count'];
     const name = names[kind] ?? 'constraint';
     return `${name} violated from ${fmt.met(startMetSeconds)} to ${fmt.met(endMetSeconds)}`;
   },

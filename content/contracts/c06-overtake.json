@@ -1,0 +1,68 @@
+{
+  "$schema": "https://astro-game-lab.github.io/hohmann-heist/schema/scenario-1.json",
+  "id": "c06-overtake",
+  "version": 1,
+  "act": 2,
+  "index": 6,
+  "title": "Overtake",
+  "briefKey": "brief.c06",
+  "clientKey": "client.withheld",
+  "fee_kcr": 9,
+  "epoch": {
+    "scale": "TAI",
+    "j2000Seconds": 0
+  },
+  "horizonSeconds": 50400,
+  "ship": {
+    "state": {
+      "kind": "elements",
+      "a_m": 6778137,
+      "e": 0,
+      "i_rad": 0,
+      "raan_rad": 0,
+      "argp_rad": 0,
+      "nu_rad": 0
+    },
+    "dvBudget_mps": 250
+  },
+  "targets": [
+    {
+      "id": "MERIDIAN-9",
+      "label": "MERIDIAN-9",
+      "state": {
+        "kind": "elements",
+        "a_m": 6778137,
+        "e": 0,
+        "i_rad": 0,
+        "raan_rad": 0,
+        "argp_rad": 0,
+        "nu_rad": 5.8468529941810035
+      }
+    }
+  ],
+  "objective": {
+    "kind": "intercept",
+    "targetId": "MERIDIAN-9",
+    "maxRange_m": 1000
+  },
+  "constraints": [
+    {
+      "kind": "altitude_floor",
+      "min_m": 100000
+    },
+    {
+      "kind": "deadline",
+      "seconds": 45000
+    }
+  ],
+  "par": {
+    "dv_mps": 21.9983,
+    "time_s": 44814.787,
+    "burns": 1,
+    "derivation": "Closed-form phasing sweep over two revolution counts: 61 members enumerated, 8 admissible, the cheapest of them flown in 8 ship revolutions against the target's 9; the Lambert family is degenerate here and was searched too, then evaluated as a quantised plan through the game's own timeline. Best known, not a proven optimum (DEP-12). Solver: tools/pars/solve.ts. Derivation: docs/PARS.md#c06-overtake.",
+    "referenceReplay": "{\"a\":0,\"c\":{\"dv\":220,\"t\":44815},\"e\":1,\"n\":[[0,219983,0,0]],\"s\":\"c06-overtake\",\"v\":1}"
+  },
+  "unlocks": [],
+  "assistsAllowed": ["closest_approach", "constraints", "elements", "snapping"],
+  "coachMarks": []
+}

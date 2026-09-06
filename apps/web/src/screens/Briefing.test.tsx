@@ -18,11 +18,13 @@ let container: HTMLElement;
  * a shape assertion, and be nonsense. The shipped contract is a 400 km circular LEO with
  * a target 400 km above it, and those are numbers a reader can check by eye.
  */
-const c03 = (): NonNullable<ReturnType<typeof contractById>> => {
-  const scenario = contractById('c03-cold-open');
-  if (scenario === undefined) throw new Error('c03-cold-open is not in the registry');
+const shipped = (id: string): NonNullable<ReturnType<typeof contractById>> => {
+  const scenario = contractById(id);
+  if (scenario === undefined) throw new Error(`${id} is not in the registry`);
   return scenario;
 };
+
+const c03 = (): NonNullable<ReturnType<typeof contractById>> => shipped('c03-cold-open');
 
 const mount = async (props: Partial<Parameters<typeof Briefing>[0]> = {}): Promise<() => void> => {
   const onAccept = vi.fn();
@@ -119,6 +121,62 @@ describe('the §8.3.3 layout', () => {
     expect(row?.querySelector('svg')).not.toBeNull();
     // The icon says nothing the line does not; §8.8's rule about single channels.
     expect(row?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  /**
+   * §6.5's burn-count cap, and the word the line has to carry — #92.
+   *
+   * The cap never disables *Commit*, so the briefing is the first place a player can find
+   * out it exists, and "soft" is the part that makes them weigh the trade rather than
+   * treat it as a wall. §6.5: *"A player never discovers a constraint by failing it."*
+   */
+  /**
+   * A circular goal is one number, not the same number twice.
+   *
+   * §13.4's suite cannot catch this: "35 786 × 35 786 km" is a correct rendering of a
+   * correct goal and passes every check there is. It was caught by looking at the built
+   * page, which is why C02 and C04 — the first circular `reach_orbit` goals to ship — are
+   * the contracts that surfaced it.
+   */
+  /**
+   * A twelve-day contract says twelve days — #94.
+   *
+   * Every contract before C07 ran for hours, so "288 h 00 m" was a rendering nothing had
+   * ever produced. It is also inconsistent with the timeline beside it, which has always
+   * rendered a MET past a day as `11d 23:00:51` through `@hh/astro`'s `formatMet`.
+   */
+  it('renders a multi-day deadline in days', async () => {
+    await mount({ scenario: shipped('c07-slot-machine') });
+    expect(visible('value-deadline')).toBe('12 d 0 h 00 m');
+  });
+
+  it('still renders a contract of hours in hours', async () => {
+    await mount({ scenario: shipped('c01-shakedown') });
+    expect(visible('value-deadline')).toBe('1 h 30 m');
+  });
+
+  it('states a circular goal once', async () => {
+    await mount({ scenario: shipped('c02-round-trip') });
+    expect(text('objective')).toBe('Reach a 800 km circular orbit');
+  });
+
+  it('states an eccentric goal as both apsides', async () => {
+    await mount({ scenario: shipped('c01-shakedown') });
+    expect(text('objective')).toBe('Reach a 400 × 800 km orbit');
+  });
+
+  it('shows C04’s burn-count cap, and says that it is soft', async () => {
+    await mount({ scenario: shipped('c04-long-haul') });
+    const row = el('constraint-burn_count');
+    expect(row?.textContent).toBe('2 burns — soft: over it you can still fly, but not for Gold');
+    expect(row?.querySelector('svg')).not.toBeNull();
+  });
+
+  it('shows no burn-count row for a contract that declares no cap', async () => {
+    await mount();
+    // Absent, not zero and not "unlimited": a contract without a cap has nothing to say
+    // here, and a row saying so would be noise on six of the seven shipped contracts.
+    expect(el('constraint-burn_count')).toBeNull();
   });
 });
 

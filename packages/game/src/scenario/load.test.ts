@@ -361,3 +361,97 @@ describe('tolerance overrides', () => {
     }
   });
 });
+
+/**
+ * A `reach_orbit` goal's two orientation angles — #90.
+ *
+ * The schema makes them optional, and **omitting one is a statement**: the contract asks
+ * for that shape in any orientation. It is not a mistake to be caught.
+ *
+ * The loader used to refuse an eccentric goal that left `argp_rad` out, on the reasoning
+ * that a goal with an apse line ought to say where it points. C01 is the counter-example
+ * and it is not an edge case: its ship starts on a circular-enough orbit, a prograde burn
+ * puts periapsis wherever the burn happened, and no inertial direction in this game is
+ * drawn or referenced — so demanding a particular apse line demanded alignment with an
+ * invisible axis. The rule was exactly backwards, and #90 said so: the goal must express
+ * "raise apoapsis, leave periapsis alone" *"without asserting an argument of periapsis
+ * that does not exist."*
+ */
+describe('a reach_orbit goal’s orientation (#90)', () => {
+  const withGoal = (goal: Record<string, unknown>): Record<string, unknown> => ({
+    ...scenario(),
+    targets: [],
+    objective: { kind: 'reach_orbit', goal },
+  });
+
+  it('accepts a circular equatorial goal that omits both angles', () => {
+    const result = loaded(withGoal({ a_m: 7_178_137, e: 0, i_rad: 0 }));
+    if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    expect(result.objective.oriented).toStrictEqual({ raan: false, argp: false });
+  });
+
+  it('accepts an eccentric goal that omits its argument of periapsis', () => {
+    // C01's shape. The apse line exists; the contract does not care where it points.
+    const result = loaded(withGoal({ a_m: 6_978_137, e: 0.028_660_944_891_165_076, i_rad: 0 }));
+    if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    expect(result.objective.oriented.argp).toBe(false);
+  });
+
+  it('records an angle the goal did state, so it can be compared', () => {
+    const result = loaded(
+      withGoal({ a_m: 6_978_137, e: 0.02, i_rad: 0.9, raan_rad: 0.5, argp_rad: 1.2 }),
+    );
+    if (result.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    expect(result.objective.oriented).toStrictEqual({ raan: true, argp: true });
+    expect(result.objective.goal.argp).toBeCloseTo(1.2, 12);
+  });
+
+  // The distinction the whole mechanism exists for: an omitted angle defaults to zero in
+  // the shape, so without `oriented` the evaluator could not tell it from a stated zero.
+  it('distinguishes an omitted angle from a stated zero', () => {
+    const omitted = loaded(withGoal({ a_m: 6_978_137, e: 0.02, i_rad: 0 }));
+    const stated = loaded(withGoal({ a_m: 6_978_137, e: 0.02, i_rad: 0, argp_rad: 0 }));
+    if (omitted.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    if (stated.objective.kind !== 'reach_orbit') throw new Error('expected reach_orbit');
+    // Same shape …
+    expect(omitted.objective.goal.argp).toBe(stated.objective.goal.argp);
+    // … and a different requirement.
+    expect(omitted.objective.oriented.argp).toBe(false);
+    expect(stated.objective.oriented.argp).toBe(true);
+  });
+});
+
+/**
+ * §6.5's burn-count cap, as the loader sees it — #92.
+ *
+ * The loader's whole job here is to keep "no cap" distinguishable from "a generous cap".
+ * `constraints/burn-count.ts` says why that distinction reaches the HUD.
+ */
+describe('the burn-count cap (#92)', () => {
+  it('carries a declared cap into the rules', () => {
+    const document = {
+      ...scenario(),
+      constraints: [
+        { kind: 'altitude_floor', min_m: 100_000 },
+        { kind: 'deadline', seconds: 45_000 },
+        { kind: 'burn_count', max: 2 },
+      ],
+    };
+    expect(loaded(document).rules.maxBurns).toBe(2);
+  });
+
+  it('leaves maxBurns absent — not zero, not Infinity — when no cap is declared', () => {
+    expect(loaded(scenario()).rules).not.toHaveProperty('maxBurns');
+  });
+
+  it('refuses two burn_count constraints, like every other duplicated kind', () => {
+    const document = {
+      ...scenario(),
+      constraints: [
+        { kind: 'burn_count', max: 2 },
+        { kind: 'burn_count', max: 3 },
+      ],
+    };
+    expect(keys(parseScenario(document))).toContain('scenario.error.duplicateConstraint');
+  });
+});

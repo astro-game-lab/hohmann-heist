@@ -52,6 +52,8 @@
  * exists to prevent; the catalogue has `Intl.ListFormat` and the locale, and this
  * package has neither.
  */
+import type { ComparedElement } from './objectives/reach-orbit.js';
+
 export type MessageParamValue = string | number | readonly string[];
 
 /** The parameters accompanying a key. */
@@ -163,9 +165,43 @@ export interface GameMessageParams {
    * into one, so the rule never builds prose (FR-910).
    */
   readonly 'debrief.diagnosis.wrongOrbit': {
-    readonly element: string;
+    /**
+     * Which element missed, as `reach_orbit`'s own union rather than as a string.
+     *
+     * It was `string`, and that is how the catalogue came to test for `'argp'` while the
+     * evaluator has always emitted `'argumentOfPeriapsis'`. Nothing caught it: the message
+     * fell through to the metres branch and rendered a 180° miss as "0 km out, against
+     * 0 km allowed", which is three wrong things — wrong unit, wrong magnitude, and a
+     * tolerance that reads as forbidding everything. Typed, the mismatch is a compile
+     * error, which is the only reason this cannot happen again for `raan`.
+     */
+    readonly element: ComparedElement;
     readonly difference: number;
     readonly tolerance: number;
+  };
+
+  /**
+   * A `station` run that never stopped sliding through the slot (DEP-14).
+   *
+   * The drift is the **necessary** condition — a ship still moving through the box was
+   * never on station, whatever longitude it read on the way past — so this rule reports
+   * the drift and carries the offset only as context.
+   */
+  readonly 'debrief.diagnosis.stillDrifting': {
+    readonly driftRadPerSec: number;
+    readonly maxDriftRadPerSec: number;
+    readonly offsetRad: number;
+  };
+  /**
+   * A `station` run that settled at the wrong longitude.
+   *
+   * `offsetRad` is **signed** and stays signed: east means the drift ran too long and west
+   * means it was stopped early, and those want opposite corrections. An absolute value
+   * here would turn the one actionable fact into a magnitude.
+   */
+  readonly 'debrief.diagnosis.wrongLongitude': {
+    readonly offsetRad: number;
+    readonly maxOffsetRad: number;
   };
 
   /** Close enough, and still moving too fast for the objective to count. */

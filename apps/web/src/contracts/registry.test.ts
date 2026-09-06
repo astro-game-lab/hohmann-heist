@@ -12,6 +12,26 @@ describe('the contract registry', () => {
     expect(contracts().map((scenario) => scenario.id)).toContain('c03-cold-open');
   });
 
+  /**
+   * Acts I and II, in the order §6.8 lists them.
+   *
+   * Spelled out rather than counted, because the failure this catches is a contract that
+   * loads and is unreachable — the glob is what puts a file into the game, and a file that
+   * was never added is indistinguishable from one that was, unless something names it.
+   * The list grows as M4's contracts land; that edit is the reminder to check the board.
+   */
+  it('ships Acts I and II, reachable at #/contract/<id>', () => {
+    expect(contracts().map((scenario) => scenario.id)).toStrictEqual([
+      'c01-shakedown',
+      'c02-round-trip',
+      'c03-cold-open',
+      'c04-long-haul',
+      'c05-tailgate',
+      'c06-overtake',
+      'c07-slot-machine',
+    ]);
+  });
+
   it('loads each one through @hh/game’s own loader', () => {
     const c03 = contractById('c03-cold-open');
     expect(c03).toBeDefined();

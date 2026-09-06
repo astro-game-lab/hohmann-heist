@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { contractById } from '../contracts/registry.js';
 import { PlannerScreen, type CommittedRun } from './PlannerScreen.js';
+import { scrubStepFor } from './TimelineStrip.js';
 
 const catalogue = createCatalogue();
 let container: HTMLElement;
@@ -156,10 +157,23 @@ describe('the timeline (#128)', () => {
     const scrub = el('timeline-scrub');
     expect(scrub).toBeInstanceOf(HTMLInputElement);
     expect(scrub?.getAttribute('type')).toBe('range');
-    expect(scrub?.getAttribute('step')).toBe('60');
-    // The step is described to the player, not only in a docstring.
-    const hint = container.querySelector('#hh-timeline-step-hint');
-    expect(hint?.textContent).toContain('60');
+
+    // The step is derived from the mission window rather than fixed (#94), so this asserts
+    // the property #128 actually asked for — that the input's step and the sentence the
+    // player is shown are the *same* number — rather than pinning a constant. Pinning one
+    // is what made this test fail the day a fourteen-day contract shipped and C03's
+    // six-hour window stopped rounding to the same minute.
+    const step = scrubStepFor(c03().horizonSeconds);
+    expect(scrub?.getAttribute('step')).toBe(String(step));
+
+    // The hint states the step in whatever unit reads best — "30 s", "15 min", "2.0 h" —
+    // so it is parsed back to seconds rather than string-matched. What is being asserted
+    // is that the two agree, not how the catalogue chose to spell it.
+    const hint = container.querySelector('#hh-timeline-step-hint')?.textContent ?? '';
+    const match = /by ([\d.]+) (s|min|h)/.exec(hint);
+    if (match === null) throw new Error(`the step hint states no step: "${hint}"`);
+    const scale = { s: 1, min: 60, h: 3600 }[match[2] ?? 's'] ?? 1;
+    expect(Number(match[1]) * scale).toBe(step);
   });
 
   it('places the deadline wall from the scenario horizon', async () => {

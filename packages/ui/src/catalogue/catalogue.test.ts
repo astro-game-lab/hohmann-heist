@@ -98,8 +98,20 @@ const samples: AllMessageParams = {
   'screen.notFound.body': { path: '/nope' },
   'screen.notFound.backToTitle': {},
   'screen.notBuiltYet': {},
+
+  'brief.c01': {},
+  'brief.c02': {},
   'brief.c03': {},
+  'brief.c04': {},
+  'brief.c05': {},
+  'brief.c06': {},
+  'brief.c07': {},
   'client.withheld': {},
+  'client.ferroCombine': {},
+  'client.orbitalMutual': {},
+  'mark.c01.oppositeSide': {},
+  'mark.c02.secondBurn': {},
+  'mark.c04.scale': {},
   'planner.handle.prograde': {},
   'planner.handle.radial': {},
   'planner.apsis.periapsis': { altitudeMetres: 412_300 },
@@ -136,6 +148,12 @@ const samples: AllMessageParams = {
     difference: 42_000,
     tolerance: 10_000,
   },
+  'debrief.diagnosis.stillDrifting': {
+    driftRadPerSec: 5e-8,
+    maxDriftRadPerSec: 2.0201e-9,
+    offsetRad: 0.001,
+  },
+  'debrief.diagnosis.wrongLongitude': { offsetRad: -0.0012, maxOffsetRad: 8.727e-4 },
   'debrief.diagnosis.tooFast': { relativeSpeedMps: 1.4, maxRelativeSpeedMps: 0.5, rangeM: 80 },
   'debrief.diagnosis.arrivedLate': { alongTrackM: 12_400, rangeM: 12_500 },
   'debrief.diagnosis.arrivedEarly': { alongTrackM: 12_400, rangeM: 12_500 },
@@ -163,6 +181,7 @@ const samples: AllMessageParams = {
     trueAnomalyRad: 0.244_346_095,
   },
   'briefing.constraint.altitudeFloor': { floorAltitudeM: 100_000 },
+  'briefing.constraint.burnCount': { maxBurns: 2 },
   'briefing.recordNone': {},
   'briefing.record': { bestDvMps: 109.2, medal: 'gold', attempts: 7 },
   'briefing.attempts': { attempts: 7 },
@@ -181,6 +200,9 @@ const samples: AllMessageParams = {
   'planner.hud.dvLabel': {},
   'planner.hud.dv': { usedMps: 72.4, budgetMps: 250 },
   'planner.hud.dvBar': { fraction: 0.29, usedMps: 72.4, budgetMps: 250 },
+  'planner.hud.burnsLabel': {},
+  'planner.hud.burns': { burns: 2, maxBurns: 2 },
+  'planner.hud.burnsStatus': { burns: 3, maxBurns: 2 },
   'planner.hud.metLabel': {},
   'planner.hud.met': { metSeconds: 0 },
   'planner.hud.settings': {},
@@ -442,23 +464,30 @@ describe('a quantity is never rendered without its unit (#83)', () => {
 describe('a missing key', () => {
   // Only reachable for a key that came from data — a scenario's briefKey or a coach
   // mark (D14). Every statically-known key is checked by the compiler.
+  //
+  // The key below is deliberately **not** a plausible contract brief. These cases used
+  // `brief.c05` and broke the day C05 shipped, which is a fair warning: any key shaped
+  // like a contract's is one milestone away from existing, and a test whose subject is
+  // "a key nobody has written" should not name something somebody is going to write.
+  const ABSENT = 'brief.notAContract';
+
   it('throws under the development policy, naming the key', () => {
     const dev = createCatalogue({ onMissingKey: 'throw' });
-    expect(() => dev.resolveDynamic('brief.c05')).toThrow(MissingMessageKeyError);
-    expect(() => dev.resolveDynamic('brief.c05')).toThrow(/brief\.c05/);
+    expect(() => dev.resolveDynamic(ABSENT)).toThrow(MissingMessageKeyError);
+    expect(() => dev.resolveDynamic(ABSENT)).toThrow(/brief\.notAContract/);
   });
 
   it('renders a visible marker under the production policy, never a blank', () => {
     const prod = createCatalogue({ onMissingKey: 'fallback' });
-    const rendered = prod.resolveDynamic('brief.c05');
-    expect(rendered).toBe(missingKeyFallback('brief.c05'));
+    const rendered = prod.resolveDynamic(ABSENT);
+    expect(rendered).toBe(missingKeyFallback(ABSENT));
     expect(rendered.trim()).not.toBe('');
-    expect(rendered).toContain('brief.c05');
+    expect(rendered).toContain(ABSENT);
   });
 
   it('is stable across calls, so it does not flicker between renders', () => {
     const prod = createCatalogue({ onMissingKey: 'fallback' });
-    expect(prod.resolveDynamic('brief.c05')).toBe(prod.resolveDynamic('brief.c05'));
+    expect(prod.resolveDynamic(ABSENT)).toBe(prod.resolveDynamic(ABSENT));
   });
 
   it('throws by default, because the safe default is the loud one', () => {
@@ -467,7 +496,7 @@ describe('a missing key', () => {
 
   it('reports which keys it has', () => {
     expect(catalogue.has('app.title')).toBe(true);
-    expect(catalogue.has('brief.c05')).toBe(false);
+    expect(catalogue.has(ABSENT)).toBe(false);
   });
 
   it('resolves a key that is present, when handed dynamically', () => {

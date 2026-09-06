@@ -191,6 +191,27 @@ export const PlannerScreen = ({
         exceededAtNode: null,
       };
 
+  // The same arrangement for the burn-count cap. A plan the engine could not evaluate has
+  // no timeline to count nodes on, but the *plan* still has nodes and the contract still
+  // has a cap, so the fallback reports both rather than hiding the readout at the moment
+  // a player most wants to know where they stand.
+  const burnCount = legality.evaluable
+    ? legality.constraints.burnCount
+    : {
+        kind: 'burn_count' as const,
+        violations: [],
+        burns: model.plan.nodes.length,
+        maxBurns: scenario.rules.maxBurns ?? null,
+        remaining:
+          scenario.rules.maxBurns === undefined
+            ? null
+            : scenario.rules.maxBurns - model.plan.nodes.length,
+        exceeded:
+          scenario.rules.maxBurns !== undefined &&
+          model.plan.nodes.length > scenario.rules.maxBurns,
+        exceededAtNode: null,
+      };
+
   const orbit =
     evaluation.timeline === null
       ? orbitReadout(
@@ -406,6 +427,7 @@ export const PlannerScreen = ({
         contractIndex={scenario.document.index}
         contractTitle={scenario.document.title}
         budget={budget}
+        burnCount={burnCount}
         startEpoch={scenario.startEpoch}
         scrubEpoch={model.scrub.epoch}
         onOpenHelp={() => undefined}

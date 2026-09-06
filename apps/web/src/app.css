@@ -446,10 +446,20 @@ body {
 }
 
 .hh-hud__budget,
+.hh-hud__burns,
 .hh-hud__met {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* §6.5's soft cap. Amber rather than red: the plan is still legal and still committable,
+   and red is the colour this UI reserves for something that stops you. The state is in
+   the readout's accessible name as a sentence too — §8.8 refuses to let colour carry a
+   meaning on its own — so this reinforces a fact the markup has already stated. */
+.hh-hud__burns [data-exceeded='true'] {
+  color: var(--warn);
+  font-weight: 600;
 }
 
 .hh-dv-bar {

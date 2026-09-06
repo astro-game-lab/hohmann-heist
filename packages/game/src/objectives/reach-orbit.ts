@@ -45,6 +45,11 @@
  *   matched everything the goal actually says about the orbit's shape.
  * - **An equatorial goal does not compare RAAN.** There is no node line to match, and
  *   the same argument applies: the inclination comparison has already bounded the plane.
+ * - **A goal that did not state an angle does not compare it.** Distinct from both of the
+ *   above: the shape may make the element perfectly meaningful while the *contract* is
+ *   indifferent to it. C01 asks for a 400 × 800 km ellipse in any orientation, because a
+ *   prograde burn from a circular orbit puts periapsis wherever the burn happened and no
+ *   inertial direction in this game means anything to a player.
  *
  * The test is on the **goal**, not on the achieved orbit, and that asymmetry is
  * deliberate. Testing the achieved orbit would make the set of compared elements depend
@@ -82,8 +87,34 @@ import { REACH_ORBIT_TOLERANCE } from './tolerances.js';
 export type ComparedElement =
   'periapsisRadius' | 'apoapsisRadius' | 'inclination' | 'raan' | 'argumentOfPeriapsis';
 
-/** Why an element was not compared. Both are properties of the goal, never of the result. */
-export type SkipReason = 'goal-circular' | 'goal-equatorial';
+/**
+ * Why an element was not compared. Every one is a property of the goal, never of the result.
+ *
+ * `goal-unoriented` is the goal declining to constrain an orientation it does not care
+ * about, which is a different statement from the shape making one meaningless. C01 is the
+ * case: its goal is a 400 × 800 km ellipse, so it genuinely *has* an apse line — but the
+ * contract asks for that shape in **any** orientation, because the ship starts on a
+ * circular orbit and a prograde burn makes whichever point it happens at the periapsis.
+ * Demanding a particular apse line there would be demanding alignment with an inertial
+ * axis nothing in the game draws or references.
+ */
+export type SkipReason = 'goal-circular' | 'goal-equatorial' | 'goal-unoriented';
+
+/**
+ * Which orientations a goal chose to constrain.
+ *
+ * Separate from the shape, and composed with it: an element is compared only when the
+ * goal's shape makes it meaningful **and** the goal stated it. The scenario schema carries
+ * this by making `raan_rad` and `argp_rad` optional, so a contract says "any orientation"
+ * by leaving the field out rather than by naming a value it does not mean.
+ */
+export interface GoalOrientation {
+  readonly raan: boolean;
+  readonly argp: boolean;
+}
+
+/** Both constrained — what a goal that states every element asks for. */
+export const FULLY_ORIENTED: GoalOrientation = Object.freeze({ raan: true, argp: true });
 
 /** One element's contribution to the verdict. */
 export type ElementComparison =
@@ -134,11 +165,27 @@ export interface ReachOrbitEvaluation {
   readonly tolerance: OrbitTolerance;
 }
 
-/** `true` when the goal's eccentricity is below the threshold that makes an apse line meaningful. */
-const goalIsCircular = (goal: OrbitShape): boolean => goal.eccentricity <= CIRCULAR_TOLERANCE;
+/**
+ * `true` when the goal's eccentricity is below the threshold that makes an apse line
+ * meaningful.
+ *
+ * Exported because the *loader* asks the same question, for the mirror-image reason. The
+ * schema lets a goal omit `argp_rad`, and the loader refuses a document that omits it
+ * while still having an apse line — which is exactly the condition under which this
+ * evaluator would have compared it. One predicate, so the file format and the rule that
+ * reads it cannot drift apart: a threshold changed in one place and not the other would
+ * make a contract either uncheckable or unloadable, and neither would be visible here.
+ */
+export const goalIsCircular = (goal: OrbitShape): boolean =>
+  goal.eccentricity <= CIRCULAR_TOLERANCE;
 
-/** `true` when `sin i` is below the threshold that makes a node line meaningful (§7.2). */
-const goalIsEquatorial = (goal: OrbitShape): boolean =>
+/**
+ * `true` when `sin i` is below the threshold that makes a node line meaningful (§7.2).
+ *
+ * Exported alongside {@link goalIsCircular}, and for the same reason. `sin i` rather than
+ * `i` so a retrograde equatorial goal is caught as well as a prograde one.
+ */
+export const goalIsEquatorial = (goal: OrbitShape): boolean =>
   Math.abs(Math.sin(goal.inclination)) <= EQUATORIAL_TOLERANCE;
 
 /**
@@ -239,6 +286,7 @@ export const evaluateReachOrbit = (
   timeline: Timeline,
   goal: OrbitShape,
   tolerance: OrbitTolerance = REACH_ORBIT_TOLERANCE,
+  oriented: GoalOrientation = FULLY_ORIENTED,
 ): ReachOrbitEvaluation => {
   const { elements, startEpoch } = finalArc(timeline);
 
@@ -252,8 +300,21 @@ export const evaluateReachOrbit = (
     argumentOfPeriapsisRad: elements.argp,
   };
 
+  // Two independent reasons to skip an angle, and they are reported apart: the shape can
+  // make it meaningless, or the goal can decline to constrain it. A briefing that says
+  // which elements were checked should be able to say which of the two applied.
   const circular = goalIsCircular(goal);
   const equatorial = goalIsEquatorial(goal);
+  const raanSkip: SkipReason | null = equatorial
+    ? 'goal-equatorial'
+    : oriented.raan
+      ? null
+      : 'goal-unoriented';
+  const argpSkip: SkipReason | null = circular
+    ? 'goal-circular'
+    : oriented.argp
+      ? null
+      : 'goal-unoriented';
 
   const comparisons: readonly ElementComparison[] = [
     compareScalar(
@@ -269,11 +330,11 @@ export const evaluateReachOrbit = (
       tolerance.radiusM,
     ),
     compareScalar('inclination', goal.inclination, achieved.inclinationRad, tolerance.angleRad),
-    equatorial
-      ? skipped('raan', 'goal-equatorial', goal.raan, achieved.raanRad)
+    raanSkip !== null
+      ? skipped('raan', raanSkip, goal.raan, achieved.raanRad)
       : compareAngle('raan', goal.raan, achieved.raanRad, tolerance.angleRad),
-    circular
-      ? skipped('argumentOfPeriapsis', 'goal-circular', goal.argp, achieved.argumentOfPeriapsisRad)
+    argpSkip !== null
+      ? skipped('argumentOfPeriapsis', argpSkip, goal.argp, achieved.argumentOfPeriapsisRad)
       : compareAngle(
           'argumentOfPeriapsis',
           goal.argp,

@@ -7,35 +7,56 @@
  * enforces rather than leaving to review, so it cannot reach the bundle and does not count
  * against NFR-020.
  *
+ * ## Three families, one per objective kind
+ *
+ * There is no general trajectory optimiser here and there is not going to be one. Each
+ * objective kind names a *family* of solutions that is the right shape for it, and the
+ * solver searches that family and nothing else:
+ *
+ * | Objective | Family | Free parameters |
+ * | --- | --- | --- |
+ * | `intercept` | Lambert transfers between two epochs | departure epoch, time of flight |
+ * | `reach_orbit` | tangential two-body transfers — Hohmann, or bi-elliptic where the ratio admits it | departure epoch (and the intermediate radius, when bi-elliptic) |
+ * | `station` | drift orbits — leave GEO radius, let the longitude slide, stop | one integer: how many drift revolutions |
+ *
+ * The families differ in more than their parameters. The Lambert one is genuinely a
+ * *search* — a grid of tens of thousands of solves refined by a simplex — because the
+ * cheapest transfer between two moving bodies has no closed form. The other two are
+ * closed-form constructions with a one-dimensional sweep on top, because they do: the
+ * minimum-Δv coplanar transfer between two circular orbits is a textbook result, and a
+ * drift orbit is one algebraic relation between how far off GEO radius you go and how
+ * fast the longitude slides. Where a closed form exists, searching for it would be
+ * pretending not to know something.
+ *
  * ## What par is, and what it is not
  *
  * DEP-12 states it plainly and this module may not overstate it: **par is the best
- * solution this search found, not a proven optimum.** What runs below is a fine grid over
- * the transfer parameters, refined by a simplex, over an explicitly enumerated family of
- * trajectories. Three limits follow, and they are limits of the *method*, not of this
- * implementation:
+ * solution these searches found, not a proven optimum.** Three limits follow, and they
+ * are limits of the *method*, not of this implementation:
  *
- * 1. **The family is Lambert transfers between two epochs.** A cheaper solution outside it —
- *    three burns, a bi-elliptic detour, a drift-and-catch — would not be found, because
- *    it is not searched for.
- * 2. **The grid can step over a narrow minimum.** The refinement finds the bottom of a
- *    valley it started in; it cannot find one the grid never entered. The grid is fine
+ * 1. **The family is chosen per objective kind, and a cheaper solution outside it is not
+ *    found because it is not looked for.** An `intercept` solved by a drift-and-catch, a
+ *    `reach_orbit` reached by a three-burn detour the bi-elliptic branch does not cover,
+ *    a `station` acquisition flown on a transfer rather than a drift — none of these is
+ *    searched.
+ * 2. **A grid can step over a narrow minimum.** The refinement finds the bottom of a
+ *    valley it started in; it cannot find one the grid never entered. The grids are fine
  *    enough that this is unlikely at v1.0's coplanar geometries and it is not impossible.
- * 3. **The revolution count is capped.** {@link DEFAULT_GRID}'s `maxRevolutions` bounds
- *    the search, not the physics, and a phasing contract that wants more revolutions than
- *    that must raise it and say so in its derivation.
+ * 3. **The revolution count is capped.** {@link revolutionCeilingFor} bounds the search,
+ *    not the physics, and the ceiling each contract got is reported in its derivation.
  *
  * This is why D12 publishes par and invites a player to beat it. If one does, the
  * derivation in `docs/PARS.md` is what their bug report gets checked against — so it
  * records the method, these limits, and the numbers, rather than only the answer.
  *
- * ## Why the search minimises a Lambert cost and then evaluates the game's own plan
+ * ## Why a search minimises a continuous cost and then evaluates the game's own plan
  *
  * The two stages measure different things on purpose. The **search** minimises a
- * continuous quantity — the departure impulse a Lambert arc needs — because a simplex
- * needs a surface it can walk down, and the quantity a plan actually costs is a staircase:
- * DEP-09 rounds every Δv component to 1e-4 m/s, so the evaluated cost is flat across whole
- * neighbourhoods and a simplex would stall on the first plateau it met.
+ * continuous quantity — the departure impulse a Lambert arc needs, or how far a resulting
+ * orbit sits from the goal — because a simplex needs a surface it can walk down, and the
+ * quantity a plan actually costs is a staircase: DEP-09 rounds every Δv component to
+ * 1e-4 m/s, so the evaluated cost is flat across whole neighbourhoods and a simplex would
+ * stall on the first plateau it met.
  *
  * The **answer** is then built as a real `Plan`, quantised at entry the way a player's
  * would be (FR-105), and run through the same evaluator the game runs — so the published
@@ -44,18 +65,37 @@
  * `tools/content/evaluate.ts`, which the content suite also imports, so the figure written
  * into the scenario and the figure asserted against it cannot drift apart.
  */
-import type { Epoch, LambertBranchChoice, State } from '@hh/astro';
-import { addSeconds, eci, solveLambert, solveLambertBranches, toRtn } from '@hh/astro';
+import type { Epoch, LambertBranchChoice, OrbitShape, State } from '@hh/astro';
+import {
+  OMEGA_EARTH,
+  addSeconds,
+  apoapsisRadius,
+  biEllipticTransfer,
+  eci,
+  elementsFromState,
+  period,
+  periapsisRadius,
+  solveLambert,
+  solveLambertBranches,
+  toRtn,
+} from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
-import { V, seconds } from '@hh/math';
+import { evaluateReachOrbit, goalIsCircular } from '@hh/game';
+import { V, metres, seconds } from '@hh/math';
 import type { Arc } from '@hh/propagation';
 import { createArc, stateAt } from '@hh/propagation';
-import type { Plan } from '@hh/sim';
-import { createManeuverNode, createPlan } from '@hh/sim';
+import type { Plan, Timeline } from '@hh/sim';
+import { createManeuverNode, createPlan, stateAt as timelineStateAt } from '@hh/sim';
 
 import type { ContractOutcome } from '../content/evaluate.js';
-import { isReferenceSolution, outcomeFor } from '../content/evaluate.js';
+import { isReferenceSolution, outcomeFor, timelineFor } from '../content/evaluate.js';
 import { minimise } from './nelder-mead.js';
+
+/** Semi-major axis of a Cartesian state, m. `a = p / (1 − e²)`, through `@hh/astro`. */
+const semiMajorAxisOf = (state: State, mu: number) => {
+  const elements = elementsFromState(state.position, state.velocity, mu);
+  return metres(elements.semiLatusRectum / (1 - elements.eccentricity * elements.eccentricity));
+};
 
 /** How finely the coarse stage samples, and how far it looks. */
 export interface GridSpec {
@@ -77,9 +117,10 @@ export interface GridSpec {
  * transfer whose cost changes by roughly 1 m/s per 30 s of departure error, so every
  * minimum is bracketed several times over before the simplex starts.
  *
- * `maxRevolutions: 4` covers everything v1.0 Act I–III content asks for. §6.8's phasing
- * contracts go to eight revolutions and will have to raise it; the cost is linear in the
- * ceiling, and a contract that raises it says so in its derivation.
+ * `maxRevolutions: 4` is a **floor**, not the ceiling that gets used: it is what a short
+ * contract like C03 searches, and {@link revolutionCeilingFor} raises it from the
+ * scenario's own horizon for anything longer. §6.8's phasing contracts need eight, and
+ * they get eight by being twelve hours long rather than by naming a number.
  *
  * `minTimeOfFlightSeconds: 60` keeps the grid off transfers so short that the two
  * positions are effectively the same point. Nothing physical happens there — the cost
@@ -90,6 +131,50 @@ export const DEFAULT_GRID: GridSpec = Object.freeze({
   arrivalSamples: 161,
   maxRevolutions: 4,
   minTimeOfFlightSeconds: 60,
+});
+
+/**
+ * Hard ceiling on the revolution count, whatever the horizon says.
+ *
+ * The Lambert stage's cost is linear in this, so an unbounded derivation from the horizon
+ * would let one long contract dominate the CI step. Sixteen is comfortably above §6.8's
+ * deepest phasing contract at eight and comfortably below anything that would matter to
+ * the job timeout. A contract that genuinely needs more than this should say so out loud
+ * by changing the constant, not by growing until nobody notices.
+ */
+const MAX_REVOLUTION_CEILING = 16;
+
+/**
+ * The revolution ceiling for one contract, derived from its own horizon — #93.
+ *
+ * `DEFAULT_GRID.maxRevolutions` used to be the ceiling for every contract, and its
+ * docstring said what was wrong with that: *"§6.8's phasing contracts go to eight
+ * revolutions and will have to raise it … and a contract that raises it says so in its
+ * derivation."* The obvious reading of that is a per-contract override, and the obvious
+ * override is a table of contract ids — which is the one thing `scenario/load.ts` refuses
+ * to have, for the reason it gives at length: the moment a contract needs a special case
+ * in code, contracts stop being data.
+ *
+ * So the ceiling is **derived**. A transfer cannot complete more revolutions than fit in
+ * the planning horizon, so the horizon divided by the ship's own orbital period is an
+ * upper bound that costs nothing to compute and is a property of the scenario rather than
+ * of a lookup table. C03's six-hour horizon gives 3 and is floored at the default 4;
+ * C05's thirteen-and-a-half-hour horizon gives 8, which is exactly what §6.8's phasing
+ * pair needs. Nothing had to be told about either contract.
+ *
+ * The ceiling reached is reported in {@link LambertSearch} and lands in `docs/PARS.md`,
+ * which is the "says so in its derivation" half of the requirement.
+ */
+export const revolutionCeilingFor = (scenario: LoadedScenario): number => {
+  const shipPeriod = period(semiMajorAxisOf(scenario.ship.state, scenario.mu), scenario.mu);
+  const fitsInHorizon = Math.floor(scenario.horizonSeconds / shipPeriod);
+  return Math.min(MAX_REVOLUTION_CEILING, Math.max(DEFAULT_GRID.maxRevolutions, fitsInHorizon));
+};
+
+/** The grid one contract searches: the default, with its own revolution ceiling. */
+export const gridFor = (scenario: LoadedScenario): GridSpec => ({
+  ...DEFAULT_GRID,
+  maxRevolutions: revolutionCeilingFor(scenario),
 });
 
 /**
@@ -118,10 +203,9 @@ interface Candidate {
   readonly dvMps: number;
 }
 
-/** What the solver found, and enough about how it looked to write a derivation. */
-export interface ParSolution {
-  readonly plan: Plan;
-  readonly outcome: ContractOutcome;
+/** What the Lambert search did, for an `intercept`. */
+export interface LambertSearch {
+  readonly kind: 'lambert';
   readonly candidate: Candidate;
   readonly grid: GridSpec;
   /** Grid points evaluated, including those with no transfer. */
@@ -136,6 +220,94 @@ export interface ParSolution {
   readonly refinementIterations: number;
   /** `true` when every simplex run stopped on its tolerance rather than on its cap. */
   readonly refinementConverged: boolean;
+}
+
+/**
+ * What the phasing sweep did, for an `intercept` between two orbits of the same radius.
+ *
+ * A separate family from {@link LambertSearch} rather than a special case inside it,
+ * because Lambert's problem cannot express this solution at all — see {@link solvePhasing}.
+ */
+export interface PhasingSearch {
+  readonly kind: 'phasing';
+  /** Complete revolutions the ship flies on the phasing orbit. */
+  readonly shipRevolutions: number;
+  /** Complete revolutions the target flies in the same time. */
+  readonly targetRevolutions: number;
+  /** Phase the ship had to make up, radians, measured ahead of the ship at the start. */
+  readonly phaseRad: number;
+  /** Period of the phasing orbit, s. Below the ship's own to catch up, above it to fall back. */
+  readonly phasingPeriodSeconds: number;
+  /** The apsis the phasing orbit adds — periapsis when catching up, apoapsis when falling back. */
+  readonly otherApsisRadiusM: number;
+  readonly membersEnumerated: number;
+  readonly membersFeasible: number;
+  /**
+   * The cheapest the Lambert family managed on the same contract, or `null` when it found
+   * nothing admissible. Reported because both families are searched and the derivation
+   * should say what the one that lost was worth.
+   */
+  readonly lambertBestMps: number | null;
+}
+
+/** What the tangential-transfer construction did, for a `reach_orbit`. */
+export interface TransferSearch {
+  readonly kind: 'transfer';
+  /** Which closed form the winner came from. */
+  readonly shape: 'hohmann' | 'bi-elliptic';
+  /** Impulses the construction used: one for an apsis raise, two or three otherwise. */
+  readonly impulses: number;
+  /** Ship radius at departure, m. */
+  readonly departureRadiusM: number;
+  /** The radius the transfer targets, m — the goal's far apsis. */
+  readonly arrivalRadiusM: number;
+  /** `arrivalRadiusM / departureRadiusM`, the number the bi-elliptic threshold is about. */
+  readonly radiusRatio: number;
+  /** Bi-elliptic intermediate apoapsis, m — `null` when the winner is a Hohmann. */
+  readonly intermediateRadiusM: number | null;
+  /** Whether the bi-elliptic branch was searched at all, and why not when it was not. */
+  readonly biEllipticConsidered: boolean;
+  /** Departure epochs sampled while orienting the transfer against the goal's apse line. */
+  readonly departureSamples: number;
+  /** Simplex iterations spent refining the departure epoch. */
+  readonly refinementIterations: number;
+  readonly refinementConverged: boolean;
+}
+
+/** One member of the drift family: `revolutions` drift orbits, and what it costs. */
+export interface DriftPoint {
+  readonly revolutions: number;
+  /** Period of the drift orbit, s. */
+  readonly driftPeriodSeconds: number;
+  /** Semi-major axis offset from the ship's starting radius, m. Negative drifts east. */
+  readonly semiMajorAxisOffsetM: number;
+  /** Both impulses summed, m/s — what the closed form says this member costs. */
+  readonly totalDvMps: number;
+  /** Mission elapsed time at the second burn, s. */
+  readonly elapsedSeconds: number;
+  /** Whether the game accepted it: objective met and commit allowed. */
+  readonly feasible: boolean;
+}
+
+/** What the drift-orbit sweep did, for a `station`. */
+export interface DriftSearch {
+  readonly kind: 'drift';
+  /** Every member enumerated, cheapest last. The Δv/time trade §6.8 names (#94). */
+  readonly family: readonly DriftPoint[];
+  /** The member that won. */
+  readonly winner: DriftPoint;
+  /** Largest revolution count the horizon admitted. */
+  readonly revolutionCeiling: number;
+}
+
+/** How the winner was found, in terms particular to its family. */
+export type SearchReport = LambertSearch | PhasingSearch | TransferSearch | DriftSearch;
+
+/** What the solver found, and enough about how it looked to write a derivation. */
+export interface ParSolution {
+  readonly plan: Plan;
+  readonly outcome: ContractOutcome;
+  readonly search: SearchReport;
 }
 
 /** The ship's coasting arc, and the target's, over the whole planning horizon. */
@@ -282,26 +454,164 @@ const linspace = (lo: number, hi: number, count: number): readonly number[] =>
   count <= 1 ? [lo] : Array.from({ length: count }, (_, i) => lo + ((hi - lo) * i) / (count - 1));
 
 /**
- * Compute par for one contract.
+ * The phasing family: catch a target on your own orbit by changing your period — #93.
  *
- * @throws Error when the objective is not one this solver has a strategy for. Deliberate:
- * a solver that quietly returned its best guess for a `rendezvous` by solving the
- * `intercept` inside it would publish a par that no rendezvous can achieve, and the
- * scenario would ship with a number nobody could reproduce. `reach_orbit` (C01, C02, C04)
- * and the proximity kinds that need an arrival burn (C08 onward) get their strategies with
- * the contracts that need them.
+ * ## Why this is a family and not a Lambert transfer
+ *
+ * When the ship and the target share a circular orbit there is nowhere to transfer *to*.
+ * The manoeuvre is to leave the circle, fly a different period for a whole number of
+ * revolutions, and arrive back at the point you left at the moment the target reaches it.
+ * Departure and arrival are **the same position**.
+ *
+ * That is precisely the geometry `solveLambert` refuses. Lambert's problem takes two
+ * positions and a time of flight; with the two positions coincident the transfer angle is
+ * zero, the problem is degenerate, and the solver reports a `RangeError` rather than one
+ * of the infinitely many arcs that satisfy it. So the Lambert sweep cannot find this
+ * solution — it can only creep towards it and get worse as it does, which is what it did:
+ * on C05 it returned 48.26 m/s from seventeen families with only two of them feasible,
+ * against a closed form of 36.00. Not a tuning problem. The family was wrong.
+ *
+ * ## The two integers
+ *
+ * The ship flies `shipRevolutions` complete revolutions of a phasing orbit and returns to
+ * where it started; the target must be there when it arrives, which happens after it has
+ * flown a whole number of its own. Writing `Δθ` for how far ahead the target starts,
+ *
+ *     t = T·(targetRevolutions − Δθ/2π),   T′ = t / shipRevolutions
+ *
+ * and vis-viva at the shared radius gives the impulse. Both integers matter and neither
+ * is redundant: `shipRevolutions < targetRevolutions` drops into a **lower, faster** orbit
+ * to catch something ahead — §6.8's whole lesson for C05 — while the reverse climbs into a
+ * **higher, slower** one to let something behind catch up, which is C06. One loop covers
+ * both, and which one a contract gets is a fact about its phase angle rather than about
+ * this code.
+ *
+ * ## One impulse, and the floor
+ *
+ * One, for the same reason the Lambert branch takes one: DEP-04 asks for 1 000 m of range
+ * and says nothing about relative velocity, so the burn that re-circularises at the end is
+ * not bought. The phasing orbit's other apsis is reported because it is the number the
+ * altitude floor acts on — a faster orbit has a lower periapsis, and at a small enough
+ * revolution count it goes through the floor. Every member is evaluated through the game's
+ * own legality check, so a member that would breach the floor is refused there rather than
+ * being screened out here by a rule written twice.
  */
-export const solvePar = (scenario: LoadedScenario, grid: GridSpec = DEFAULT_GRID): ParSolution => {
-  const objective = scenario.objective;
-  if (objective.kind !== 'intercept') {
-    throw new Error(
-      `${scenario.id}: no par strategy for a "${objective.kind}" objective. ` +
-        'This solver searches Lambert transfers for an `intercept`, which is ' +
-        'the only objective kind shipped so far. Add the strategy with the contract that ' +
-        'needs it rather than reusing this one — see tools/pars/solve.ts.',
-    );
+const solvePhasing = (
+  scenario: LoadedScenario,
+  target: LoadedScenario['targets'][number],
+  ceiling: number,
+): {
+  readonly plan: Plan;
+  readonly outcome: ContractOutcome;
+  readonly shipRevolutions: number;
+  readonly targetRevolutions: number;
+  readonly phaseRad: number;
+  readonly phasingPeriodSeconds: number;
+  readonly otherApsisRadiusM: number;
+  readonly enumerated: number;
+  readonly feasible: number;
+} | null => {
+  const shipRadius = V.norm(scenario.ship.state.position);
+  const targetRadius = V.norm(target.state.position);
+  // Same circular orbit, to within a metre. Anything else is a transfer and belongs to
+  // the Lambert family; this returns `null` and the caller uses that one alone.
+  if (Math.abs(shipRadius - targetRadius) > 1) return null;
+
+  const shipPeriod = period(semiMajorAxisOf(scenario.ship.state, scenario.mu), scenario.mu);
+  const circularSpeed = Math.sqrt(scenario.mu / shipRadius);
+
+  // How far ahead the target is, in `[0, 2π)`. `atan2` on both positions and a normalised
+  // difference — never `acos` on a dot product, which cannot tell ahead from behind and is
+  // the entire distinction C05 and C06 are built on (NFR-006).
+  const angleOf = (position: { readonly x: number; readonly y: number }): number =>
+    Math.atan2(position.y, position.x);
+  const raw = angleOf(target.state.position) - angleOf(scenario.ship.state.position);
+  const phase = ((raw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+  let winner: {
+    plan: Plan;
+    outcome: ContractOutcome;
+    shipRevolutions: number;
+    targetRevolutions: number;
+    phasingPeriodSeconds: number;
+    otherApsisRadiusM: number;
+  } | null = null;
+  let enumerated = 0;
+  let feasible = 0;
+
+  // The two integers are bounded differently, and conflating them costs solutions.
+  //
+  // `shipRevolutions` is how many laps the ship itself flies, so the horizon-derived
+  // ceiling is exactly right for it. `targetRevolutions` is not a lap count: the elapsed
+  // time is `T·(k − Δθ/2π)`, so a `k` of nine describes a little over eight revolutions
+  // when the target starts most of a lap ahead. Bounding it by the same ceiling silently
+  // removed C06's answer — the target starts 335° ahead, the winning member is `k = 9`,
+  // and it takes 8.07 revolutions rather than nine. The deadline test below is the real
+  // bound; this only stops the loop.
+  const targetRevolutionCap = Math.ceil(scenario.rules.deadlineSeconds / shipPeriod) + 1;
+
+  for (let targetRevolutions = 1; targetRevolutions <= targetRevolutionCap; targetRevolutions++) {
+    const elapsed = shipPeriod * (targetRevolutions - phase / (2 * Math.PI));
+    if (elapsed <= 0 || elapsed > scenario.rules.deadlineSeconds) continue;
+
+    for (let shipRevolutions = 1; shipRevolutions <= ceiling; shipRevolutions++) {
+      const phasingPeriod = elapsed / shipRevolutions;
+      const phasingAxis = Math.cbrt(scenario.mu * (phasingPeriod / (2 * Math.PI)) ** 2);
+      // The transfer orbit has to exist: an apsis at or below the centre is not an orbit.
+      const otherApsis = 2 * phasingAxis - shipRadius;
+      if (otherApsis <= 0) continue;
+      enumerated++;
+
+      const speed = Math.sqrt(scenario.mu * (2 / shipRadius - 1 / phasingAxis));
+      const plan = planForImpulses(scenario, [{ met: 0, magnitudeMps: speed - circularSpeed }]);
+      if (plan === null) continue;
+      const outcome = outcomeFor(scenario, plan);
+      if (outcome === null || !isReferenceSolution(scenario, outcome)) continue;
+      feasible++;
+
+      if (
+        winner === null ||
+        outcome.dvMps < winner.outcome.dvMps ||
+        (outcome.dvMps === winner.outcome.dvMps &&
+          (outcome.metSeconds ?? Number.POSITIVE_INFINITY) <
+            (winner.outcome.metSeconds ?? Number.POSITIVE_INFINITY))
+      ) {
+        winner = {
+          plan,
+          outcome,
+          shipRevolutions,
+          targetRevolutions,
+          phasingPeriodSeconds: phasingPeriod,
+          otherApsisRadiusM: otherApsis,
+        };
+      }
+    }
   }
 
+  return winner === null ? null : { ...winner, phaseRad: phase, enumerated, feasible };
+};
+
+/**
+ * The `intercept` strategy: Lambert transfers between two epochs, and phasing orbits.
+ *
+ * Two families, because one of them cannot see the other's answers. Lambert covers a
+ * transfer between two *different* places; {@link solvePhasing} covers the case where
+ * there is only one place, which Lambert's problem is degenerate at. Both are searched and
+ * the cheaper admissible answer wins, so a contract does not have to declare which shape
+ * it is — C03 is a climb and takes the Lambert answer, C05 and C06 are phasing problems
+ * and take the other, and nothing in either scenario file says so.
+ *
+ * One impulse either way, because DEP-04 asks for 1 000 m of range and says nothing about
+ * relative velocity — see {@link planFor}.
+ */
+const solveIntercept = (
+  scenario: LoadedScenario,
+  // The proximity member of the loaded union, which is the one carrying a target. Its
+  // `kind` is `ProximityKind` rather than the literal, so it is picked out by the field
+  // that distinguishes it — the same discriminator `isProximityObjective` uses.
+  objective: Extract<LoadedScenario['objective'], { readonly targetId: string }>,
+  grid: GridSpec,
+): ParSolution => {
   const target = scenario.targets.find((candidate) => candidate.id === objective.targetId);
   if (target === undefined) {
     throw new Error(`${scenario.id}: the loader admitted an objective naming an absent target`);
@@ -398,7 +708,7 @@ export const solvePar = (scenario: LoadedScenario, grid: GridSpec = DEFAULT_GRID
     const plan = planFor(geometry, candidate);
     if (plan === null) continue;
     const outcome = outcomeFor(scenario, plan);
-    if (outcome === null || !isReferenceSolution(outcome)) continue;
+    if (outcome === null || !isReferenceSolution(scenario, outcome)) continue;
     familiesFeasible++;
 
     // Δv first, then time — §6.7's own ordering, and the leaderboard's. A tie on both is
@@ -414,26 +724,687 @@ export const solvePar = (scenario: LoadedScenario, grid: GridSpec = DEFAULT_GRID
     }
   }
 
+  // ── The other family ──────────────────────────────────────────────────────────
+  const phasing = solvePhasing(scenario, target, grid.maxRevolutions);
+  const lambertBestMps = winner === null ? null : winner.outcome.dvMps;
+
+  // Cheaper wins, then earlier — §6.7's own ordering, applied across families exactly as
+  // it is applied within one.
+  const phasingWins =
+    phasing !== null &&
+    (winner === null ||
+      phasing.outcome.dvMps < winner.outcome.dvMps ||
+      (phasing.outcome.dvMps === winner.outcome.dvMps &&
+        (phasing.outcome.metSeconds ?? Number.POSITIVE_INFINITY) <
+          (winner.outcome.metSeconds ?? Number.POSITIVE_INFINITY)));
+
+  // `phasingWins` carries `phasing !== null`, and the narrowing travels through the
+  // aliased condition — repeating it here would be a branch nothing can reach.
+  if (phasingWins) {
+    return {
+      plan: phasing.plan,
+      outcome: phasing.outcome,
+      search: {
+        kind: 'phasing',
+        shipRevolutions: phasing.shipRevolutions,
+        targetRevolutions: phasing.targetRevolutions,
+        phaseRad: phasing.phaseRad,
+        phasingPeriodSeconds: phasing.phasingPeriodSeconds,
+        otherApsisRadiusM: phasing.otherApsisRadiusM,
+        membersEnumerated: phasing.enumerated,
+        membersFeasible: phasing.feasible,
+        lambertBestMps,
+      },
+    };
+  }
+
   if (winner === null) {
     throw new Error(
-      `${scenario.id}: the search found no plan that meets the objective and that the game ` +
-        `would let a player commit. ${String(families.length)} transfer families were ` +
-        `refined from ${String(gridPoints - gridSkipped)} usable grid points. Either the ` +
-        'contract is unsolvable inside its budget, deadline and horizon, or the search ' +
-        'family is the wrong one for it.',
+      `${scenario.id}: neither search family found a plan that meets the objective and ` +
+        `that the game would let a player commit. ${String(families.length)} Lambert ` +
+        `transfer families were refined from ${String(gridPoints - gridSkipped)} usable ` +
+        'grid points, and the phasing sweep found nothing admissible either. Either the ' +
+        'contract is unsolvable inside its budget, deadline and horizon, or it needs a ' +
+        'family neither of these is.',
     );
   }
 
   return {
     plan: winner.plan,
     outcome: winner.outcome,
-    candidate: winner.candidate,
-    grid,
-    gridPoints,
-    gridSkipped,
-    familiesFound: families.length,
-    familiesFeasible,
-    refinementIterations,
-    refinementConverged,
+    search: {
+      kind: 'lambert',
+      candidate: winner.candidate,
+      grid,
+      gridPoints,
+      gridSkipped,
+      familiesFound: families.length,
+      familiesFeasible,
+      refinementIterations,
+      refinementConverged,
+    },
   };
+};
+
+// ── The `reach_orbit` strategy ───────────────────────────────────────────────────────
+
+/**
+ * How finely the departure epoch is sampled while orienting a transfer, per revolution.
+ *
+ * 361 samples over one revolution is a step of one degree of the ship's position. The
+ * quantity being resolved is DEP-13's 0.1° angle tolerance, so the grid is ten times
+ * coarser than the tolerance band it is looking for — deliberately: the grid only has to
+ * *bracket* the band, and the simplex below then walks to its centre. A grid fine enough
+ * to land inside the band on its own would be doing the refinement's job at ten times the
+ * cost, and would still not be centred.
+ */
+const ORIENTATION_SAMPLES_PER_REVOLUTION = 361;
+
+/**
+ * How far a resulting orbit sits from the goal, in units of its own tolerance.
+ *
+ * Zero when every compared element is exactly right, `1` when each is exactly at its
+ * tolerance, and smoothly increasing beyond — so a simplex has a surface to walk down and
+ * its minimum is the **centre** of the tolerance band rather than an edge of it. Centring
+ * matters: a departure epoch chosen at the edge would meet the objective by a hair, and
+ * §13.4 replays the stored answer on a different engine than the one that wrote it.
+ *
+ * The comparisons come from `evaluateReachOrbit` itself rather than being recomputed
+ * here, so the elements this cost is built from are exactly the elements the game judges
+ * — including which ones a degenerate goal skips.
+ */
+const goalMismatch = (evaluation: ReturnType<typeof evaluateReachOrbit>): number =>
+  evaluation.comparisons.reduce((sum, comparison) => {
+    if (!comparison.compared) return sum;
+    const scaled = comparison.difference / comparison.tolerance;
+    return sum + scaled * scaled;
+  }, 0);
+
+/** The apsis radii a `reach_orbit` goal asks for. */
+interface GoalApsides {
+  readonly periapsisM: number;
+  readonly apoapsisM: number;
+}
+
+const apsidesOf = (goal: OrbitShape): GoalApsides => ({
+  periapsisM: periapsisRadius(goal),
+  apoapsisM: apoapsisRadius(goal),
+});
+
+/** A tangential impulse: when, and how much, along the velocity at that moment. */
+interface Impulse {
+  readonly met: number;
+  readonly magnitudeMps: number;
+}
+
+/**
+ * The plan a list of tangential impulses describes, built the way the game would.
+ *
+ * Each impulse is applied along the **velocity at the moment it happens**, which is what
+ * "prograde" means and what a player dragging the prograde handle gets. The state at each
+ * burn comes from the timeline built out of the burns before it, so this is the real
+ * trajectory rather than a closed form's idea of one — a second burn placed at the
+ * transfer's apoapsis is placed where the *plan* actually put the apoapsis.
+ *
+ * Returns `null` rather than throwing for a trajectory the engine cannot evaluate: a
+ * sweep over departure epochs walks over those, and they are an ordinary thing to skip.
+ */
+const planForImpulses = (scenario: LoadedScenario, impulses: readonly Impulse[]): Plan | null => {
+  const nodes = [];
+  for (const impulse of impulses) {
+    // Outside the horizon there is no timeline to read a state from, and `stateAt` says so
+    // by throwing (FR-103). A sweep walks over epochs past the horizon as a matter of
+    // course — the drift family enumerates one member past the last that fits, so the
+    // derivation can say the deadline is what stopped it — so this is a `null`, not a bug.
+    if (impulse.met < 0 || impulse.met > scenario.horizonSeconds) return null;
+    const epoch = addSeconds(scenario.startEpoch, seconds(impulse.met));
+    // The trajectory as flown so far: no nodes for the first impulse, every earlier node
+    // for the ones after it.
+    const result = timelineFor(scenario, createPlan(nodes));
+    if (!result.ok) return null;
+    const at = stateAtTimeline(result.timeline, epoch);
+    if (at === null) return null;
+    const direction = V.scale(at.velocity, 1 / V.norm(at.velocity));
+    const deltaVEci = eci(V.scale(direction, impulse.magnitudeMps));
+    nodes.push(
+      createManeuverNode({
+        epoch,
+        deltaVRtn: toRtn(deltaVEci, at.position, at.velocity),
+      }),
+    );
+  }
+  return createPlan(nodes);
+};
+
+/** A timeline's state at an epoch, or `null` where it did not converge. */
+const stateAtTimeline = (timeline: Timeline, at: Epoch): State | null => {
+  const result = timelineStateAt(timeline, at);
+  return result.converged ? result.state : null;
+};
+
+/** One candidate transfer: its impulses, and what shape produced it. */
+interface TransferShape {
+  readonly shape: 'hohmann' | 'bi-elliptic';
+  /** Impulse magnitudes in order, signed along velocity. */
+  readonly magnitudes: readonly number[];
+  /** Offsets from the departure epoch, seconds. */
+  readonly offsets: readonly number[];
+  readonly intermediateRadiusM: number | null;
+}
+
+/**
+ * The tangential transfers from a circular radius to a goal, cheapest construction first.
+ *
+ * Which construction applies is read off the **goal's own apsides against the ship's
+ * radius**, and the test is "is one of the goal's apsides already here", not "which of
+ * them is nearer".
+ *
+ * That distinction is the whole of it, and getting it wrong is silent. A *circular* goal
+ * has both apsides at the same radius, so a nearer-of-the-two test picks whichever the
+ * comparison's tie-break happens to favour and answers a one-impulse transfer — which
+ * raises the far apsis correctly and leaves the near one four hundred kilometres low.
+ * Every element compared but one is then right, which is exactly the kind of wrong that
+ * reads as nearly correct. So:
+ *
+ * - **The goal's periapsis is already where the ship is.** One prograde impulse raises
+ *   apoapsis to the goal's and stops. This is C01, and the circularisation a second burn
+ *   would add buys nothing the goal asks for — the same argument DEP-04 makes for an
+ *   `intercept`, applied to a shape rather than to a range.
+ * - **The goal's apoapsis is already where the ship is.** The mirror: one retrograde
+ *   impulse lowers periapsis. Nothing in v1.0 uses it; it is here because leaving it out
+ *   would make the rule "an apsis raise" rather than "an apsis change", and the next
+ *   contract to want the inward case would get a wrong answer rather than an error.
+ * - **Neither.** The goal is somewhere else entirely, and reaching it takes two impulses
+ *   — the Hohmann pair, and above a radius ratio of 11.94 the bi-elliptic branch as well.
+ *
+ * @throws Error for an **eccentric** goal that shares neither apsis with the ship's
+ * orbit. A two-impulse tangential transfer ends on a circle, so it cannot reach one, and
+ * answering with the Hohmann transfer to its periapsis would publish the cost of arriving
+ * on a different orbit. No v1.0 contract asks for it; the day one does, it needs a family
+ * rather than a fallback.
+ */
+const transferShapesFor = (
+  departureRadiusM: number,
+  departureSpeedMps: number,
+  goal: GoalApsides,
+  radiusToleranceM: number,
+  mu: number,
+): readonly TransferShape[] => {
+  const here = (radius: number): boolean => Math.abs(radius - departureRadiusM) <= radiusToleranceM;
+  const circularGoal = goal.apoapsisM - goal.periapsisM <= 2 * radiusToleranceM;
+
+  /**
+   * The impulse from **vis-viva at the ship's actual state**, not from `hohmannTransfer`.
+   *
+   * The closed form takes two circular radii and reports the burn between them, which is
+   * the ship's burn only when the ship is on the inner circle. C01's is not: it flies a
+   * 400 × 450 km ellipse, so at its own periapsis it is already moving faster than
+   * circular and needs 95.04 m/s to raise apoapsis to 800 km where a circular departure
+   * would need 109.12. Using the closed form there asks for the right *orbit* with the
+   * wrong *burn*, and misses by 300 km.
+   *
+   * `hohmannTransfer` keeps its job in `crosscheck.ts`, which is the better division of
+   * labour anyway: the search reads the state it is actually at, and the closed form
+   * checks the answer from the other direction.
+   */
+  const impulseTo = (targetApsisM: number, fromRadiusM: number, fromSpeedMps: number): number => {
+    const semiMajorAxis = (fromRadiusM + targetApsisM) / 2;
+    return Math.sqrt(mu * (2 / fromRadiusM - 1 / semiMajorAxis)) - fromSpeedMps;
+  };
+
+  const build = (targetRadius: number, impulses: 1 | 2): TransferShape => {
+    const transferAxis = (departureRadiusM + targetRadius) / 2;
+    const first = impulseTo(targetRadius, departureRadiusM, departureSpeedMps);
+    if (impulses === 1) {
+      return { shape: 'hohmann', magnitudes: [first], offsets: [0], intermediateRadiusM: null };
+    }
+    // The second impulse circularises at the far apsis: the circular speed there against
+    // the speed the transfer ellipse arrives with.
+    const arrivalSpeed = Math.sqrt(mu * (2 / targetRadius - 1 / transferAxis));
+    return {
+      shape: 'hohmann',
+      magnitudes: [first, Math.sqrt(mu / targetRadius) - arrivalSpeed],
+      offsets: [0, Math.PI * Math.sqrt(transferAxis ** 3 / mu)],
+      intermediateRadiusM: null,
+    };
+  };
+
+  // An apsis already at the ship's radius, and the goal is not simply the orbit it is
+  // already on: one impulse moves the other apsis and the plan is finished.
+  if (!circularGoal && here(goal.periapsisM)) return [build(goal.apoapsisM, 1)];
+  if (!circularGoal && here(goal.apoapsisM)) return [build(goal.periapsisM, 1)];
+
+  // An eccentric goal sharing neither apsis with the ship's current radius: no tangential
+  // transfer reaches it, because a two-impulse tangential transfer ends on a circle.
+  // Empty rather than thrown — the departure sweep visits this at *most* of the epochs it
+  // tries, since the ship is only at an apsis twice per revolution, and walking over an
+  // epoch that offers no transfer is the ordinary case rather than an error. When no epoch
+  // works at all, `solveReachOrbit` says so with the whole sweep's evidence.
+  if (!circularGoal) return [];
+
+  const targetRadius = goal.periapsisM;
+  const shapes: TransferShape[] = [build(targetRadius, 2)];
+
+  if (!biEllipticCouldWin(departureRadiusM, targetRadius)) return shapes;
+
+  const best = bestBiElliptic(departureRadiusM, targetRadius, mu);
+  if (best !== null) shapes.push(best);
+  return shapes;
+};
+
+/**
+ * `docs/PHYSICS.md`'s measured lower threshold: below this, Hohmann wins for every `r_b`.
+ *
+ * 11.94 rather than 15.58, and the two are not the ends of one comparison — that document
+ * says so at length. 11.94 is where the bi-elliptic with `r_b → ∞`, the best it can ever
+ * do, ties Hohmann; below it there is no intermediate radius that wins, so searching is
+ * provably wasted. Above it the answer depends on `r_b`, which is what makes it a search.
+ */
+const BI_ELLIPTIC_LOWER_THRESHOLD = 11.94;
+
+const biEllipticCouldWin = (r1: number, r2: number): boolean =>
+  Math.max(r1, r2) / Math.min(r1, r2) > BI_ELLIPTIC_LOWER_THRESHOLD;
+
+/**
+ * The cheapest bi-elliptic transfer, searched over its one free parameter.
+ *
+ * `r_b` is a genuine free choice — `biEllipticTransfer` says so, and §6.8's C11 is built
+ * on the trade it opens. The cost falls monotonically towards `r_b → ∞` above the upper
+ * threshold, so an unbounded search would return "escape and come back"; the sweep is
+ * bounded at the horizon-crossing radius a contract could actually fly, and the simplex
+ * refines inside it. C11 is where this earns its keep; nothing in M3 reaches it.
+ */
+const bestBiElliptic = (r1: number, r2: number, mu: number): TransferShape | null => {
+  const outer = Math.max(r1, r2);
+  const cost = (rb: number): number => {
+    if (rb <= outer) return Number.POSITIVE_INFINITY;
+    try {
+      return biEllipticTransfer(metres(r1), metres(r2), metres(rb), mu).totalDeltaV;
+    } catch (error) {
+      if (error instanceof RangeError) return Number.POSITIVE_INFINITY;
+      throw error;
+    }
+  };
+
+  let bestRb: number | null = null;
+  let bestCost = Number.POSITIVE_INFINITY;
+  // A decade above the outer radius, in twenty steps. Coarse on purpose: the cost is
+  // smooth and monotone in `r_b`, so this only has to find the side the minimum is on.
+  for (let i = 1; i <= 20; i++) {
+    const rb = outer * (1 + (i * 9) / 20);
+    const value = cost(rb);
+    if (value < bestCost) {
+      bestCost = value;
+      bestRb = rb;
+    }
+  }
+  if (bestRb === null || !Number.isFinite(bestCost)) return null;
+
+  const refined = minimise(([rb]) => cost(rb ?? 0), [bestRb], [outer / 2]);
+  const rb =
+    Number.isFinite(refined.fx) && refined.fx < bestCost ? (refined.x[0] ?? bestRb) : bestRb;
+
+  const transfer = biEllipticTransfer(metres(r1), metres(r2), metres(rb), mu);
+  const outward = r2 > r1 ? 1 : -1;
+  const firstLeg = Math.PI * Math.sqrt(((r1 + rb) / 2) ** 3 / mu);
+  return {
+    shape: 'bi-elliptic',
+    // Out to `r_b`, raise periapsis there, circularise on the way back in.
+    magnitudes: [
+      outward * transfer.firstBurn,
+      outward * transfer.secondBurn,
+      -outward * transfer.thirdBurn,
+    ],
+    offsets: [0, firstLeg, transfer.timeOfFlight],
+    intermediateRadiusM: rb,
+  };
+};
+
+/**
+ * The `reach_orbit` strategy: a closed-form transfer, oriented against the goal's apse
+ * line — #90, #92.
+ *
+ * The Δv is not searched for. Between two coplanar circular orbits the minimum-Δv
+ * two-impulse transfer is the Hohmann transfer, which is a textbook result and is already
+ * validated against §7.3's constants in `docs/PHYSICS.md`'s Tier 1 table; searching a grid
+ * for it would be pretending not to know it, and would publish a number slightly worse
+ * than the one we can write down.
+ *
+ * **What is searched is *when*.** A goal that is circular and equatorial pins nothing, and
+ * the answer is to depart immediately. A goal with an apse line — C01's 400 × 800 km
+ * ellipse — pins the burn to the point that becomes its periapsis, which is half an orbit
+ * from the apoapsis being raised. That is §6.8's whole lesson for C01, *"a prograde burn
+ * raises the orbit on the opposite side"*, expressed as a constraint the solver has to
+ * satisfy rather than as prose: the departure epoch is swept over one revolution, scored
+ * by how far the resulting orbit sits from the goal, and refined to the centre of the
+ * tolerance band.
+ */
+const solveReachOrbit = (
+  scenario: LoadedScenario,
+  objective: Extract<LoadedScenario['objective'], { readonly kind: 'reach_orbit' }>,
+): ParSolution => {
+  const goal = apsidesOf(objective.goal);
+  const shipPeriod = period(semiMajorAxisOf(scenario.ship.state, scenario.mu), scenario.mu);
+
+  const shipArc = createArc({
+    startEpoch: scenario.startEpoch,
+    endEpoch: scenario.horizon,
+    state: scenario.ship.state,
+    mu: scenario.mu,
+  });
+
+  /** The candidate transfers available from a departure epoch, and their plans. */
+  const plansAt = (departureMet: number): readonly { shape: TransferShape; plan: Plan }[] => {
+    if (departureMet < 0 || departureMet > scenario.rules.deadlineSeconds) return [];
+    const from = stateAtMet(shipArc, scenario.startEpoch, departureMet);
+    if (from === null) return [];
+    const radius = V.norm(from.position);
+
+    return transferShapesFor(
+      radius,
+      V.norm(from.velocity),
+      goal,
+      objective.tolerance.radiusM,
+      scenario.mu,
+    ).flatMap((shape) => {
+      const impulses = shape.magnitudes.map((magnitudeMps, index) => ({
+        met: departureMet + (shape.offsets[index] ?? 0),
+        magnitudeMps,
+      }));
+      const last = impulses[impulses.length - 1];
+      if (last === undefined || last.met > scenario.rules.deadlineSeconds) return [];
+      const plan = planForImpulses(scenario, impulses);
+      return plan === null ? [] : [{ shape, plan }];
+    });
+  };
+
+  /** How far the best transfer from this departure epoch lands from the goal. */
+  const mismatchAt = (departureMet: number): number => {
+    let best = Number.POSITIVE_INFINITY;
+    for (const { plan } of plansAt(departureMet)) {
+      const result = timelineFor(scenario, plan);
+      if (!result.ok) continue;
+      best = Math.min(
+        best,
+        goalMismatch(evaluateReachOrbit(result.timeline, objective.goal, objective.tolerance)),
+      );
+    }
+    return best;
+  };
+
+  // ── Does the goal constrain *when* to depart at all? ────────────────────────
+  //
+  // Only through its apse line. `evaluateReachOrbit` compares the argument of periapsis
+  // exactly when the goal is not circular, and the departure epoch is what puts the apse
+  // line where the goal wants it — burn here, and periapsis ends up here. A **circular**
+  // goal has no apse line, compares no angle that a departure epoch could move, and is
+  // therefore reached equally well from any moment: the answer is to leave now.
+  //
+  // Deciding that from the goal, rather than discovering it from a flat search, is the
+  // point. The mismatch surface for a circular goal is not flat — it is DEP-09's 1e-4 m/s
+  // quantisation noise, a few parts in ten million, varying with the departure epoch
+  // because the components round differently at different points on the orbit. A simplex
+  // minimises that noise perfectly happily. C02 and C04 both came back with a departure
+  // two-thirds of a lap in, quantised one counter cheaper, and a par_time nearly double
+  // the transfer it describes — an answer that is defensible under the tie-break rules and
+  // is not the answer. There is nothing there to search for, so it is not searched for.
+  const departurePinned = !goalIsCircular(objective.goal);
+
+  const window = Math.min(shipPeriod, scenario.rules.deadlineSeconds);
+  // One revolution and no more: the geometry repeats after it, so a second lap could only
+  // find the same departure a period later, which is the same solution at a worse time.
+  const samples = departurePinned ? ORIENTATION_SAMPLES_PER_REVOLUTION : 1;
+  let bestMet = 0;
+  let bestMismatch = Number.POSITIVE_INFINITY;
+  for (const departureMet of linspace(0, departurePinned ? window : 0, samples)) {
+    const mismatch = mismatchAt(departureMet);
+    // Strict `<`, so equal samples keep the earliest departure and so the earliest par.
+    if (mismatch < bestMismatch) {
+      bestMismatch = mismatch;
+      bestMet = departureMet;
+    }
+  }
+
+  const step = window / Math.max(samples - 1, 1);
+  const refined = departurePinned
+    ? minimise(([departureMet]) => mismatchAt(departureMet ?? 0), [bestMet], [step])
+    : { x: [bestMet], fx: bestMismatch, iterations: 0, converged: true };
+  const candidates = [bestMet, ...(Number.isFinite(refined.fx) ? [refined.x[0] ?? bestMet] : [])];
+
+  let winner: {
+    readonly plan: Plan;
+    readonly outcome: ContractOutcome;
+    readonly shape: TransferShape;
+    readonly radiusM: number;
+  } | null = null;
+
+  for (const departureMet of candidates) {
+    const from = stateAtMet(shipArc, scenario.startEpoch, departureMet);
+    if (from === null) continue;
+    for (const { shape, plan } of plansAt(departureMet)) {
+      const outcome = outcomeFor(scenario, plan);
+      if (outcome === null || !isReferenceSolution(scenario, outcome)) continue;
+      if (
+        winner === null ||
+        outcome.dvMps < winner.outcome.dvMps ||
+        (outcome.dvMps === winner.outcome.dvMps &&
+          (outcome.metSeconds ?? Number.POSITIVE_INFINITY) <
+            (winner.outcome.metSeconds ?? Number.POSITIVE_INFINITY))
+      ) {
+        winner = { plan, outcome, shape, radiusM: V.norm(from.position) };
+      }
+    }
+  }
+
+  if (winner === null) {
+    throw new Error(
+      `${scenario.id}: no tangential transfer reaches the goal orbit inside the contract's ` +
+        `budget, deadline and horizon. ${String(samples)} departure epochs were swept across ` +
+        `one revolution (${window.toFixed(1)} s) and the closest any of them came was ` +
+        `${bestMismatch.toFixed(3)} tolerance-widths from the goal. Either the goal is not ` +
+        'reachable by a two-body tangential transfer, or the deadline is shorter than one.',
+    );
+  }
+
+  // The radius the winning construction actually targeted, read off the shape rather than
+  // re-derived from the goal — the same test running twice is a second chance to disagree.
+  const targetRadius =
+    winner.shape.magnitudes.length === 1 &&
+    Math.abs(goal.periapsisM - winner.radiusM) <= objective.tolerance.radiusM
+      ? goal.apoapsisM
+      : goal.periapsisM;
+  return {
+    plan: winner.plan,
+    outcome: winner.outcome,
+    search: {
+      kind: 'transfer',
+      shape: winner.shape.shape,
+      impulses: winner.shape.magnitudes.length,
+      departureRadiusM: winner.radiusM,
+      arrivalRadiusM: targetRadius,
+      radiusRatio: Math.max(winner.radiusM, targetRadius) / Math.min(winner.radiusM, targetRadius),
+      intermediateRadiusM: winner.shape.intermediateRadiusM,
+      biEllipticConsidered: biEllipticCouldWin(winner.radiusM, targetRadius),
+      departureSamples: samples,
+      refinementIterations: refined.iterations,
+      refinementConverged: refined.converged,
+    },
+  };
+};
+
+// ── The `station` strategy ───────────────────────────────────────────────────────────
+
+/**
+ * The `station` strategy: drift orbits — #94.
+ *
+ * Nothing here is a transfer between two positions, so the Lambert family is the wrong
+ * one and would not find this at all. Acquiring a slot 3° east is a **drift**: leave the
+ * geostationary radius so the orbit's period no longer matches Earth's rotation, let the
+ * longitude slide at the rate that mismatch produces, and burn again to stop.
+ *
+ * ## The family is indexed by an integer, and that is what makes it exact
+ *
+ * The obvious parameterisation is "how far off GEO radius to go", with the coast time
+ * following. It has a flaw that only shows up in the second burn: a drift orbit is
+ * *eccentric*, so at an arbitrary coast time the ship is not back at the radius it left,
+ * and the burn that stops the drift is not simply the first one reversed. It is reversed
+ * exactly once per revolution, at the apsis the ship departed from.
+ *
+ * So the free parameter is the **number of complete drift revolutions**, `k`, and
+ * everything else is algebra. Over one revolution the ship returns to the same inertial
+ * direction, so the longitude it gains is what Earth failed to turn through in that time:
+ *
+ *     Δλ per revolution = 2π − ω⊕·T′ = ω⊕·(T_geo − T′)
+ *
+ * Setting `k` revolutions equal to the slot offset gives the drift period directly,
+ *
+ *     T′ = T_geo − slot / (k·ω⊕)
+ *
+ * and the two impulses are then vis-viva at the departure radius. No search, one closed
+ * form per `k`, and the second burn is exactly the negative of the first because the ship
+ * is back where it started.
+ *
+ * ## Cheaper is slower, so the deadline is what sets par
+ *
+ * Δv falls as `k` rises — a longer coast needs a smaller period offset — so the cheapest
+ * admissible member is the largest `k` whose second burn still lands inside the deadline.
+ * That makes the contract's deadline, not its budget, the thing that decides par, which
+ * is §6.8's *"delta-v/time trade, at its most extreme"* stated as a search bound. The whole
+ * family is reported rather than only the winner, because #94 asks `docs/PARS.md` to show
+ * the trade and not just its endpoint.
+ */
+const solveStation = (
+  scenario: LoadedScenario,
+  objective: Extract<LoadedScenario['objective'], { readonly kind: 'station' }>,
+): ParSolution => {
+  const radius = V.norm(scenario.ship.state.position);
+  const geoPeriod = (2 * Math.PI) / OMEGA_EARTH;
+  const slot = objective.goal.slotOffsetRad;
+
+  // A slot due east of a ship already on a geostationary orbit. A contract whose ship is
+  // not at that radius has no drift orbit in this sense, and the caller is told so rather
+  // than handed a number from a family that does not describe it.
+  if (slot === 0) {
+    throw new Error(
+      `${scenario.id}: the slot is at the ship's own longitude, so there is nothing to ` +
+        'drift. A station contract with a zero offset is met by the empty plan and needs ' +
+        'no par strategy.',
+    );
+  }
+
+  // How many drift revolutions the horizon could possibly hold. One more than the deadline
+  // admits, so the sweep can see the first member that does *not* fit and the derivation
+  // can say the deadline is what stopped it.
+  const ceiling = Math.max(1, Math.floor(scenario.horizonSeconds / geoPeriod) + 1);
+
+  const family: DriftPoint[] = [];
+  let winner: {
+    readonly plan: Plan;
+    readonly outcome: ContractOutcome;
+    readonly point: DriftPoint;
+  } | null = null;
+
+  for (let revolutions = 1; revolutions <= ceiling; revolutions++) {
+    // T′ = T_geo − slot / (k·ω⊕). A slot east of the ship needs a shorter period, so a
+    // smaller semi-major axis and a retrograde first burn — which is the same
+    // counter-intuitive fact C05 teaches, one act later and two orders of magnitude
+    // cheaper.
+    const driftPeriod = geoPeriod - slot / (revolutions * OMEGA_EARTH);
+    if (driftPeriod <= 0) continue;
+
+    const driftSemiMajorAxis = Math.cbrt(scenario.mu * (driftPeriod / (2 * Math.PI)) ** 2);
+    // Vis-viva at the departure radius on the drift orbit, against the circular speed
+    // there. Signed: negative is retrograde.
+    const speedOnDrift = Math.sqrt(scenario.mu * (2 / radius - 1 / driftSemiMajorAxis));
+    const circularSpeedHere = Math.sqrt(scenario.mu / radius);
+    const firstBurn = speedOnDrift - circularSpeedHere;
+    const elapsed = revolutions * driftPeriod;
+
+    const plan = planForImpulses(scenario, [
+      { met: 0, magnitudeMps: firstBurn },
+      // Exactly reversed, and exactly a whole number of revolutions later, which is the
+      // one coast time at which "reversed" is the right burn.
+      { met: elapsed, magnitudeMps: -firstBurn },
+    ]);
+
+    const outcome = plan === null ? null : outcomeFor(scenario, plan);
+    const feasible = outcome !== null && isReferenceSolution(scenario, outcome);
+
+    const point: DriftPoint = {
+      revolutions,
+      driftPeriodSeconds: driftPeriod,
+      semiMajorAxisOffsetM: driftSemiMajorAxis - radius,
+      totalDvMps: 2 * Math.abs(firstBurn),
+      elapsedSeconds: elapsed,
+      feasible,
+    };
+    family.push(point);
+
+    // `feasible` already carries `outcome !== null`, and the compiler knows it: the
+    // narrowing travels through the aliased condition, so repeating it here would be a
+    // check with no case that reaches it.
+    if (!feasible || plan === null) continue;
+    if (
+      winner === null ||
+      outcome.dvMps < winner.outcome.dvMps ||
+      (outcome.dvMps === winner.outcome.dvMps &&
+        (outcome.metSeconds ?? Number.POSITIVE_INFINITY) <
+          (winner.outcome.metSeconds ?? Number.POSITIVE_INFINITY))
+    ) {
+      winner = { plan, outcome, point };
+    }
+  }
+
+  if (winner === null) {
+    throw new Error(
+      `${scenario.id}: no drift orbit reaches the slot inside the contract's budget, ` +
+        `deadline and horizon. ${String(family.length)} members of the family were tried, ` +
+        `from ${family[0]?.totalDvMps.toFixed(4) ?? '—'} m/s over ` +
+        `${family[0]?.elapsedSeconds.toFixed(0) ?? '—'} s downward. Either the deadline is ` +
+        'shorter than one drift revolution, or the ship does not start on a geostationary ' +
+        'orbit and the drift family is the wrong one for this contract.',
+    );
+  }
+
+  return {
+    plan: winner.plan,
+    outcome: winner.outcome,
+    search: {
+      kind: 'drift',
+      family,
+      winner: winner.point,
+      revolutionCeiling: ceiling,
+    },
+  };
+};
+
+// ── Dispatch ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute par for one contract.
+ *
+ * @throws Error when the objective is not one this solver has a strategy for. Deliberate:
+ * a solver that quietly returned its best guess for a `rendezvous` by solving the
+ * `intercept` inside it would publish a par that no rendezvous can achieve, and the
+ * scenario would ship with a number nobody could reproduce. The proximity kinds that need
+ * an arrival burn — `rendezvous` and `soft_rendezvous`, C08 onward — get their strategy
+ * with the contract that first needs one.
+ */
+export const solvePar = (scenario: LoadedScenario, grid?: GridSpec): ParSolution => {
+  const objective = scenario.objective;
+
+  if (objective.kind === 'intercept') {
+    return solveIntercept(scenario, objective, grid ?? gridFor(scenario));
+  }
+  if (objective.kind === 'reach_orbit') return solveReachOrbit(scenario, objective);
+  if (objective.kind === 'station') return solveStation(scenario, objective);
+
+  throw new Error(
+    `${scenario.id}: no par strategy for a "${objective.kind}" objective. ` +
+      'This solver has three families — Lambert transfers for an `intercept`, tangential ' +
+      'two-body transfers for a `reach_orbit`, and drift orbits for a `station`. An ' +
+      'objective that must match velocity needs an arrival burn and so a family of its ' +
+      'own; add it with the contract that needs it rather than reusing one of these — ' +
+      'see tools/pars/solve.ts.',
+  );
 };

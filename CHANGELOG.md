@@ -12,6 +12,49 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **Acts I and II, as playable content (#90, #92, #93, #94).** Six new contracts — C01
+  *Shakedown*, C02 *Round Trip*, C04 *Long Haul*, C05 *Tailgate*, C06 *Overtake* and C07
+  *Slot Machine* — with computed pars, reference replays and briefs. Act I reproduces
+  §6.8's figures to the digit; Act II's Δv values are **half** §6.8's for C05 and C06,
+  because those are `intercept` contracts and DEP-04 asks for range and not for relative
+  velocity, so the re-circularisation §6.8 prices is not bought. `docs/PARS.md` records
+  every divergence and its cause.
+- **§6.5's burn-count cap (#92).** A soft constraint, first used by C04: declarable in a
+  scenario, evaluated during planning, shown in the briefing and the HUD, and never able
+  to block a commit. Exceeding it forfeits Gold through §6.7's existing
+  `burns ≤ par_burns` rule rather than through a second threshold — there is no fourth
+  legality code and none was added.
+- **Two more par-solver families (#90, #93, #94).** `reach_orbit` gets closed-form
+  tangential transfers, with the departure epoch swept only when the goal has an apse line
+  to orient; `station` gets drift orbits indexed by revolution count; and `intercept` gains
+  a **phasing** family alongside its Lambert search, because a phasing solution departs and
+  arrives at the same position — the one geometry Lambert's problem is degenerate at, and
+  one the transfer search was answering 34% too expensively.
+
+### Changed
+- **The debrief can explain a missed `station` run (#94).** `diagnosis.ts` handled
+  `reach_orbit` and the three proximity kinds and returned nothing for a slot, so C07 —
+  the only `station` contract in v1.0 — was the one contract whose failures the game could
+  not account for. Two rules now: still drifting, and stopped in the wrong place. They
+  want opposite corrections, so they read different quantities, and the drift rule reads
+  the orbit the plan **ends** on rather than the best moment it managed — a plan with one
+  burn has an admissible-drift instant before it ever leaves geostationary, and reading
+  that would tell a player they had stopped while they slid away.
+- **A `reach_orbit` goal may omit `raan_rad` and `argp_rad`.** A circular goal has no apse
+  line and an equatorial one no node line, and every v1.0 contract is equatorial-equivalent,
+  so requiring an author to state an orientation their goal does not have was asking them to
+  write down a requirement the evaluator then ignores. The loader refuses a document that
+  omits one its own goal *does* make meaningful, which would otherwise silently demand an
+  orientation nobody wrote.
+- **Par now requires the objective to be met inside the deadline.** §6.7's Bronze is
+  "objective met, within budget and deadline", so a par that earns no medal is not a par.
+  `L3` caps the last *burn* and a one-impulse plan's only burn is at departure, so nothing
+  else was enforcing this — and a search whose cost falls with time walked straight to the
+  planning horizon because of it.
+- **The Lambert revolution ceiling is derived from each contract's horizon** rather than
+  fixed at four, so §6.8's eight-revolution phasing contracts get eight without any
+  per-contract override. C03's par is unchanged in every digit.
+
 - **§6.4's fifth objective type, `station` (#77).** Mean longitude within a slot and secular
   drift within a limit, both at once. The slot is stated as an offset from the ship's own
   starting longitude, because Earth's absolute orientation is not modelled — the sidereal

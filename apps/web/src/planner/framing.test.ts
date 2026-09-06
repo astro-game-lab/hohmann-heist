@@ -23,6 +23,7 @@ import {
   manualCamera,
   recentreFraming,
 } from './framing.js';
+import { scrubStepFor } from './TimelineStrip.js';
 
 const VIEWPORT = { width: 1200, height: 800, devicePixelRatio: 1 };
 
@@ -180,5 +181,40 @@ describe('manual control suspends auto-framing until recentred (FR-404, §8.5.2)
     state = advanceFraming(state, REFRAME_DURATION_SECONDS, false);
     expect(state.mode).toBe('suspended');
     expect(state.camera).toBe(panned);
+  });
+});
+
+/**
+ * The scrub step, against the windows that actually ship — #94.
+ *
+ * `scrubStepFor` lives in `TimelineStrip.tsx` beside the input it configures. These cases
+ * pin the two things the derivation is for: a fourteen-hour contract keeps the flat minute
+ * #128 chose, and a fourteen-day one does not.
+ */
+describe('the scrub step (#94, §8.5.3)', () => {
+  it('gives a 14 h window the 60 s #128 chose, so nothing about C05 or C06 moves', () => {
+    expect(scrubStepFor(14 * 3600)).toBe(60);
+  });
+
+  it('does not leave a 14-day contract crossing its timeline a minute at a time', () => {
+    const step = scrubStepFor(14 * 86_400);
+    expect(step).toBeGreaterThan(60);
+    // The invariant is the press count, not the step: a constant fraction of the window
+    // means crossing it takes about the same number of presses however long it is.
+    expect((14 * 86_400) / step).toBeGreaterThan(300);
+    expect((14 * 86_400) / step).toBeLessThan(1500);
+  });
+
+  it('keeps every shipped window inside that press band', () => {
+    for (const windowSeconds of [10_800, 21_600, 28_800, 50_400, 1_209_600]) {
+      const presses = windowSeconds / scrubStepFor(windowSeconds);
+      expect(presses).toBeGreaterThan(300);
+      expect(presses).toBeLessThan(1500);
+    }
+  });
+
+  it('never returns zero, which would freeze the input', () => {
+    expect(scrubStepFor(1)).toBeGreaterThan(0);
+    expect(scrubStepFor(0)).toBeGreaterThan(0);
   });
 });
