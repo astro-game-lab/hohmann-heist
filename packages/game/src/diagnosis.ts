@@ -29,6 +29,8 @@
  * | Arrived early or late | The miss is mostly **along-track** | `missRtn.y` dominating |
  * | Over- or under-shot | The miss is mostly **radial** | `missRtn.x` dominating |
  * | Wrong orbit | A `reach_orbit` element is outside tolerance | The element comparisons |
+ * | Still drifting | A `station` run ends on an orbit that is still sliding | The **final arc's** drift against DEP-14's limit |
+ * | Wrong longitude | A `station` run settled, at the wrong longitude | The signed offset against the slot's half-width |
  *
  * ## Along-track versus radial is not a tie-break, it is the diagnosis
  *
@@ -167,6 +169,53 @@ export const diagnose = (facts: DiagnosisFacts): Diagnosis | null => {
         element: worst.element,
         difference: worst.difference,
         tolerance: worst.tolerance,
+      }),
+      codex: 'burns-and-apsides',
+    };
+  }
+
+  // ── On station, or not ─────────────────────────────────────────────────────
+  //
+  // Two conditions have to hold at one epoch (DEP-14), so there are two ways to miss and
+  // they want opposite advice. The drift rule goes first because it is the **necessary**
+  // one: a ship still sliding through the box was never on station whatever its longitude
+  // read at the moment it passed, so reporting the offset there would quote a number the
+  // player could not have held.
+  //
+  // `achieved` reports the best moment the run managed, and `station.ts` defines "best"
+  // as the smallest offset *among epochs whose drift was admissible*, falling back to the
+  // smallest offset overall when none was. So `withinDrift === false` means the ship
+  // never settled anywhere — which is exactly what makes the drift the first thing to say.
+  if (objective.kind === 'station' && !objective.met) {
+    const { achieved, finalDriftRadPerSec, goal } = objective;
+
+    // A timeline that could not be propagated reports a non-finite drift. Nothing true can
+    // be said about it, so nothing is — §8.3.9's own instruction.
+    if (!Number.isFinite(finalDriftRadPerSec)) return null;
+
+    // "Did you stop" is asked of the orbit the plan **ends** on, not of `achieved`. The
+    // best moment a run managed can predate the manoeuvre: a plan with one burn and no
+    // second one has an admissible-drift instant at the very start, before it left
+    // geostationary, and reading that would tell a player the drift was right while the
+    // ship slid away for the rest of the horizon.
+    if (Math.abs(finalDriftRadPerSec) > goal.maxDriftRadPerSec) {
+      return {
+        message: gameMessage('debrief.diagnosis.stillDrifting', {
+          driftRadPerSec: finalDriftRadPerSec,
+          maxDriftRadPerSec: goal.maxDriftRadPerSec,
+          offsetRad: achieved.offsetRad,
+        }),
+        codex: 'burns-and-apsides',
+      };
+    }
+
+    // Settled, and in the wrong place: the drift was stopped, just not here. The sign is
+    // the whole of the advice — east means the coast ran long, west means it was cut short
+    // — so it is carried rather than passed through an absolute value.
+    return {
+      message: gameMessage('debrief.diagnosis.wrongLongitude', {
+        offsetRad: achieved.offsetRad,
+        maxOffsetRad: goal.maxOffsetRad,
       }),
       codex: 'burns-and-apsides',
     };

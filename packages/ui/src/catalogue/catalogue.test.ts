@@ -148,6 +148,12 @@ const samples: AllMessageParams = {
     difference: 42_000,
     tolerance: 10_000,
   },
+  'debrief.diagnosis.stillDrifting': {
+    driftRadPerSec: 5e-8,
+    maxDriftRadPerSec: 2.0201e-9,
+    offsetRad: 0.001,
+  },
+  'debrief.diagnosis.wrongLongitude': { offsetRad: -0.0012, maxOffsetRad: 8.727e-4 },
   'debrief.diagnosis.tooFast': { relativeSpeedMps: 1.4, maxRelativeSpeedMps: 0.5, rangeM: 80 },
   'debrief.diagnosis.arrivedLate': { alongTrackM: 12_400, rangeM: 12_500 },
   'debrief.diagnosis.arrivedEarly': { alongTrackM: 12_400, rangeM: 12_500 },

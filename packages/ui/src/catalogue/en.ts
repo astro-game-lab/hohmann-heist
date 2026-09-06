@@ -231,6 +231,30 @@ export const en: Messages = {
       : `${kilometres(tolerance, fmt)} km`;
     return `Your ${ELEMENT_NAMES[element]} was ${off} out, against ${allowed} allowed.`;
   },
+  // Degrees per day, because that is the unit DEP-14 states the limit in and the unit the
+  // briefing showed the player. Three decimals: the limit is 0.01°/day, so two would round
+  // the whole budget to a single digit and a run at 0.014 would read as 0.01.
+  'debrief.diagnosis.stillDrifting': ({ driftRadPerSec, maxDriftRadPerSec }, fmt) => {
+    const perDay = (rate: number): string =>
+      `${fmt.decimal(toDegrees(radians(Math.abs(rate))) * 86_400, 3)}°/day`;
+    const sense = driftRadPerSec >= 0 ? 'east' : 'west';
+    return (
+      `You passed the slot but never stopped: your longitude was still sliding ${sense} at ` +
+      `${perDay(driftRadPerSec)}, against ${perDay(maxDriftRadPerSec)} allowed. A slot is ` +
+      'somewhere you stay, not somewhere you cross.'
+    );
+  },
+  // The sign is the advice, so it is a word rather than a minus: east of the slot means
+  // the drift ran too long, west means it was stopped too early.
+  'debrief.diagnosis.wrongLongitude': ({ offsetRad, maxOffsetRad }, fmt) => {
+    const degrees = (rad: number): string =>
+      `${fmt.decimal(toDegrees(radians(Math.abs(rad))), 3)}°`;
+    return (
+      `You stopped ${degrees(offsetRad)} ${offsetRad >= 0 ? 'east' : 'west'} of the slot, ` +
+      `against ±${degrees(maxOffsetRad)} allowed — the drift was right, the coast was ` +
+      `${offsetRad >= 0 ? 'too long' : 'cut short'}.`
+    );
+  },
   'debrief.diagnosis.tooFast': ({ relativeSpeedMps, maxRelativeSpeedMps }, fmt) =>
     `You were close enough, and still closing at ${fmt.decimal(relativeSpeedMps, 2)} m/s — ` +
     `${fmt.decimal(maxRelativeSpeedMps, 2)} m/s is the limit. Getting there is not the same ` +

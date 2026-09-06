@@ -32,6 +32,14 @@ they relied on has moved.
   one the transfer search was answering 34% too expensively.
 
 ### Changed
+- **The debrief can explain a missed `station` run (#94).** `diagnosis.ts` handled
+  `reach_orbit` and the three proximity kinds and returned nothing for a slot, so C07 —
+  the only `station` contract in v1.0 — was the one contract whose failures the game could
+  not account for. Two rules now: still drifting, and stopped in the wrong place. They
+  want opposite corrections, so they read different quantities, and the drift rule reads
+  the orbit the plan **ends** on rather than the best moment it managed — a plan with one
+  burn has an admissible-drift instant before it ever leaves geostationary, and reading
+  that would tell a player they had stopped while they slid away.
 - **A `reach_orbit` goal may omit `raan_rad` and `argp_rad`.** A circular goal has no apse
   line and an equatorial one no node line, and every v1.0 contract is equatorial-equivalent,
   so requiring an author to state an orientation their goal does not have was asking them to

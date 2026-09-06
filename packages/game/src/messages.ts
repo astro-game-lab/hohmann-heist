@@ -180,6 +180,30 @@ export interface GameMessageParams {
     readonly tolerance: number;
   };
 
+  /**
+   * A `station` run that never stopped sliding through the slot (DEP-14).
+   *
+   * The drift is the **necessary** condition — a ship still moving through the box was
+   * never on station, whatever longitude it read on the way past — so this rule reports
+   * the drift and carries the offset only as context.
+   */
+  readonly 'debrief.diagnosis.stillDrifting': {
+    readonly driftRadPerSec: number;
+    readonly maxDriftRadPerSec: number;
+    readonly offsetRad: number;
+  };
+  /**
+   * A `station` run that settled at the wrong longitude.
+   *
+   * `offsetRad` is **signed** and stays signed: east means the drift ran too long and west
+   * means it was stopped early, and those want opposite corrections. An absolute value
+   * here would turn the one actionable fact into a magnitude.
+   */
+  readonly 'debrief.diagnosis.wrongLongitude': {
+    readonly offsetRad: number;
+    readonly maxOffsetRad: number;
+  };
+
   /** Close enough, and still moving too fast for the objective to count. */
   readonly 'debrief.diagnosis.tooFast': {
     readonly relativeSpeedMps: number;

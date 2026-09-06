@@ -125,6 +125,22 @@ export interface StationEvaluation {
    * they flew through at speed.
    */
   readonly achieved: StationAchieved;
+  /**
+   * Secular drift of the orbit the plan **ends** on, radians per second.
+   *
+   * Distinct from `achieved.driftRadPerSec`, and the distinction matters to anything
+   * explaining a failure. `achieved` reports the *best moment* the run managed, and the
+   * best moment can predate the manoeuvre entirely: a plan with one burn and no second one
+   * still has an admissible-drift instant at the very start, before it left geostationary,
+   * so `achieved` reports that instant and a debrief reading it would say the ship had
+   * stopped when it is sliding away as the horizon ends.
+   *
+   * This is the last arc's drift, which is a property of that arc's semi-major axis and so
+   * holds from the final impulse to the horizon — the same reasoning `reach_orbit` uses to
+   * read one arc rather than sample. It answers "did you stop", which is the first thing a
+   * missed station run needs to be told.
+   */
+  readonly finalDriftRadPerSec: number;
   readonly goal: StationGoal;
 }
 
@@ -199,6 +215,7 @@ export const evaluateStation = (timeline: Timeline, goal: StationGoal): StationE
         withinSlot: false,
         withinDrift: false,
       }),
+      finalDriftRadPerSec: Number.NaN,
       goal,
     });
   }
@@ -259,6 +276,13 @@ export const evaluateStation = (timeline: Timeline, goal: StationGoal): StationE
 
   const achieved = best ?? { offset: 0, drift: Number.NaN, admissible: false };
 
+  // The orbit the plan leaves the ship on. `buildTimeline` always produces at least one
+  // arc, so the index is safe; it is checked rather than asserted because
+  // `noUncheckedIndexedAccess` is on and a cast would be the one place the invariant
+  // stopped being enforced.
+  const last = timeline.arcs[timeline.arcs.length - 1];
+  const finalDrift = last === undefined ? Number.NaN : stationDrift(last);
+
   return Object.freeze({
     kind: 'station' as const,
     met: atEpoch !== null,
@@ -269,6 +293,7 @@ export const evaluateStation = (timeline: Timeline, goal: StationGoal): StationE
       withinSlot: Math.abs(achieved.offset) <= goal.maxOffsetRad,
       withinDrift: Math.abs(achieved.drift) <= goal.maxDriftRadPerSec,
     }),
+    finalDriftRadPerSec: finalDrift,
     goal,
   });
 };
