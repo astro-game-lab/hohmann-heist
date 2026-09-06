@@ -1,6 +1,7 @@
+import { parseScenario } from '@hh/game';
 import { describe, expect, it } from 'vitest';
 
-import { contractById, contracts } from './registry.js';
+import { brokenContractById, brokenContracts, contractById, contracts } from './registry.js';
 
 describe('the contract registry', () => {
   // The glob is the point: `tools/content/` walks the same directory, so a contributor
@@ -54,5 +55,64 @@ describe('the contract registry', () => {
   it('answers undefined for an id that does not ship, rather than throwing', () => {
     expect(contractById('c99-nope')).toBeUndefined();
     expect(contractById('')).toBeUndefined();
+  });
+});
+
+/**
+ * A contract whose data is refused — §8.7, FR-202, #125.
+ *
+ * The registry used to throw at module load. It now collects the failure instead, so §8.7's
+ * *"show which field failed, and offer to report it"* has something to render: a `throw`
+ * happens before anything is mounted, and stringifying `parseScenario`'s JSON pointers into
+ * an `Error` message threw away the very thing that row asks for.
+ *
+ * The build-failure guarantee did not go away — it moved to `tools/content/`, which refuses
+ * to let an invalid contract merge and fails in CI with the file named, which is a better
+ * place for it than a browser with a blank page.
+ */
+describe('a contract that fails validation', () => {
+  it('is absent from the shipped registry, so nothing renders a partial scenario', () => {
+    // FR-202: *"never load a partially valid scenario"*. Every id the registry hands out
+    // came back from `parseScenario` with `ok: true`.
+    for (const scenario of contracts()) {
+      expect(scenario.ship.state.position, scenario.id).toBeDefined();
+      expect(scenario.rules, scenario.id).toBeDefined();
+    }
+  });
+
+  it('reports none in a build the content suite has passed', () => {
+    expect(brokenContracts()).toStrictEqual([]);
+    expect(brokenContractById('c01-shakedown')).toBeUndefined();
+  });
+
+  /**
+   * The state is reachable, with a deliberately malformed fixture.
+   *
+   * Driven through the same `parseScenario` call the registry makes, because the value the
+   * registry stores *is* the loader's error list — a test that hand-wrote the errors would
+   * be testing its own fixture. What this establishes is the shape #125's screen renders:
+   * a JSON pointer at the offending value, and a catalogue key naming what is wrong with
+   * it (never Ajv's English, which is neither translatable nor stable).
+   */
+  it('produces field-level errors a screen can render', () => {
+    const valid = contractById('c01-shakedown');
+    expect(valid).toBeDefined();
+
+    const malformed = {
+      ...(valid?.document as unknown as Record<string, unknown>),
+      // A number where the schema wants one, made a string. Chosen because it is the
+      // commonest real mistake in a hand-written contract and because the pointer to it is
+      // nested, which is where a naive error message stops being useful.
+      horizonSeconds: 'forty thousand',
+    };
+
+    const result = parseScenario(malformed);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    expect(result.errors.length).toBeGreaterThan(0);
+    const first = result.errors[0];
+    expect(first?.path).toMatch(/^\//);
+    expect(first?.message.key).toMatch(/^scenario\.error\./);
   });
 });

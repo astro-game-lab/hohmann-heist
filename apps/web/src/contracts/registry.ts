@@ -20,15 +20,26 @@
  * the game because they did not know about this file. The glob means the directory is the
  * registry in both places.
  *
- * ## A contract that will not load is a build failure, not a runtime one
+ * ## A contract that will not load is reported, not thrown
  *
- * `parseScenario` runs at module load and a failure throws immediately. The alternative —
- * skipping the bad one and carrying on — would ship a build whose contract board silently
- * has a hole in it. The content suite already refuses to let an invalid contract merge, so
- * the only way to reach the throw is to have broken the loader itself, and hearing about
- * that at start-up is the point.
+ * This module used to throw at load, on the reasoning that a bad contract should be a
+ * build failure rather than a board with a silent hole in it. The first half of that is
+ * still true and is still enforced — **by `tools/content/`'s suite, which refuses to let
+ * an invalid contract merge**, and which is a better place for the guarantee because it
+ * fails in CI with the file named rather than in a browser with a blank page.
+ *
+ * What the throw could not do is §8.7's row: *"Refuse to load it, show which field failed,
+ * and offer to report it."* A `throw` at module scope happens before anything is mounted,
+ * so the only thing that can catch it is a boundary with an `Error` in its hand — and
+ * `parseScenario` had already produced a list of JSON pointers and field-level messages
+ * that stringifying into an `Error` threw away. Collecting the failures keeps them, so the
+ * board can render the refusal against the contract it belongs to and the briefing route
+ * for that id can say which field is wrong.
+ *
+ * The hole is therefore no longer silent, which was the actual objection: a contract that
+ * failed to parse is **visible on the board as a failure**, not absent from it.
  */
-import { parseScenario, type LoadedScenario } from '@hh/game';
+import { parseScenario, type LoadedScenario, type ScenarioError } from '@hh/game';
 
 /**
  * Vite resolves this at build time: no directory is read at runtime, and the JSON is
@@ -41,21 +52,55 @@ const files = import.meta.glob<unknown>('../../../../content/contracts/*.json', 
   import: 'default',
 });
 
-const load = (): ReadonlyMap<string, LoadedScenario> => {
+/** A contract whose data was refused — §8.7, FR-202. */
+export interface BrokenContract {
+  /**
+   * The id, taken from the filename.
+   *
+   * It cannot come from the document: the document is what failed validation, so its `id`
+   * field is exactly as untrustworthy as the rest of it — and may be the field that failed.
+   * The filename is the one identifier that is known to be well-formed, because Vite
+   * resolved the glob against it.
+   */
+  readonly id: string;
+  /** The loader's own field-level errors, unmodified. */
+  readonly errors: readonly ScenarioError[];
+}
+
+/** `…/content/contracts/c05-tailgate.json` → `c05-tailgate`. */
+const idFromPath = (path: string): string =>
+  path
+    .split('/')
+    .pop()
+    ?.replace(/\.json$/, '') ?? path;
+
+interface Registry {
+  readonly byId: ReadonlyMap<string, LoadedScenario>;
+  readonly broken: readonly BrokenContract[];
+}
+
+const load = (): Registry => {
   const byId = new Map<string, LoadedScenario>();
+  const broken: BrokenContract[] = [];
+
+  // `Object.entries` over a glob is insertion-ordered by Vite's own sort of the matched
+  // paths, but nothing downstream may rely on that (NFR-009): `contracts()` sorts by act
+  // and index, and the broken list is sorted by id below.
   for (const [path, document] of Object.entries(files)) {
     const result = parseScenario(document);
     if (!result.ok) {
-      throw new Error(
-        `${path} failed to load: ${result.errors.map((error) => error.message.key).join(', ')}`,
-      );
+      broken.push({ id: idFromPath(path), errors: result.errors });
+      continue;
     }
     byId.set(result.scenario.id, result.scenario);
   }
-  return byId;
+
+  broken.sort((a, b) => a.id.localeCompare(b.id));
+  return { byId, broken: Object.freeze(broken) };
 };
 
-const CONTRACTS = load();
+const REGISTRY = load();
+const CONTRACTS = REGISTRY.byId;
 
 /**
  * Contracts in the order they are played.
@@ -70,3 +115,17 @@ export const contracts = (): readonly LoadedScenario[] =>
 
 /** One contract by the id in its URL, or `undefined` — a bad link is a thing to render. */
 export const contractById = (id: string): LoadedScenario | undefined => CONTRACTS.get(id);
+
+/**
+ * Every contract whose data was refused, by id.
+ *
+ * Empty in any build the content suite has passed, which is every build that reaches
+ * `main`. It is not dead code for that reason: §8.7 asks for the state, and a state with
+ * no way to reach it is a state nobody has looked at. `registry.test.ts` reaches it with
+ * a malformed document through the same `parseScenario` call this uses.
+ */
+export const brokenContracts = (): readonly BrokenContract[] => REGISTRY.broken;
+
+/** One refused contract by id, or `undefined` if that id parsed (or does not exist). */
+export const brokenContractById = (id: string): BrokenContract | undefined =>
+  REGISTRY.broken.find((contract) => contract.id === id);

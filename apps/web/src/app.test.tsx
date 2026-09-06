@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { App } from './app.js';
 import { SCREEN_TRANSITION_MS, type MotionMediaQuery } from './motion.js';
-import { SAVE_KEY } from './save/index.js';
+import { SAVE_KEY, emptySave } from './save/index.js';
 
 let container: HTMLElement;
 
@@ -116,11 +116,21 @@ describe('routing', () => {
     expect(el('screen')?.dataset['screen']).toBe('title');
   });
 
+  /**
+   * Every route the title offers is a hash route — #117, and the reason the router is
+   * hash-based at all (a deep link has to survive a hard refresh on GitHub Pages).
+   *
+   * This used to assert that the title linked `#/board`. It does not, and that is
+   * §8.3.1's decision rather than an omission: *"no menus between a stranger and the
+   * game"*, so **Start goes to the briefing** and the board is reached from there. FR-901
+   * is the requirement that makes it so, and `TitleScreen.test.tsx` counts the clicks.
+   */
   it('renders navigation links as hash hrefs', async () => {
     await mount();
     const hrefs = [...container.querySelectorAll('nav a')].map((a) => a.getAttribute('href'));
-    expect(hrefs).toContain('#/board');
+    expect(hrefs.length).toBeGreaterThan(0);
     expect(hrefs.every((h) => h?.startsWith('#/'))).toBe(true);
+    expect(hrefs.some((h) => h?.startsWith('#/contract/'))).toBe(true);
   });
 });
 
@@ -324,9 +334,17 @@ describe('focus', () => {
     expect(document.activeElement).not.toBe(heading());
   });
 
+  /*
+   * `#/daily` and `#/codex/…` rather than `#/board`, which these used to use.
+   *
+   * The board is now the one route the shell does **not** move focus on: §8.3.2 lands
+   * keyboard entry on `NEXT` and the board does that itself, so the shell stands down for
+   * it (see `app.tsx`). That makes the board the worst possible example of the general
+   * rule, and the block below tests the exception.
+   */
   it('moves to the new screen’s heading on a route change', async () => {
     await mount();
-    await goTo('#/board');
+    await goTo('#/daily');
     expect(document.activeElement).toBe(heading());
     expect(text('screen-heading').trim()).not.toBe('');
   });
@@ -334,9 +352,9 @@ describe('focus', () => {
   it('moves again on the next change, not only the first', async () => {
     await mount();
     await goTo('#/daily');
-    await goTo('#/board');
+    await goTo('#/codex/phasing');
     expect(document.activeElement).toBe(heading());
-    expect(el('screen')?.dataset['screen']).toBe('board');
+    expect(el('screen')?.dataset['screen']).toBe('codex');
   });
 });
 
@@ -484,5 +502,237 @@ describe('a save that cannot be read', () => {
   it('says nothing when there is nothing wrong', async () => {
     await mount();
     expect(el('save-notice')).toBeNull();
+  });
+});
+
+/**
+ * §8.3.3's direct-URL guard — #119.
+ *
+ * > *locked (unreachable by UI; direct-URL access shows the unlock rule)*
+ *
+ * The board renders no link to a locked card, so this is the *only* way to reach one. It
+ * is an app-level test rather than a component one because the guard lives in the router's
+ * body switch, and what it proves is that the guard and the board read the same
+ * `progression()` result — a second rule here is exactly what §6.8 forbids.
+ */
+describe('a locked contract reached by its URL', () => {
+  it('shows the unlock rule instead of the briefing', async () => {
+    // Act II is locked on an empty save: Act I has four contracts, so §6.8's ⌈2/3⌉ wants
+    // three Bronzes and there are none.
+    window.location.hash = '#/contract/c05-tailgate';
+    await mount();
+
+    expect(el('locked-contract')).not.toBeNull();
+    // Not the briefing, and — the part that matters — not the contract's title either.
+    expect(el('brief')).toBeNull();
+    expect(text('screen')).not.toContain('Tailgate');
+  });
+
+  it('opens it once the act is unlocked', async () => {
+    // Built from `emptySave()` rather than hand-written: §11.7's document has required
+    // `daily` and `flags` blocks, and a fixture missing them is *unreadable* rather than
+    // empty — which would have made this test pass for the wrong reason.
+    const save = emptySave();
+    localStorage.setItem(
+      SAVE_KEY,
+      JSON.stringify({
+        ...save,
+        contracts: Object.fromEntries(
+          ['c01-shakedown', 'c02-round-trip', 'c03-cold-open'].map((id) => [
+            id,
+            { attempts: 1, medal: 'bronze', firstCompletedAt: '2026-09-14T18:22:11Z' },
+          ]),
+        ),
+      }),
+    );
+
+    window.location.hash = '#/contract/c05-tailgate';
+    await mount();
+
+    expect(el('locked-contract')).toBeNull();
+    expect(el('brief')).not.toBeNull();
+  });
+
+  it('leaves an unlocked contract alone', async () => {
+    window.location.hash = '#/contract/c01-shakedown';
+    await mount();
+    expect(el('locked-contract')).toBeNull();
+    expect(el('brief')).not.toBeNull();
+  });
+});
+
+/**
+ * §8.7's replay rows, on the route that carries the code — #125.
+ *
+ * `/#/replay?s=…&r=…` is §11.6's share URL, and the code is its whole payload. The viewer
+ * itself is M6; what M3 owes is that a code which cannot be read says so, and says which
+ * of the two reasons applies.
+ */
+describe('the replay route', () => {
+  it('renders the placeholder when no code is offered', async () => {
+    // A bare `#/replay` is not a failure — it is the route the viewer will own. Calling an
+    // empty address malformed would be inventing a problem.
+    window.location.hash = '#/replay';
+    await mount();
+    expect(el('replay-problem')).toBeNull();
+    expect(el('placeholder-notice')).not.toBeNull();
+  });
+
+  it('reports a malformed code', async () => {
+    window.location.hash = '#/replay?s=c03-cold-open&r=not-a-code';
+    await mount();
+    expect(el('replay-problem')?.dataset['kind']).toBe('invalid');
+  });
+
+  it('names the mismatch for a code from a newer schema', async () => {
+    const future = encodeURIComponent(
+      JSON.stringify({ v: 99, s: 'c03-cold-open', e: 1, n: [], a: 0, c: { dv: 0, t: 0 } }),
+    );
+    window.location.hash = `#/replay?s=c03-cold-open&r=${future}`;
+    await mount();
+
+    const problem = el('replay-problem');
+    expect(problem?.dataset['kind']).toBe('futureVersion');
+    expect(problem?.textContent).toContain('99');
+  });
+});
+
+/**
+ * §8.3.1's *Continue*, at the level where its inputs are real — #118.
+ *
+ * `TitleScreen.test.tsx` checks the entry renders from the props it is given. This checks
+ * the props, which is where the bug was: `progression().next` is C01 on a *completely
+ * empty* save — correctly, since it is the first unstarted unlocked contract — so a title
+ * that took `next` as its only condition offered Continue to a first-time player, pointing
+ * at the same contract Start did. Found in the browser, and this is the test that would
+ * have found it first.
+ */
+describe('Continue on the title screen', () => {
+  const withProgress = (contracts: Record<string, unknown>): void => {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...emptySave(), contracts }));
+  };
+
+  it('is absent on a fresh save, even though NEXT is C01', async () => {
+    window.location.hash = '#/';
+    await mount();
+
+    expect(el('title-start')).not.toBeNull();
+    expect(el('title-continue')).toBeNull();
+  });
+
+  /**
+   * Accepted-and-abandoned counts as progress, and `NEXT` moves past it.
+   *
+   * *"Unstarted is stronger than unfinished: a contract the player has attempted and not
+   * beaten is not where the board should be pointing them, because they already know where
+   * it is."* — `progression.ts`. So an attempt on C01 both **enables** Continue and sends
+   * it to C02, and those are two different facts about the same record: `attempts` is what
+   * makes there be something to resume, and `next` is where resuming goes.
+   */
+  it('appears once a contract has been accepted', async () => {
+    withProgress({ 'c01-shakedown': { attempts: 1 } });
+    window.location.hash = '#/';
+    await mount();
+
+    expect(el('title-continue')).not.toBeNull();
+    expect(el('title-continue')?.getAttribute('href')).toBe('#/contract/c02-round-trip');
+  });
+
+  it('follows NEXT past a contract that is finished', async () => {
+    withProgress({
+      'c01-shakedown': { attempts: 2, medal: 'gold', firstCompletedAt: '2026-09-14T18:22:11Z' },
+    });
+    window.location.hash = '#/';
+    await mount();
+
+    expect(el('title-continue')?.getAttribute('href')).toBe('#/contract/c02-round-trip');
+  });
+
+  it('is absent again once every unlocked contract is Bronzed', async () => {
+    withProgress(
+      Object.fromEntries(
+        [
+          'c01-shakedown',
+          'c02-round-trip',
+          'c03-cold-open',
+          'c04-long-haul',
+          'c05-tailgate',
+          'c06-overtake',
+          'c07-slot-machine',
+        ].map((id) => [
+          id,
+          { attempts: 1, medal: 'bronze', firstCompletedAt: '2026-09-14T18:22:11Z' },
+        ]),
+      ),
+    );
+    window.location.hash = '#/';
+    await mount();
+
+    expect(el('title-continue')).toBeNull();
+    // Start is still there: a finished campaign is still replayable from the top.
+    expect(el('title-start')).not.toBeNull();
+  });
+});
+
+/**
+ * §8.7's first-load skeleton comes down when the app goes up — #125.
+ *
+ * `render(vnode, parent)` diffs against whatever is already in `parent` rather than
+ * clearing it, so the skeleton survived the mount and left a second, dead "Hohmann Heist"
+ * at the bottom of every screen — visible, and in the accessibility tree. Found in the
+ * browser; asserted here.
+ */
+describe('the first-load skeleton', () => {
+  it('is gone once the application has mounted', async () => {
+    // `main.tsx` owns the removal, so this reproduces the shape it runs against: a mount
+    // point that already contains the skeleton.
+    const skeleton = document.createElement('div');
+    skeleton.id = 'hh-boot';
+    container.append(skeleton);
+
+    document.getElementById('hh-boot')?.remove();
+    await mount();
+
+    expect(document.getElementById('hh-boot')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="screen-heading"]')).toHaveLength(1);
+  });
+});
+
+/**
+ * §8.3.2's entry focus, *through the shell* — #119, #117.
+ *
+ * `BoardScreen.test.tsx` mounts the board on its own, where nothing can override it. This
+ * mounts the whole app, which is where the bug was: `Screen` moves focus to the `<h1>` on
+ * every route change (#117) and Preact runs child effects before parent ones, so the
+ * board's focus was set and then immediately overridden — and the board opened with focus
+ * on its heading. Only reproducible with the shell above it, and only found by driving the
+ * running app.
+ */
+describe('arriving at the board', () => {
+  it('lands keyboard focus on NEXT, not on the heading', async () => {
+    window.location.hash = '#/';
+    await mount();
+    await goTo('#/board');
+
+    const next = container.querySelector('[data-next="true"] a');
+    expect(next).not.toBeNull();
+    expect(document.activeElement).toBe(next);
+  });
+
+  it('lands on NEXT on a cold load too', async () => {
+    window.location.hash = '#/board';
+    await mount();
+
+    expect(document.activeElement).toBe(container.querySelector('[data-next="true"] a'));
+  });
+
+  /** Every other route keeps #117's behaviour — the shell only stands down for the board. */
+  it('still moves focus to the heading on other routes', async () => {
+    window.location.hash = '#/';
+    await mount();
+    await goTo('#/settings');
+
+    expect(el('screen-heading')).not.toBeNull();
+    expect(document.activeElement).not.toBe(container.querySelector('[data-next="true"] a'));
   });
 });

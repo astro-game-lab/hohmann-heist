@@ -48,6 +48,36 @@ const ELEMENT_NAMES: Readonly<Record<ComparedElement, string>> = Object.freeze({
   argumentOfPeriapsis: 'argument of periapsis',
 });
 
+/**
+ * §6.8's act titles, and the numerals that name the acts themselves.
+ *
+ * Chrome rather than content: a heading over a row of cards, which no rule reads. Keeping
+ * them here rather than in the scenario files means the four contracts in Act I cannot
+ * carry four differing copies of their act's title — see `types.ts` on `board.actName`.
+ *
+ * Both tables are **partial on purpose**. §14.1 ships the campaign act by act, so a
+ * milestone that adds Act IV's contracts before anyone has written its title should render
+ * "Act IV" rather than a missing key, and {@link actNumber} falls back to the Arabic
+ * numeral past the table's end rather than pretending an act does not exist.
+ */
+const ACT_TITLES: Readonly<Record<number, string>> = Object.freeze({
+  1: 'Getting Off The Ground',
+  2: 'Timing Is Everything',
+  3: 'Close Enough To Touch',
+});
+
+const ROMAN: Readonly<Record<number, string>> = Object.freeze({
+  1: 'I',
+  2: 'II',
+  3: 'III',
+  4: 'IV',
+  5: 'V',
+  6: 'VI',
+});
+
+/** "Act II", or "Act 7" for an act past the numerals written above. */
+const actNumber = (act: number): string => `Act ${ROMAN[act] ?? String(act)}`;
+
 const kilometres = (metres: number, fmt: MessageFormatters): string => {
   // Rounded to a tenth of a kilometre *first*, and the decimal dropped only if the
   // **rounded** value is whole. Testing `metres % 1000` instead would be a rule about
@@ -817,14 +847,100 @@ export const en: Messages = {
 
   // ── The application shell ──────────────────────────────────────────────────
   'app.title': () => 'Hohmann Heist',
-  'app.routesLabel': () => 'Routes',
 
-  'nav.board': () => 'Contract board',
-  'nav.contract': ({ index }, fmt) =>
-    `Contract ${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })}`,
-  'nav.daily': () => 'Daily',
-  'nav.codex': () => 'Codex',
-  'nav.settings': () => 'Settings',
+  // ── The title screen (§8.3.1) ──────────────────────────────────────────────
+  //
+  // The tagline is the repository's own one-line description, which is the sentence the
+  // game has been describing itself with since before it could be played. Two clauses,
+  // because §8.3.1's mockup breaks it over two lines and the second is the promise.
+  'title.tagline': () => 'Steal things in orbit. The only weapon is orbital mechanics.',
+  'title.menuLabel': () => 'Main menu',
+  'title.start': () => 'Start',
+  'title.continue': () => 'Continue',
+  'title.continueAct': ({ act }) => actNumber(act),
+  'title.daily': () => 'Daily challenge',
+  'title.codex': () => 'Codex',
+  'title.settings': () => 'Settings',
+
+  // ── The footer (§8.3.1, §14.4) ─────────────────────────────────────────────
+  //
+  // §8.3.1 puts it on *every* screen: `astro-game-lab · MIT · the physics ↗`. The arrow
+  // is part of the link's text rather than an icon, because it means "this leaves the
+  // game" and a glyph would spend one of §9.6's twenty on a convention every reader
+  // already knows.
+  'footer.label': () => 'About this build',
+  'footer.attribution': () => 'astro-game-lab · MIT',
+  'footer.physics': () => 'the physics ↗',
+  'footer.build': () => 'Build',
+  'footer.buildDetail': ({ commit }) => `commit ${commit}`,
+
+  // ── The contract board (§8.3.2) ────────────────────────────────────────────
+  'board.actName': ({ act }) => {
+    const name = ACT_TITLES[act];
+    return name === undefined ? actNumber(act) : `${actNumber(act)} · ${name}`;
+  },
+  'board.actProgress': ({ bronzed, total }, fmt) => `${fmt.integer(bronzed)}/${fmt.integer(total)}`,
+
+  // Every number comes in as a parameter — see `types.ts` on why this sentence may not
+  // know that the threshold is two thirds.
+  'board.actLocked': ({ requiredAct, required, earned }, fmt) =>
+    `Locked — needs ${fmt.integer(required)} of ${actNumber(requiredAct)} at Bronze. You have ${fmt.integer(earned)}.`,
+
+  'board.cardNumber': ({ index }, fmt) =>
+    fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false }),
+  'board.cardLabel': ({ index, title }, fmt) =>
+    `Contract ${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })} — ${title}`,
+  'board.lockedCardNumber': () => '??',
+
+  'board.par': ({ dvMps }, fmt) => `par ${fmt.decimal(dvMps, 1)} m/s`,
+  'board.best': ({ dvMps }, fmt) => `${fmt.decimal(dvMps, 1)} m/s`,
+  'board.notAttempted': () => 'Not attempted',
+  'board.next': () => 'Next',
+  'board.credits': ({ kilocredits }, fmt) => `${fmt.decimal(kilocredits, 1)}k`,
+  'board.creditsLabel': () => 'Credits',
+  'board.backToTitle': () => 'Hohmann Heist',
+  'board.settings': () => 'Settings',
+  'board.cardsLabel': ({ act }) => `${actNumber(act)} contracts`,
+
+  // The daily strip says what it does not know. The daily challenge is M7; a submission
+  // count here would be a number invented to fill a space.
+  'board.daily.heading': () => 'Daily challenge',
+  'board.daily.notAttempted': () => 'Not attempted.',
+  'board.daily.noSubmissions': () => 'Submissions open when the daily does.',
+  'board.daily.yourBest': () => 'your best: —',
+
+  'board.lockedContract.heading': () => 'Not yet',
+  'board.lockedContract.back': () => 'Back to the board',
+
+  // ── §8.7's empty, loading and failure states ───────────────────────────────
+  'state.error.heading': () => 'That screen stopped working',
+  'state.error.body': () =>
+    'Something in this screen failed. Your progress is saved and the rest of the game still works.',
+  'state.error.back': () => 'Back to the board',
+  'state.error.detail': ({ message }) => message,
+
+  // Names the field the loader rejected, because "invalid scenario" tells the person who
+  // could fix it nothing. `parseScenario` produced both halves; this only lays them out.
+  'state.scenario.heading': ({ id }) => `“${id}” can’t be loaded`,
+  'state.scenario.body': () =>
+    'This contract’s data failed validation, so it was refused rather than partly loaded.',
+  'state.scenario.field': ({ path, detail }) => `${path}: ${detail}`,
+  'state.scenario.report': () => 'Report this ↗',
+
+  'state.replay.invalidHeading': () => 'That replay code can’t be read',
+  'state.replay.invalidBody': () =>
+    'The code is malformed or was truncated in transit. Ask for it again in full.',
+  'state.replay.futureHeading': () => 'That replay is from a newer build',
+  'state.replay.futureBody': ({ found, supported }, fmt) =>
+    `The code is schema version ${fmt.integer(found)}; this build reads version ${fmt.integer(supported)}.`,
+  'state.replay.release': () => 'Get the build that reads it ↗',
+
+  'state.canvas.heading': () => 'This browser can’t draw the orbit view',
+  'state.canvas.body': () =>
+    'The game needs a 2-D canvas and this browser did not provide one. Everything below is what does work.',
+  'state.canvas.tier1': () =>
+    'Fully supported: Chrome, Edge and Firefox (last two versions), Safari 17 and later.',
+  'state.canvas.tier2': () => 'Smoke-tested: Samsung Internet and Chrome on Android (last two).',
 
   // ── Screen headings and the not-found state (§8.2, §8.7) ───────────────────
   //

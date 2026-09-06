@@ -8,9 +8,298 @@
       name="description"
       content="Steal things in orbit. A browser puzzle game where the only weapon is real orbital mechanics."
     />
+
+    <!--
+      §11.15's unsupported page and §8.7's first-load skeleton, inline — #126, #125.
+
+      Both live here rather than in the bundle for the same reason: they have to work in
+      the moments the bundle does not. The check runs on a browser that cannot parse the
+      bundle, and the skeleton has to be painted before the bundle has been fetched.
+
+      Everything below is styled inline and mirrors #116's default palette (`--bg`
+      #05070d, `--fg` #e8ecf4, `--fg-dim` #9fb3c8, `--accent` #5bc0eb). The application's
+      CSS is imported from `main.tsx` and bundled, so a browser that cannot load the bundle
+      never sees it — a rule referencing a custom property would resolve to nothing and the
+      page would be black text on white, which is the "looks broken" outcome the page
+      exists to avoid.
+    -->
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: #05070d;
+        color: #e8ecf4;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+      #hh-unsupported,
+      #hh-boot {
+        box-sizing: border-box;
+        margin: 0 auto;
+        max-width: 46rem;
+        padding: 3rem 1.5rem;
+      }
+      #hh-unsupported h1,
+      #hh-boot .hh-boot__wordmark {
+        font-size: 1.75rem;
+        letter-spacing: 0.14em;
+        margin: 0 0 1rem;
+        text-transform: uppercase;
+      }
+      #hh-unsupported p {
+        color: #9fb3c8;
+        line-height: 1.6;
+        margin: 0 0 1rem;
+      }
+      #hh-unsupported .hh-unsupported__reason {
+        color: #e8ecf4;
+      }
+      #hh-unsupported h2 {
+        font-size: 1rem;
+        letter-spacing: 0.08em;
+        margin: 2rem 0 0.5rem;
+        text-transform: uppercase;
+      }
+      #hh-unsupported ul {
+        color: #9fb3c8;
+        line-height: 1.6;
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+      #hh-unsupported a {
+        color: #5bc0eb;
+      }
+
+      /*
+        §8.7's first load: "Inline skeleton of the title screen; the app is < 400 kB gzip
+        and should be interactive before a spinner would appear (NFR-020). If it takes
+        > 800 ms, a minimal progress bar."
+
+        So the bar is *not present* at 0 ms and is not a spinner. It is one rule with an
+        800 ms delay on the animation that reveals it — no script, no timer, nothing to
+        clean up, and nothing to race the bundle. A fast load replaces this subtree before
+        the animation begins and the bar is never painted at all.
+      */
+      #hh-boot .hh-boot__line {
+        background: #0f1622;
+        border-radius: 2px;
+        height: 0.75rem;
+        margin: 0 0 0.75rem;
+      }
+      #hh-boot .hh-boot__line--short {
+        width: 40%;
+      }
+      #hh-boot .hh-boot__bar {
+        background: #0f1622;
+        border-radius: 2px;
+        height: 2px;
+        margin-top: 2.5rem;
+        opacity: 0;
+        overflow: hidden;
+        animation: hh-boot-appear 1ms linear 800ms forwards;
+      }
+      #hh-boot .hh-boot__bar::after {
+        animation: hh-boot-progress 1.4s ease-in-out 800ms infinite;
+        background: #5bc0eb;
+        content: '';
+        display: block;
+        height: 100%;
+        width: 35%;
+      }
+      @keyframes hh-boot-appear {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes hh-boot-progress {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(340%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #hh-boot .hh-boot__bar::after {
+          animation: none;
+          width: 100%;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <!--
+      §8.7's first-load skeleton. Preact's `render` replaces the contents of `#app`, so
+      this is removed by the first paint of the real title screen and needs no teardown.
+      `aria-hidden` and `aria-busy`: it is a picture of a screen that is not there yet, and
+      announcing its shape would be announcing nothing.
+    -->
+    <div id="app">
+      <div id="hh-boot" aria-hidden="true" aria-busy="true">
+        <p class="hh-boot__wordmark">Hohmann Heist</p>
+        <div class="hh-boot__line"></div>
+        <div class="hh-boot__line hh-boot__line--short"></div>
+        <div class="hh-boot__bar"></div>
+      </div>
+    </div>
+
+    <!--
+      §11.15's pre-boot capability check — #126.
+
+      **This script is ES5 and must stay ES5.** `var`, `function`, no arrow, no `const`,
+      no template literal, no optional chaining. A browser that cannot parse ES2022 cannot
+      parse a check written in it: the whole file would fail to parse, this would never
+      run, and the player would get exactly the blank page the check exists to prevent.
+      `boot/supported.test.ts` extracts this block and asserts both halves — that it parses
+      and behaves, and that it contains no post-ES5 syntax.
+
+      **Detection is by feature, not by `eval` of modern syntax.** Probing ES2022 by
+      `try { eval('class A { #x }') }` alone tells you what the engine *parses*, costs a
+      CSP exception, and is defeated by any engine that parses more than it implements.
+      Reading for ES2022 *library* surface — `Object.hasOwn`, `Array.prototype.at`,
+      `String.prototype.replaceAll`, `Error.prototype.cause` — is plain ES5 property
+      access, works everywhere, and is what actually correlates with the baseline. A
+      `new Function` syntax probe corroborates it inside a `try`, so an engine with the
+      methods and without the grammar is still caught.
+
+      **`CompressionStream` is deliberately absent from the blocking set.** §11.15 lists it,
+      and then says a ~3 kB `fflate` fallback covers the Safari versions that lack it.
+      Blocking on it would lock out players who can play, which is worse than the blank
+      page this is here to fix.
+
+      FR-910 exception, stated rather than silent: the strings below are not in the message
+      catalogue. They cannot be — the catalogue is in the bundle, and this runs when the
+      bundle will not. Reviewed and accepted as the one place in the application where
+      user-facing text is a literal.
+    -->
+    <script id="hh-boot-check">
+      (function () {
+        'use strict';
+
+        var missing = null;
+
+        // ES2022 library surface, in ES5 syntax.
+        if (
+          typeof Object.hasOwn !== 'function' ||
+          typeof Array.prototype.at !== 'function' ||
+          typeof String.prototype.replaceAll !== 'function'
+        ) {
+          missing = 'ES2022 JavaScript';
+        }
+
+        // Corroborate with the grammar, inside a try so a parse failure is a value rather
+        // than an uncaught error. Never the only signal — see the comment above.
+        if (missing === null) {
+          try {
+            new Function('class A { #x = 1; m() { return this.#x ?? 0; } } return new A().m();')();
+          } catch (error) {
+            missing = 'ES2022 JavaScript';
+          }
+        }
+
+        if (missing === null && typeof structuredClone !== 'function') {
+          missing = 'structuredClone';
+        }
+
+        if (missing === null) {
+          var supportsCanvas = false;
+          try {
+            var probe = document.createElement('canvas');
+            supportsCanvas = !!(probe.getContext && probe.getContext('2d'));
+          } catch (error) {
+            supportsCanvas = false;
+          }
+          if (!supportsCanvas) {
+            missing = 'Canvas 2D';
+          }
+        }
+
+        if (missing === null) {
+          return;
+        }
+
+        var app = document.getElementById('app');
+        if (!app) {
+          return;
+        }
+
+        // Built with the DOM rather than `innerHTML`, so the reason — which is one of
+        // three fixed strings above and never user input — cannot become markup.
+        while (app.firstChild) {
+          app.removeChild(app.firstChild);
+        }
+
+        var page = document.createElement('div');
+        page.id = 'hh-unsupported';
+
+        var heading = document.createElement('h1');
+        heading.appendChild(document.createTextNode('Hohmann Heist'));
+        page.appendChild(heading);
+
+        var reason = document.createElement('p');
+        reason.className = 'hh-unsupported__reason';
+        reason.appendChild(
+          document.createTextNode('This browser is missing ' + missing + ', which the game needs.'),
+        );
+        page.appendChild(reason);
+
+        var explain = document.createElement('p');
+        explain.appendChild(
+          document.createTextNode(
+            'The game runs entirely in the browser and propagates real orbits, so it needs a ' +
+              'current one. Nothing is wrong with your machine and nothing needs installing ' +
+              'beyond a newer browser.',
+          ),
+        );
+        page.appendChild(explain);
+
+        var matrixHeading = document.createElement('h2');
+        matrixHeading.appendChild(document.createTextNode('What works'));
+        page.appendChild(matrixHeading);
+
+        var list = document.createElement('ul');
+        var rows = [
+          'Chrome, Edge and Firefox — the last two versions. Fully tested.',
+          'Safari 17 and later, on macOS and iOS. Fully tested.',
+          'Samsung Internet and Chrome on Android — the last two versions. Smoke-tested.',
+        ];
+        for (var i = 0; i < rows.length; i++) {
+          var row = document.createElement('li');
+          row.appendChild(document.createTextNode(rows[i]));
+          list.appendChild(row);
+        }
+        page.appendChild(list);
+
+        var source = document.createElement('p');
+        var link = document.createElement('a');
+        link.href = 'https://github.com/astro-game-lab/hohmann-heist';
+        link.appendChild(document.createTextNode('astro-game-lab/hohmann-heist'));
+        source.appendChild(link);
+        page.appendChild(source);
+
+        app.appendChild(page);
+
+        // Stop the application from painting over this.
+        //
+        // Two of the three checks above — `structuredClone` and Canvas 2D — can fail on an
+        // engine that *does* parse the bundle, so the module script will run, mount, and
+        // replace everything just written. A flag is the only thing that reaches it: the
+        // `<script type="module">` element does not exist yet when this runs (it is later
+        // in the document), and removing a deferred script from the tree does not cancel
+        // it in any case. `main.tsx` reads this and declines to render.
+        window.__HH_UNSUPPORTED__ = true;
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

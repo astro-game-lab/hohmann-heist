@@ -67,12 +67,136 @@ export interface MessageFormatters {
 /** Keys the UI owns, with their parameters. Rules' keys come from `@hh/game`. */
 export interface UiMessageParams {
   readonly 'app.title': Record<string, never>;
-  readonly 'app.routesLabel': Record<string, never>;
-  readonly 'nav.board': Record<string, never>;
-  readonly 'nav.contract': { readonly index: number };
-  readonly 'nav.daily': Record<string, never>;
-  readonly 'nav.codex': Record<string, never>;
-  readonly 'nav.settings': Record<string, never>;
+
+  // ── The title screen (§8.3.1, #118) ───────────────────────────────────────
+  //
+  // The wordmark is the screen's `<h1>` and resolves through `app.title`, so it is type
+  // rather than an image and needs no separate label: what a screen reader announces on
+  // entry is the game's name, which is what §8.3.1 asks the screen to do first.
+  //
+  // The five entries are one key each rather than a table keyed by route. §8.2's
+  // information architecture is the thing being named here, and a route is not a noun a
+  // player says — "Daily Challenge" is.
+  readonly 'title.tagline': Record<string, never>;
+  readonly 'title.menuLabel': Record<string, never>;
+  readonly 'title.start': Record<string, never>;
+  readonly 'title.continue': Record<string, never>;
+  /**
+   * What *Continue* resumes, as the entry's own description.
+   *
+   * §8.3.1's mockup writes it as `(Act II)`, and the act is the useful half: the contract
+   * number moves every time the player finishes one, and the act is the part they
+   * remember being in. Named through the same act table the board uses.
+   */
+  readonly 'title.continueAct': { readonly act: number };
+  readonly 'title.daily': Record<string, never>;
+  readonly 'title.codex': Record<string, never>;
+  readonly 'title.settings': Record<string, never>;
+
+  // ── The footer, present on every screen (§8.3.1, §14.4) ───────────────────
+  //
+  // The version itself is **not** here — `apps/web/src/version.ts` says why: it is an
+  // identifier to be read back verbatim into a bug report, not prose, and a locale that
+  // regrouped its digits would break the one thing it is for. What is here is the label
+  // that names it, which is prose and does need translating.
+  readonly 'footer.label': Record<string, never>;
+  /**
+   * §8.3.1's `astro-game-lab · MIT`, as **one** message.
+   *
+   * Not two keys with a separator between them in JSX. That separator would be literal
+   * text — NFR-028's lint rule says so and refused it — and, worse, it would be a sentence
+   * assembled from fragments, which is the one thing `types.ts` says this catalogue does
+   * not do. The `·` between this and the physics link is drawn by CSS, where a decoration
+   * belongs.
+   */
+  readonly 'footer.attribution': Record<string, never>;
+  readonly 'footer.physics': Record<string, never>;
+  readonly 'footer.build': Record<string, never>;
+  /** The commit, reachable without a second visible number — §14.4, #118. */
+  readonly 'footer.buildDetail': { readonly commit: string };
+
+  // ── The contract board (§8.3.2, #119) ─────────────────────────────────────
+  //
+  // §6.8's act names live here rather than in the scenario files. They are campaign
+  // *chrome* — a heading over a row of cards — and no rule reads them, so putting them in
+  // the content would make every contract file carry a copy of its act's title and invite
+  // the four in Act I to disagree. Keyed by act number, with a bare "Act N" for an act
+  // whose name has not been written yet, so shipping Act III's contracts cannot render a
+  // missing key.
+  readonly 'board.actName': { readonly act: number };
+  /** §8.3.2's "4/4" — how many of an act's contracts have at least Bronze. */
+  readonly 'board.actProgress': { readonly bronzed: number; readonly total: number };
+  /**
+   * §8.3.2's `🔒 needs 2/3 of Act II`, from #82's `LockReason` and nothing else.
+   *
+   * Every number in the sentence is a parameter, because the ⌈2/3⌉ rule is §6.8's and the
+   * board may not carry a second copy of it. A message that wrote "two thirds" would be
+   * that copy.
+   */
+  readonly 'board.actLocked': {
+    readonly requiredAct: number;
+    readonly required: number;
+    readonly earned: number;
+  };
+  readonly 'board.cardNumber': { readonly index: number };
+  /** The card's accessible name: number and title together, so the two are announced as one. */
+  readonly 'board.cardLabel': { readonly index: number; readonly title: string };
+  readonly 'board.lockedCardNumber': Record<string, never>;
+  /** FR-304: par is shown whether or not the contract has been played. */
+  readonly 'board.par': { readonly dvMps: number };
+  readonly 'board.best': { readonly dvMps: number };
+  readonly 'board.notAttempted': Record<string, never>;
+  readonly 'board.next': Record<string, never>;
+  /** §6.10's career total. Flavour with a number attached; nothing evaluates it. */
+  readonly 'board.credits': { readonly kilocredits: number };
+  readonly 'board.creditsLabel': Record<string, never>;
+  readonly 'board.backToTitle': Record<string, never>;
+  readonly 'board.settings': Record<string, never>;
+  readonly 'board.cardsLabel': { readonly act: number };
+
+  // §8.3.2's daily strip, told honestly. The daily is M7, and this says what it does not
+  // know rather than implying a backend that has not been built (§8.7's offline row is
+  // the model).
+  readonly 'board.daily.heading': Record<string, never>;
+  readonly 'board.daily.notAttempted': Record<string, never>;
+  readonly 'board.daily.noSubmissions': Record<string, never>;
+  readonly 'board.daily.yourBest': Record<string, never>;
+
+  /** §8.3.3's locked contract, reached by typing its URL. Same rule, same sentence. */
+  readonly 'board.lockedContract.heading': Record<string, never>;
+  readonly 'board.lockedContract.back': Record<string, never>;
+
+  // ── §8.7's empty, loading and failure states (#125) ────────────────────────
+  //
+  // The loader already refuses correctly — `parseScenario` returns field-level errors and
+  // the save module refuses rather than repairs. These are the *rendering* of those
+  // refusals and add no second policy: every one of them names what the layer below
+  // reported, and none of them decides anything.
+  //
+  // §8.7's **first-load** row has no key here on purpose. Its skeleton lives in
+  // `index.html`, where the catalogue cannot be reached — it has to paint before the
+  // bundle exists — and it is `aria-hidden` with no text of its own, so there is nothing
+  // to translate. See `index.html` for the FR-910 exception it shares with #126's
+  // pre-boot page.
+  readonly 'state.error.heading': Record<string, never>;
+  readonly 'state.error.body': Record<string, never>;
+  readonly 'state.error.back': Record<string, never>;
+  readonly 'state.error.detail': { readonly message: string };
+  readonly 'state.scenario.heading': { readonly id: string };
+  readonly 'state.scenario.body': Record<string, never>;
+  /** One row per field the loader rejected, in the loader's own words. */
+  readonly 'state.scenario.field': { readonly path: string; readonly detail: string };
+  readonly 'state.scenario.report': Record<string, never>;
+  readonly 'state.replay.invalidHeading': Record<string, never>;
+  readonly 'state.replay.invalidBody': Record<string, never>;
+  /** §11.6's `v`: the code says which schema it was written against. */
+  readonly 'state.replay.futureHeading': Record<string, never>;
+  readonly 'state.replay.futureBody': { readonly found: number; readonly supported: number };
+  readonly 'state.replay.release': Record<string, never>;
+  readonly 'state.canvas.heading': Record<string, never>;
+  readonly 'state.canvas.body': Record<string, never>;
+  readonly 'state.canvas.tier1': Record<string, never>;
+  readonly 'state.canvas.tier2': Record<string, never>;
 
   // ── Screen headings and the not-found state (§8.2, §8.7, #117) ─────────────
   //

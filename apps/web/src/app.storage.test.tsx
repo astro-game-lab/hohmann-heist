@@ -143,7 +143,11 @@ describe('a browser that will not store', () => {
   it('does not block anything — the screen is fully rendered and interactive', async () => {
     await mountUnavailable();
     expect(el('screen')).not.toBeNull();
-    expect(el('placeholder-notice')).not.toBeNull();
+    // The title screen, since #118 — it replaced the placeholder this used to look for.
+    // The point of the assertion is unchanged: the notice is beside a working screen, not
+    // instead of one.
+    expect(el('title-screen')).not.toBeNull();
+    expect(el('title-start')).not.toBeNull();
     // Nothing is trapping focus, and the notice is not covering the screen.
     expect(document.activeElement).not.toBe(el('storage-notice'));
   });
