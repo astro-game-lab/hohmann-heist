@@ -25,11 +25,10 @@
 import { createCatalogue, type Catalogue } from '@hh/ui';
 import type { Outcome } from '@hh/game';
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { contractById } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
-import { applyPalette, usePalette } from './palette.js';
 import { onRouteChange, parseHash, type Route } from './router.js';
 import {
   browserStorage,
@@ -38,7 +37,10 @@ import {
   writeSave,
   type LoadOutcome,
   type SaveV1,
+  type StoredSettings,
 } from './save/index.js';
+import { SettingsProvider, useSettings } from './settings/context.js';
+import { applyDocumentSettings } from './settings/document.js';
 import { UnknownContract } from './screens/Briefing.js';
 import { ContractScreen } from './screens/ContractScreen.js';
 import { NotFound } from './screens/NotFound.js';
@@ -245,44 +247,32 @@ const withResult = (save: SaveV1, id: string, outcome: Outcome, replay: string):
   };
 };
 
-export const App = (): JSX.Element => {
+/**
+ * The shell, inside the settings context.
+ *
+ * Split from {@link App} for one structural reason: a component cannot consume a context
+ * it provides. `App` owns the save — which is where the settings live — and this reads
+ * them back through the same context every other consumer uses, so there is exactly one
+ * path from a stored setting to a rendered value and no shortcut for the shell.
+ */
+const AppShell = ({ saved, onAccept, onComplete }: AppShellProps): JSX.Element => {
   // Resolve the route during the first render rather than in an effect. Effects
   // run after paint, so deferring this would show a placeholder for a frame on
   // every load — and would make the route unobservable to a synchronous test.
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => onRouteChange(setRoute), []);
 
-  const reducedMotion = useReducedMotion();
+  const { settings } = useSettings();
+  const reducedMotion = useReducedMotion(settings['accessibility.reduceMotion']);
 
-  // §9.2's palette, published onto the document element so every rule and every canvas
-  // below resolves against the same thirteen values (#116). An effect rather than a render
-  // -time write because it touches the document outside this tree; the stylesheet already
-  // carries the default palette, so the first paint is correct before this runs and this
-  // only ever changes it.
-  const palette = usePalette();
+  // §9.2's palette and the other three document-level settings, published onto the root
+  // element so every rule and every canvas below resolves against the same values
+  // (#116, #186). An effect rather than a render-time write because it touches the
+  // document outside this tree; the stylesheet already carries the defaults, so the first
+  // paint is correct before this runs and this only ever changes it.
   useEffect(() => {
-    applyPalette(document.documentElement, palette);
-  }, [palette]);
-
-  // Read once, on the first render rather than in an effect: the briefing needs the
-  // attempt count in the markup it first paints, and a save that arrived a frame later
-  // would show "attempts: 0" and then correct itself.
-  const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
-
-  const acceptContract = (id: string): void => {
-    const next = withAttempt(saved.save, id);
-    // A write that fails is not the player's problem right now — they are on their way to
-    // the planner. #167 owns the notice; what matters here is that it cannot throw.
-    writeSave(storage, next);
-    setSaved({ status: 'loaded', save: next, migrated: false });
-  };
-
-  const completeContract = (id: string, outcome: Outcome, replay: string): void => {
-    const next = withResult(saved.save, id, outcome, replay);
-    if (next === saved.save) return;
-    writeSave(storage, next);
-    setSaved({ status: 'loaded', save: next, migrated: false });
-  };
+    applyDocumentSettings(document.documentElement, settings);
+  }, [settings]);
 
   // Focus moves to the new screen's heading on every route change *except the first*.
   // On a cold load there is no previous screen to have stranded anyone on, and taking
@@ -315,7 +305,58 @@ export const App = (): JSX.Element => {
       t={t}
     >
       {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
-      {bodyFor(route, t, saved.save, acceptContract, completeContract)}
+      {bodyFor(route, t, saved.save, onAccept, onComplete)}
     </Screen>
+  );
+};
+
+interface AppShellProps {
+  readonly saved: LoadOutcome;
+  readonly onAccept: (id: string) => void;
+  readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
+}
+
+export const App = (): JSX.Element => {
+  // Read once, on the first render rather than in an effect: the briefing needs the
+  // attempt count in the markup it first paints, and a save that arrived a frame later
+  // would show "attempts: 0" and then correct itself.
+  const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
+
+  const acceptContract = (id: string): void => {
+    const next = withAttempt(saved.save, id);
+    // A write that fails is not the player's problem right now — they are on their way to
+    // the planner. #167 owns the notice; what matters here is that it cannot throw.
+    writeSave(storage, next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
+
+  const completeContract = (id: string, outcome: Outcome, replay: string): void => {
+    const next = withResult(saved.save, id, outcome, replay);
+    if (next === saved.save) return;
+    writeSave(storage, next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
+
+  /**
+   * A settings change, persisted and applied.
+   *
+   * Stable across renders (`useCallback` over the current save), because the provider
+   * memoises its context value on this function: a fresh one every render would rebuild
+   * the context every render and re-run every consumer's effects with it, which for the
+   * palette means repainting thirteen custom properties on every keystroke in the
+   * planner.
+   */
+  const changeSettings = useCallback((stored: StoredSettings): void => {
+    setSaved((current) => {
+      const next: SaveV1 = { ...current.save, settings: stored };
+      writeSave(storage, next);
+      return { status: 'loaded', save: next, migrated: false };
+    });
+  }, []);
+
+  return (
+    <SettingsProvider stored={saved.save.settings} onChange={changeSettings}>
+      <AppShell saved={saved} onAccept={acceptContract} onComplete={completeContract} />
+    </SettingsProvider>
   );
 };

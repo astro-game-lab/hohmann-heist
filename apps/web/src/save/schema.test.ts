@@ -17,7 +17,7 @@ const populated = (): SaveV1 => ({
     },
   },
   daily: { days: { '2026-09-01': { bestDv_mps: 312.9, submitted: true } }, streak: 6 },
-  settings: { theme: 'dark', uiScale: 100, reduceMotion: false },
+  settings: { 'display.theme': 'light', 'display.uiScale': 110 },
   flags: { coachMarksSeen: ['mark.c03.departureWindow'], codexRead: ['phasing'] },
 });
 
@@ -105,7 +105,6 @@ describe('parseSaveV1', () => {
       { ...base, daily: { days: {} } },
       { ...base, daily: { days: { '2026-09-01': { bestDv_mps: 1 } }, streak: 0 } },
       { ...base, daily: { days: [], streak: 0 } },
-      { ...base, settings: { theme: { nested: true } } },
       { ...base, flags: { coachMarksSeen: [1], codexRead: [] } },
       { ...base, flags: { coachMarksSeen: [] } },
       { ...base, identity: { handle: 'x' } },
@@ -115,6 +114,58 @@ describe('parseSaveV1', () => {
         ok: false,
       });
     }
+  });
+
+  /**
+   * Settings are the one block that cannot make a save unreadable — #186, FR-701.
+   *
+   * Every other field here refuses a document it does not understand, and that is right:
+   * a contract record with a negative attempt count is a corrupted save and pretending
+   * otherwise would report progress nobody made. Settings are the opposite case. They are
+   * the least important thing in the document and the most likely to be hand-edited —
+   * §11.7 invites the player to open the file — so a typo in one must cost that setting
+   * and nothing else. A save whose whole medal history was refused because `uiScale` said
+   * `"large"` would be the worst bug this module could have.
+   */
+  it('never refuses a save over its settings — a bad one is dropped, not fatal', () => {
+    const base = JSON.parse(JSON.stringify(populated())) as Record<string, unknown>;
+    const survivors: readonly Record<string, unknown>[] = [
+      { ...base, settings: { 'display.theme': { nested: true } } },
+      { ...base, settings: { 'display.theme': 'chartreuse' } },
+      { ...base, settings: { 'display.uiScale': 103 } },
+      { ...base, settings: { 'display.uiScale': Number.NaN } },
+      { ...base, settings: { 'no.such.setting': 1 } },
+      { ...base, settings: [] },
+      { ...base, settings: 'dark' },
+    ];
+    for (const document of survivors) {
+      const result = parseSaveV1(document);
+      expect(result.ok, JSON.stringify(document['settings'])).toBe(true);
+      // And the progress it was carrying is untouched, which is the point.
+      if (result.ok) expect(result.save.contracts['c03-cold-open']?.medal).toBe('gold');
+    }
+  });
+
+  it('drops an unknown settings key and an out-of-domain value, keeping the rest', () => {
+    const base = JSON.parse(JSON.stringify(populated())) as Record<string, unknown>;
+    const result = parseSaveV1({
+      ...base,
+      settings: {
+        'display.theme': 'light',
+        'display.uiScale': 103,
+        'no.such.setting': true,
+        keybindings: { addNode: 'k', bogus: 4 },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // `light` is in domain and kept; 103 is off the 5% step grid and dropped, so the
+    // default applies; the unknown key never enters the document; and a rebind whose
+    // value is not a string goes with it.
+    expect(result.save.settings).toStrictEqual({
+      'display.theme': 'light',
+      keybindings: { addNode: 'k' },
+    });
   });
 
   // `Infinity` and `NaN` do not survive `JSON.stringify` — they come back as `null` —

@@ -37,17 +37,10 @@
  * is what makes the shell visible at all.
  */
 import type { SceneColours } from '@hh/render';
-import { useEffect, useMemo, useState } from 'preact/hooks';
-import {
-  DEFAULT_PALETTE_ID,
-  MEDAL_KEYS,
-  TOKENS,
-  isPaletteId,
-  mixColour,
-  paletteSet,
-  withAlpha,
-  type PaletteId,
-} from '@hh/ui';
+import { useMemo } from 'preact/hooks';
+import { MEDAL_KEYS, TOKENS, mixColour, paletteSet, withAlpha, type PaletteId } from '@hh/ui';
+
+import { useSetting } from './settings/context.js';
 
 /**
  * How far Earth's coastline is lifted from its fill toward the annotation ink.
@@ -145,52 +138,16 @@ export const applyPalette = (root: HTMLElement, id: PaletteId): void => {
 };
 
 /**
- * Which palette to show, until §8.3.12's control exists.
- *
- * **Temporary, and deliberately visible as such.** #186 makes the palette a persisted
- * setting and #122 renders the control; until then there is no way to reach four of the
- * five palettes, which would make FR-907 unverifiable and would leave "switching restyles
- * every screen and the canvas" as a claim nobody could check.
- *
- * So the hash carries it: `#/board?palette=deuteranopia`. The router already discards
- * everything after the `?` when matching a route (`router.ts`), so this reads the same
- * string without changing how routing works, and an unknown or absent value is the
- * default rather than an error.
- *
- * This goes when the setting lands, exactly as `app.tsx`'s temporary `NAV` list goes when
- * the title screen does.
- */
-export const paletteFromHash = (hash: string): PaletteId => {
-  const query = hash.indexOf('?');
-  if (query === -1) return DEFAULT_PALETTE_ID;
-  const requested = new URLSearchParams(hash.slice(query + 1)).get('palette');
-  return requested !== null && isPaletteId(requested) ? requested : DEFAULT_PALETTE_ID;
-};
-
-/**
  * The palette that is showing, as a value a component can render from.
  *
- * Subscribes to `hashchange` for the same reason {@link paletteFromHash} exists: the
- * temporary source is in the URL, so changing it has to restyle without a reload — which
- * is the property FR-907 is judged on and the one a hard-coded default could not
- * demonstrate. When #186 makes this a setting, only this hook's body changes.
+ * One line, now that #186 exists. It was a `hashchange` subscription reading
+ * `#/board?palette=deuteranopia` — the temporary way to reach four of the five palettes
+ * before there was a setting, which is what made FR-907 verifiable at all in M2. Its own
+ * docstring said it would go when the setting landed, and this is that: the source is
+ * `accessibility.palette`, changing it re-renders every reader, and there is no second
+ * way to set a palette that could disagree with the stored one.
  */
-export const usePalette = (): PaletteId => {
-  const [id, setId] = useState<PaletteId>(() => paletteFromHash(window.location.hash));
-
-  useEffect(() => {
-    const emit = (): void => {
-      setId(paletteFromHash(window.location.hash));
-    };
-    window.addEventListener('hashchange', emit);
-    emit();
-    return () => {
-      window.removeEventListener('hashchange', emit);
-    };
-  }, []);
-
-  return id;
-};
+export const usePalette = (): PaletteId => useSetting('accessibility.palette');
 
 /**
  * The scene's inks for the palette that is showing.

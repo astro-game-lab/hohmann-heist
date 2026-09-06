@@ -40,6 +40,37 @@
   --hh-screen-in-duration: 160ms;
 
   /*
+   * §8.3.12's UI scale, 90–150%, as a unitless multiplier on the root font size.
+   *
+   * One property rather than a size per component: every length in this stylesheet that
+   * should scale is written in `rem`, so multiplying the root size moves all of them
+   * together and a new component inherits the behaviour without knowing the setting
+   * exists. `settings/document.ts` publishes it; the declaration here is the value before
+   * any script has run, and it must always resolve or the `calc` below collapses.
+   *
+   * Deliberately *not* applied with `zoom` or a `transform`: both scale the rendered
+   * result including the canvas bitmap, which would make the orbit view blurry rather
+   * than bigger, and neither reflows text.
+   */
+  --hh-ui-scale: 1;
+
+  /*
+   * §8.3.12's "increase line weights", as three widths every rule reads.
+   *
+   * Three rather than one because the stylesheet already has three: a hairline for panel
+   * and control edges, a heavier ring for focus (§8.8 requires it be visible and never
+   * suppressed), and a thick rule for the bars that mark a section. Scaling them with a
+   * single multiplier would take the focus ring to 4 px while the hairline reached 2 px,
+   * which is not "heavier lines" so much as "one enormous line" — so each has its own
+   * pair of values and `[data-line-weights]` below states the heavy set outright.
+   */
+  --hh-line: 1px;
+  --hh-line-strong: 2px;
+  --hh-rule: 3px;
+
+  font-size: calc(100% * var(--hh-ui-scale));
+
+  /*
    * §9.2's thirteen tokens and §8.3.2's medal ramp, in the default palette.
    *
    * **These are duplicates, and a test keeps them honest.** `@hh/ui`'s palette module is
@@ -96,6 +127,33 @@ body {
 }
 
 /*
+ * §8.3.12's "increase line weights" (#186, #122).
+ *
+ * An attribute rather than a class, and its *presence* rather than its value — see
+ * `settings/document.ts`. Every width below is one step up from the default set, chosen so
+ * the hairline becomes visible on a low-contrast display without the focus ring growing
+ * into the content beside it.
+ */
+:root[data-line-weights] {
+  --hh-line: 2px;
+  --hh-line-strong: 3px;
+  --hh-rule: 5px;
+}
+
+/*
+ * §8.3.12's "disable background animation".
+ *
+ * Distinct from reduce-motion, which collapses *transitions* — the durations above. This
+ * is for the ambient, always-running kind, which has no duration to collapse because it
+ * never ends. Nothing in the application has one yet; the rule is stated here so the first
+ * thing that does inherits the opt-out rather than inventing a second one, and so the
+ * control is not a switch wired to nothing.
+ */
+:root[data-no-background-animation] .hh-background-animated {
+  animation: none;
+}
+
+/*
  * §9.4 calls this a cross-fade, and it is a fade-in: the outgoing screen is unmounted
  * before the incoming one renders, so there is nothing to cross with. Holding both in
  * the document to cross them properly would mean two live screens — two focus targets,
@@ -122,7 +180,7 @@ body {
  * is the same failure as no ring at all, for the user who needs it.
  */
 .hh-screen__heading:focus {
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: 3px;
 }
 
@@ -272,7 +330,7 @@ body {
 .hh-save-notice {
   max-width: 62ch;
   padding: 8px 12px;
-  border: 1px solid currentColor;
+  border: var(--hh-line) solid currentColor;
   border-radius: 4px;
 }
 
@@ -334,14 +392,14 @@ body {
 
 .hh-planner__tabs button[aria-selected='true'] {
   font-weight: 600;
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: -2px;
 }
 
 .hh-planner__refusal {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--bad);
+  border-left: var(--hh-rule) solid var(--bad);
 }
 
 @media (min-width: 1024px) {
@@ -490,7 +548,7 @@ body {
 .hh-timeline__track {
   position: relative;
   height: 34px;
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 3px;
 }
 
@@ -539,13 +597,13 @@ body {
   padding: 0;
   transform: translateX(-50%) rotate(45deg);
   background: var(--plan);
-  border: 1px solid var(--bg);
+  border: var(--hh-line) solid var(--bg);
   cursor: pointer;
 }
 
 .hh-timeline__node[aria-pressed='true'] {
   background: var(--accent);
-  outline: 2px solid var(--accent);
+  outline: var(--hh-line-strong) solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -573,14 +631,14 @@ body {
 }
 
 .hh-plan__row {
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 3px;
   padding: 4px 6px;
 }
 
 .hh-plan__row[data-selected='true'] {
   border-color: var(--accent);
-  outline: 1px solid var(--accent);
+  outline: var(--hh-line) solid var(--accent);
 }
 
 .hh-plan__select {
@@ -641,7 +699,7 @@ body {
   gap: 2px;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 6px;
 }
 
@@ -688,7 +746,7 @@ body {
   padding: 8px 12px;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid var(--accent);
+  border: var(--hh-line) solid var(--accent);
 }
 
 .hh-skip-link:focus {
@@ -818,7 +876,7 @@ body {
   white-space: nowrap;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -934,7 +992,7 @@ body {
 .hh-commit__history {
   padding: 8px 12px;
   background: none;
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 4px;
   font: inherit;
   color: inherit;
@@ -1017,7 +1075,7 @@ body {
  */
 
 .hh-editor {
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 4px;
   padding: 8px 10px;
   display: flex;
@@ -1163,7 +1221,7 @@ body {
 .hh-planner__committed {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--ok);
+  border-left: var(--hh-rule) solid var(--ok);
 }
 
 .hh-orbit__control {
@@ -1177,7 +1235,7 @@ body {
 
 .hh-editor__snap [role='radio'][aria-checked='true'] {
   font-weight: 600;
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: -2px;
 }
 
@@ -1235,7 +1293,7 @@ body {
 .hh-execution__paused {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--warn);
+  border-left: var(--hh-rule) solid var(--warn);
 }
 
 .hh-execution__transport {
@@ -1280,7 +1338,7 @@ body {
    does — §8.8: no information by colour alone. */
 .hh-execution__speeds button[aria-pressed='true'] {
   font-weight: 600;
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: -2px;
 }
 
@@ -1470,7 +1528,7 @@ body {
 .hh-debrief__miss {
   margin: 0;
   padding: 8px 12px;
-  border-inline-start: 3px solid var(--bad);
+  border-inline-start: var(--hh-rule) solid var(--bad);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1509,7 +1567,7 @@ body {
    answer than ours, which means ours is wrong. */
 .hh-debrief__beat-par {
   padding: 8px 12px;
-  border-inline-start: 3px solid var(--warn);
+  border-inline-start: var(--hh-rule) solid var(--warn);
 }
 
 .hh-debrief__beat-par p {
