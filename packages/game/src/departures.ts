@@ -183,7 +183,13 @@ export const DEPARTURES: readonly Departure[] = Object.freeze([
     module: '@hh/game/snap',
     layer: 'above-core',
     status: 'active',
-    visibility: 'internal',
+    // `internal` until #136. The assist tray always listed the *toggle*, but a player
+    // could not tell a burn the snap had moved from one that happened to sit near an
+    // apsis — which is the thing a departure has to be visible about, since this one
+    // silently changes an epoch the player chose. A snapped burn now carries a mark on
+    // its node marker and in the plan panel's row, in a glyph and in words, so the
+    // departure is observable rather than merely documented.
+    visibility: 'player-visible',
   },
   {
     id: 'DEP-08',

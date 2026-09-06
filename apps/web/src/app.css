@@ -494,11 +494,24 @@ body {
   border-radius: 3px;
 }
 
+/* §8.6: a preview is shaded and a violation is solid. Two states, and the difference is
+   what tells a player whether they have already broken a rule or are being warned before
+   they do — so it is a difference in *weight* rather than in hue, which reads at a glance
+   and survives every palette. Neither is a modal and neither makes a sound. */
 .hh-timeline__band {
   position: absolute;
   top: 0;
   bottom: 0;
+}
+
+.hh-timeline__band[data-state='preview'] {
   background: repeating-linear-gradient(45deg, var(--hazard) 0 4px, transparent 4px 8px);
+  opacity: 0.55;
+}
+
+.hh-timeline__band[data-state='violated'] {
+  background: repeating-linear-gradient(45deg, var(--hazard) 0 4px, transparent 4px 8px);
+  background-color: var(--hazard);
 }
 
 .hh-timeline__deadline {
@@ -595,6 +608,155 @@ body {
   margin-top: 2px;
 }
 
+/* DEP-07's mark (#136). A caret rather than a badge: it sits in the epoch cell it is a
+   statement about, reads at a glance beside a monospace time, and costs no row height —
+   a badge here would push every row taller for a mark most nodes do not carry. The colour
+   is the accent rather than a status colour, because a snap is not a warning. */
+.hh-plan__snapped {
+  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: help;
+}
+
+/* ── §8.5.2's node context menu (#136) ───────────────────────────────────── *
+ *
+ * Positioned over the stage and clamped to it, the same way the node editor's anchor is
+ * and for the same reason — measuring in CSS keeps it correct through a resize without a
+ * layout read. `z-index` above the editor: the menu is opened on top of whatever is
+ * already there and is dismissed first.
+ */
+
+.hh-node-menu {
+  --hh-menu-width: min(220px, calc(100% - 16px));
+
+  position: absolute;
+  z-index: 3;
+  width: var(--hh-menu-width);
+  left: clamp(8px, var(--hh-menu-x, 8px), calc(100% - var(--hh-menu-width) - 8px));
+  top: clamp(8px, var(--hh-menu-y, 8px), calc(100% - 48px));
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 2px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  border: 1px solid var(--grid);
+  border-radius: 6px;
+}
+
+.hh-node-menu__item {
+  padding: 8px 10px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hh-node-menu__item:hover:not(:disabled),
+.hh-node-menu__item:focus-visible {
+  background: var(--bg);
+}
+
+/* Disabled rather than hidden — a menu whose entries come and go teaches a player the
+   game is inconsistent. `NodeContextMenu.tsx` says why at length. */
+.hh-node-menu__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hh-node-menu__reason {
+  margin: 0;
+  padding: 2px 10px 6px;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+/* §8.8's skip-to-content link (#141).
+
+   Off-screen rather than `display: none` — a hidden element is not focusable, and a skip
+   link that cannot be focused is not a skip link. It comes back on focus, over everything,
+   which is the one moment it should be visible at all. */
+.hh-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  border: 1px solid var(--accent);
+}
+
+.hh-skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+/* ── §8.3.3's contract, in the planner (#264) ────────────────────────────── *
+ *
+ * Scrolls within the panel rather than growing it: C07's objective is three numbers and a
+ * long sentence, and the timeline must stay visible at every height (§8.3.4).
+ */
+
+.hh-contract {
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.hh-contract__title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.hh-contract__brief {
+  margin: 0 0 10px;
+  font-size: 0.9em;
+  opacity: 0.9;
+}
+
+.hh-contract__numbers {
+  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.hh-contract__numbers dt {
+  opacity: 0.75;
+}
+
+.hh-contract__numbers dd {
+  margin: 0;
+}
+
+.hh-contract__constraints ul {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hh-contract__setup dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.hh-contract__setup dt {
+  opacity: 0.75;
+}
+
+.hh-contract__setup dd {
+  margin: 0;
+}
+
 /* ── The readouts (#131, #132) ───────────────────────────────────────────── */
 
 .hh-readouts__list {
@@ -668,6 +830,79 @@ body {
 
 /* ── The assist tray (#133's toggle; #140 brings the rest in M3) ──────────── */
 
+/* The disclosure is a button inside the heading rather than beside it, so the whole
+   heading is the hit target and the heading level still describes the region (§8.8). */
+.hh-assists__disclosure {
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hh-assists__disclosure::before {
+  content: '▸ ';
+}
+
+.hh-assists__disclosure[aria-expanded='true']::before {
+  content: '▾ ';
+}
+
+/* FR-411's cap. Outside the disclosure, so it is legible while the tray is shut — it is
+   the consequence of what is inside. Coloured by what it says rather than by severity:
+   a cap is a fact about what this run can earn, not a problem to fix. */
+.hh-assists__cap {
+  margin: 4px 0 8px;
+  font-size: 0.9em;
+}
+
+.hh-assists__cap[data-cap='clean'] {
+  color: var(--medal-clean);
+}
+
+.hh-assists__cap[data-cap='silver'] {
+  color: var(--medal-silver);
+}
+
+.hh-assists__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hh-assists__effect {
+  margin: 2px 0 0;
+  font-size: 0.85em;
+}
+
+/* The two directions are coloured apart as well as worded apart. Neither is `--bad`:
+   earning Blind is a distinction, and accepting a Silver cap is a trade the player chose. */
+.hh-assists__effect[data-effect='blindWhenDisabled'] {
+  color: var(--accent);
+}
+
+.hh-assists__effect[data-effect='capsWhenEnabled'] {
+  color: var(--medal-silver);
+}
+
+.hh-assists__changed {
+  margin: 2px 0 0;
+  font-size: 0.8em;
+  opacity: 0.75;
+}
+
+.hh-assists__always {
+  margin: 0;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 .hh-assists__toggle {
   display: flex;
   align-items: center;
@@ -685,6 +920,30 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.hh-commit__controls {
+  display: flex;
+  gap: 6px;
+}
+
+/* §8.3.4's commit bar already reserved space for these (#138). Sized like the Commit
+   button's siblings rather than like a panel control: they are the same class of action,
+   and a player reaching for UNDO after a bad drag should not have to find a smaller
+   target than the one they are undoing. */
+.hh-commit__history {
+  padding: 8px 12px;
+  background: none;
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hh-commit__history:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .hh-commit__reasons {

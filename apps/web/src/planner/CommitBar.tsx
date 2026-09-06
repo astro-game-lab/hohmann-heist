@@ -42,6 +42,11 @@ export interface CommitBarProps {
   readonly resolveDynamic: Catalogue['resolveDynamic'];
   readonly legality: Legality;
   readonly onCommit: () => void;
+  /** FR-110's controls — §8.3.4's commit bar already reserved the space (#138). */
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly onUndo: () => void;
+  readonly onRedo: () => void;
 }
 
 export const CommitBar = ({
@@ -49,6 +54,10 @@ export const CommitBar = ({
   resolveDynamic,
   legality,
   onCommit,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: CommitBarProps): JSX.Element => {
   // A plan that produced no trajectory has one reason and no `reasons` array — §6.4's
   // non-evaluable case. It is not "illegal"; there was nothing to judge. The message says
@@ -61,8 +70,51 @@ export const CommitBar = ({
   const warnings = reasons.filter((reason) => !reason.blocking);
   const hasReasons = reasons.length > 0;
 
+  /**
+   * `⟲ UNDO` / `⟳` — #138's last criterion.
+   *
+   * *"Disabled with a reason when the stack is empty, never silently inert."* A disabled
+   * button that a screen reader announces only as "dimmed" is the failure that criterion
+   * names, and `aria-describedby` pointing at a hint is the same one attribute the Commit
+   * button below already uses for its blocking reasons.
+   */
+  const historyButton = (
+    kind: 'undo' | 'redo',
+    enabled: boolean,
+    onActivate: () => void,
+  ): JSX.Element => {
+    const hintId = `hh-history-${kind}-hint`;
+    return (
+      <>
+        <button
+          type="button"
+          class="hh-commit__history"
+          disabled={!enabled}
+          data-testid={`commit-${kind}`}
+          {...(enabled ? {} : { 'aria-describedby': hintId })}
+          onClick={onActivate}
+        >
+          {t(kind === 'undo' ? 'planner.history.undo' : 'planner.history.redo', {})}
+        </button>
+        {enabled ? null : (
+          <span class="hh-sr-only" id={hintId} data-testid={`commit-${kind}-hint`}>
+            {t(
+              kind === 'undo' ? 'planner.history.nothingToUndo' : 'planner.history.nothingToRedo',
+              {},
+            )}
+          </span>
+        )}
+      </>
+    );
+  };
+
   return (
     <div class="hh-commit" data-testid="commit-bar">
+      <div class="hh-commit__controls" data-testid="commit-history">
+        {historyButton('undo', canUndo, onUndo)}
+        {historyButton('redo', canRedo, onRedo)}
+      </div>
+
       {hasReasons ? (
         <ul class="hh-commit__reasons" id={REASONS_ID} data-testid="commit-reasons">
           {blocking.map((reason) => (

@@ -12,6 +12,114 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **§8.5.3's keyboard map, complete and scoped by screen (#141).** The map was a `switch` over
+  `event.key` covering the planner, and §8.3.12 makes every binding remappable — a switch has
+  to be *rewritten* to re-key where a table only has to be re-keyed. It is now `BINDINGS`, an
+  array carrying each binding's keys, the screens it applies on, a stable id independent of
+  its key, and a description; the map the handler runs, the map #187 will re-key and the map
+  #124 will render are the same array rather than three that agree today. Scoping is what
+  makes one table possible: `S` is *skip to end* during execution and nothing in the planner,
+  and `Enter` commits a plan and accepts a briefing. Execution's four bindings and the orbit
+  view's three camera keys were comparing `event.key` in their own components and are now
+  rows like the rest — NFR-016's guarantee cannot hold for keys that live outside the map.
+  `?` and `C` are listed with their features unbuilt, resolving to nothing but visible to the
+  overlay and the remapper, because a binding missing from the table is one neither can offer.
+  §8.8's skip-to-content link is present on every screen and targets the same heading a route
+  change focuses. And **§13.5's E4 runs as a test**: C02 played from briefing to debrief on key
+  events alone, with every pointer constructor and `HTMLElement.click` replaced by a throw for
+  the duration — so a walkthrough that quietly reached for a pointer fails rather than passing
+  for the wrong reason, which counting dispatches afterwards would not have caught.
+- **The contract stays readable while planning (#264).** ACCEPT is a one-way door: §8.3.3 states
+  the job in numbers and the planner then showed the Δv budget and the deadline and **nothing
+  else** — not the objective, not par, not the constraints, not the target's setup. Tolerable
+  while one contract shipped; a real problem for Acts I–II, where C07's objective is three
+  numbers none of which the planner displayed and all of which are needed to plan the burn.
+  There is now a contract panel: a fourth entry in the strip that already carries the plan, the
+  readouts and the assists, toggled from a control beside `?` and `⚙` or with `B`, and open or
+  closed for the rest of the session rather than per contract. It renders the **briefing's own
+  content, from the briefing's own code** — `objectiveLine`, `setupLine`, the constraint rows
+  and the `Quantity` component that carries display units with SI behind them all moved to a
+  shared module both screens call, and a test asserts the two render identical text for the
+  same scenario. A second rendering would have been two things to keep in step, and the first
+  to drift would be the planner's, the one a player sees least. Opening it changes nothing —
+  not the plan, the scrub head, the selection or playback — which is structural rather than
+  asserted: the component takes a scenario and a catalogue and no callback that could edit
+  anything. Found by playing the shipped Acts I–II build, not by a test.
+- **Constraint bands now warn before they fire (#129).** §6.5 says *"a player never discovers a
+  constraint by failing it"*, and the timeline drew bands only for intervals the current plan
+  was **already violating** — which is the second half of that sentence and not the first. The
+  deadline's region is the clearest case: every epoch past the wall is one where a burn is
+  `L3`, it is exactly computable from the contract, and nothing shaded it until a plan crossed
+  it. It is a band now, and C03 has three hours of it. Bands are built from the constraint
+  *evaluations* rather than from the legality reason list, which had tied what was drawn to
+  what was blocking — the burn-count cap is soft and raises no reason by design, so it could
+  never be banded at all. A preview band is shaded and a violation is solid (§8.6), each
+  carries its own sentence naming the constraint and its interval so the shading is never the
+  only channel (NFR-019, §8.8), and the wording differs rather than being the same sentence
+  with a word changed. §6.6's `constraints` assist turns the previews off — and deliberately
+  leaves violations reported, because turning off an assist that shows you things *early*
+  should not leave the commit bar calling a plan illegal with nothing saying where.
+  `constraint-bands.ts` carries a single table mapping every `ConstraintKind` to its timeline
+  and orbit representation, including "none, and here is why", so a constraint added to the
+  union is a compile error rather than a kind that silently has neither.
+- **§8.3.4's assist tray, complete (#140).** Every assist §6.6 lists, with a name, a one-line
+  description, its state, its §6.6 default, and — FR-411's requirement — **its medal effect
+  with the right direction**. The three effects are not symmetric and the tray does not
+  pretend they are: two assists affect a medal by being *enabled* and two by being
+  *disabled*, so a uniform "affects medals" badge would be wrong about half of them and
+  would tell a player that leaving the defaults alone costs something, when §6.7's Clean Job
+  is specifically available to a player using every default. The current cap is shown as a
+  medal rather than a warning icon, and sits **outside** the disclosure so it is legible
+  while the tray is collapsed — it is the consequence of what is inside. Trajectory
+  prediction appears as a row that is not a control, with its reason, because §6.6 lists it
+  as "on, cannot be disabled" and a player who cannot find it will assume it is hidden
+  somewhere. An assist the contract does not allow is **absent**, not dimmed: §6.6's unlock
+  is progression rather than purchase. The rendered set is generated from #81's model, and
+  the test asserts it against that model rather than against a literal list, so an assist
+  added upstream cannot silently fail to appear.
+- **Undo and redo over plan edits (#138).** FR-110's fifty deep, `Ctrl+Z` / `Ctrl+Shift+Z`, and
+  the `⟲ UNDO` / `⟳ REDO` controls §8.3.4's commit bar had already reserved space for. Every
+  accepted mutation — add, move, delete, Δv change, snap, context-menu action — is exactly one
+  entry, and **one drag is one entry however many pointer events it produced**, which is
+  structural rather than something to be careful about: the plan is not touched until the drag
+  is released, so a release is the only place a drag can record. A refused edit (`L5`) records
+  nothing and does not clear the redo stack, because §6.11 counts mutations and a refusal
+  mutated nothing. An entry carries the plan, the selection and the node editor's target, so
+  undo does not strand a player looking at an overlay for a node the restored plan does not
+  contain — but **not the scrub head**: FR-403 makes scrubbing a view operation, and an
+  undoable scrub would make `Ctrl+Z` appear to do nothing after a player had merely looked
+  around. The reducer lives in `@hh/ui` beside §8.5.1's machine, holds two stacks and no
+  present of its own — the planner's state is the present, and a second copy of the plan would
+  immediately raise the question of which is authoritative — and is tested as plain values,
+  which is what makes §13.5's E7 assertable by canonical JSON rather than by driving a screen.
+- **DEP-07's snap now applies to every gesture that places a burn (#136).** `releaseDragging`
+  called `moveNode` with the raw dragged tick while `addNodeAt` snapped, so a node placed by
+  clicking landed on the apsis and the same node dragged one pixel came off it — the exact
+  failure DEP-07's own docstring warns about, *"the kind of rule players correctly experience
+  as the game being unreliable"*. The drag now snaps **during** the gesture rather than on
+  release, so the preview already shows where the burn will land and there is no jump when the
+  pointer is let go. §8.3.5's epoch slider snaps too; the numeric MET fields deliberately do
+  not, because a typed number is a statement and a dragged slider is a gesture.
+- **Keyboard nudges snap, and can escape (#136).** `,` and `.` go through a new `snapNudge`,
+  which accepts a snap only when it carries the node **further in the direction the player
+  pushed it**. Without that rule a node on an apsis is pinned there — the snap finds the same
+  apsis a second away and puts it straight back, so `.` does nothing however many times it is
+  pressed. Phrasing the rule as "ignore the apsis we are on" fixes only the first press: a node
+  one second past an apsis is not on it, so the second press snaps back and the node
+  oscillates. The direction test is one comparison and covers both.
+- **§8.5.2's node context menu (#136).** Delete, snap to periapsis, snap to apoapsis and zero
+  Δv — none of which had a single home before: delete was on the row and on `Delete`, the two
+  snaps were only inside §8.3.5's overlay, and zero Δv existed nowhere. Right-click on desktop,
+  §8.5.4's long-press on touch, a control on every plan row, and `ContextMenu` or `Shift+F10`
+  from the keyboard. On a near-circular orbit the snap entries are **disabled with a reason**
+  rather than hidden: every Act I contract starts on one, so that is the first thing a player
+  meets, and a menu whose entries come and go teaches them the game is inconsistent where a
+  dimmed entry saying "this orbit is circular — it has no apsides" teaches them something true.
+- **A snapped burn is marked as snapped (#136).** In the plan panel's row, as a caret in the
+  epoch cell and as words in the sentence a screen reader is given (NFR-019). Derived from the
+  geometry through `apsisAt` rather than from a flag set when the snap happened — a flag would
+  have to be cleared every time the node moved for any other reason, and the first one missed
+  would leave a node claiming to be on an apsis it had left.
 - **Acts I and II, as playable content (#90, #92, #93, #94).** Six new contracts — C01
   *Shakedown*, C02 *Round Trip*, C04 *Long Haul*, C05 *Tailgate*, C06 *Overtake* and C07
   *Slot Machine* — with computed pars, reference replays and briefs. Act I reproduces
@@ -198,6 +306,31 @@ Curtis, Vallado and a `hapsira` fixture.
   read back verbatim into bug reports, so there is nothing in it to translate.
 
 ### Fixed
+- **A dragged node follows the pointer for the whole gesture, not just its first move (#263).**
+  Two faults behind one symptom, both found by driving the built app rather than by a test. The
+  reference epoch `pickEpoch` uses to tell one revolution from another was re-derived per move
+  by looking the node up in the drawn timeline — but the drawn timeline is the drag *preview*,
+  so the moment the first move landed, the node's epoch and therefore its derived id had
+  changed and the lookup missed. The reference silently fell back to the scrub head, which is
+  a different pass, and the burn jumped back towards T+0 on the second move of every drag. It
+  is captured once now, at `pointerdown`. And the plan panel showed the pre-drag numbers for
+  the whole gesture and only caught up on release, because the plan is deliberately not
+  mutated until then; it now renders the gesture's live values, which is what §8.8's
+  canvas-parity rule asks for — the orbit view already had them.
+- **Dragging a maneuver node works again (#263).** It did nothing in `v0.1.0`, deployed: the node
+  selected on press and then stayed exactly where it was however far the pointer travelled, and the
+  Δv handles behaved the same way. §8.5.2 makes dragging the primary way a burn is placed and moved,
+  so the released build was missing its main verb. The gesture was held in a local of the effect
+  that installs the pointer handlers, and `onPointerDown` calls `onSelectNode` — which changed a
+  value in that effect's dependency array, so the effect re-ran *between* `pointerdown` and the
+  first `pointermove` and the new closure's gesture was `null`. The gesture now lives in a ref, and
+  the listener effect's dependencies went from twenty-one to three, so a scrub tick or a drag frame
+  no longer destroys and rebuilds the renderer, the tessellation cache, the hit index and seven
+  listeners. The pointer handlers are installed **once at mount and never again during a drag**;
+  before, it was once per pointer event. Nothing in CI could have caught this, because there was no
+  pointer-drag test in the repository at all — #134 and #135 closed on `pick.ts` unit tests and on
+  the keyboard paths, both of which bypass the effect that owns the listeners. There is one now, and
+  it fails against the old code.
 - **The ship and the target now move.** Both markers were drawn at a fixed offset along their
   opening orbit and stayed there — through a scrub of the planner's timeline, and through an
   entire playback run. `MarkerSpec.offsetSeconds` is *where a body is* ("seconds from the arc's

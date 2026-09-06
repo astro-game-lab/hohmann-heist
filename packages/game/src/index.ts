@@ -112,6 +112,13 @@ export type { PlanEdit } from './plan-edits.js';
 export { addNode, componentsOf, deleteNode, moveNode, setNodeDeltaV } from './plan-edits.js';
 
 export type { SnapResult } from './snap.js';
-export { SNAP_WINDOW_SECONDS, snapToApsis, snapToApsisOnArc, snapToNamedApsis } from './snap.js';
+export {
+  SNAP_WINDOW_SECONDS,
+  apsisAt,
+  snapNudge,
+  snapToApsis,
+  snapToApsisOnArc,
+  snapToNamedApsis,
+} from './snap.js';
 
 export * from './scenario/index.js';

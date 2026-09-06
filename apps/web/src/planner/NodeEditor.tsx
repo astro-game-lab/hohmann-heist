@@ -85,7 +85,18 @@ export interface NodeEditorProps {
   readonly orbits: { readonly before: OrbitShape; readonly after: OrbitShape } | null;
   readonly mu: number;
   readonly referenceRadiusM: number;
+  /** The numeric MET fields — an exact statement, never snapped. */
   readonly onEpoch: (metSeconds: number) => void;
+  /**
+   * The epoch slider — §8.3.5's *"continuous drag; snaps to apsis within 30 s unless the
+   * snap assist is off"* (#136).
+   *
+   * A separate callback from {@link onEpoch} because they are different operations: the
+   * slider is a gesture and gets DEP-07's tolerance, the fields are a typed value and do
+   * not. Deciding that here from a flag would put the rule in the component rather than
+   * in the store that owns every other snap path.
+   */
+  readonly onEpochSlide: (metSeconds: number) => void;
   readonly onDeltaV: (progradeMps: number, radialMps: number) => void;
   readonly onSnap: (kind: 'periapsis' | 'apoapsis') => void;
   /**
@@ -109,6 +120,7 @@ export const NodeEditor = ({
   mu,
   referenceRadiusM,
   onEpoch,
+  onEpochSlide,
   onDeltaV,
   onSnap,
   snappedTo,
@@ -242,7 +254,7 @@ export const NodeEditor = ({
           aria-label={t('planner.editor.epochSlider', {})}
           data-testid="editor-epoch-slider"
           onInput={(event) => {
-            onEpoch(Number((event.target as HTMLInputElement).value));
+            onEpochSlide(Number((event.target as HTMLInputElement).value));
           }}
         />
 

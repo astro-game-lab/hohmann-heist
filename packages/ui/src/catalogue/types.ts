@@ -365,6 +365,12 @@ export interface UiMessageParams {
    * arrives as a *number* — the index into a list this message owns — rather than as a
    * string fragment, so the sentence stays the message's to write. See `en.ts`.
    */
+  /** §6.5's preview: where a burn *would* be illegal (#129). */
+  readonly 'planner.timeline.bandPreview': {
+    readonly kind: number;
+    readonly startMetSeconds: number;
+    readonly endMetSeconds: number;
+  };
   readonly 'planner.timeline.band': {
     readonly kind: number;
     readonly startMetSeconds: number;
@@ -425,10 +431,89 @@ export interface UiMessageParams {
   readonly 'planner.approach.notMet': { readonly maxRangeMetres: number };
   readonly 'planner.approach.none': Record<string, never>;
 
+  // FR-110's undo stack, in §8.3.4's commit bar (#138).
+  readonly 'planner.history.undo': Record<string, never>;
+  readonly 'planner.history.redo': Record<string, never>;
+  readonly 'planner.history.nothingToUndo': Record<string, never>;
+  readonly 'planner.history.nothingToRedo': Record<string, never>;
+
+  /** §8.8's skip-to-content link (#141). */
+  readonly 'app.skipToContent': Record<string, never>;
+
+  // §8.5.3's bindings, one description each — what #124's overlay renders and what #187
+  // re-keys. Keyed by binding id rather than by key, because the key is the part that
+  // changes (#141).
+  readonly 'keys.addNode': Record<string, never>;
+  readonly 'keys.deleteNode': Record<string, never>;
+  readonly 'keys.editNode': Record<string, never>;
+  readonly 'keys.cycleNode': Record<string, never>;
+  readonly 'keys.nudgeEpoch': Record<string, never>;
+  readonly 'keys.prograde': Record<string, never>;
+  readonly 'keys.radial': Record<string, never>;
+  readonly 'keys.scrub': Record<string, never>;
+  readonly 'keys.scrubToStart': Record<string, never>;
+  readonly 'keys.scrubToDeadline': Record<string, never>;
+  readonly 'keys.zoom': Record<string, never>;
+  readonly 'keys.recentre': Record<string, never>;
+  readonly 'keys.toggleContract': Record<string, never>;
+  readonly 'keys.nodeMenu': Record<string, never>;
+  readonly 'keys.undo': Record<string, never>;
+  readonly 'keys.redo': Record<string, never>;
+  readonly 'keys.playPause': Record<string, never>;
+  readonly 'keys.skipToEnd': Record<string, never>;
+  readonly 'keys.playbackSpeed': Record<string, never>;
+  readonly 'keys.retry': Record<string, never>;
+  readonly 'keys.confirm': Record<string, never>;
+  readonly 'keys.cancel': Record<string, never>;
+  readonly 'keys.help': Record<string, never>;
+  readonly 'keys.codex': Record<string, never>;
+
+  // §8.3.3's contract, carried into the planner (#264).
+  readonly 'planner.contract.heading': Record<string, never>;
+  readonly 'planner.contract.toggle': Record<string, never>;
+  readonly 'planner.tab.contract': Record<string, never>;
+
+  // §8.5.2's node context menu (#136).
+  readonly 'planner.nodeMenu.label': { readonly index: number };
+  readonly 'planner.nodeMenu.snapPeriapsis': Record<string, never>;
+  readonly 'planner.nodeMenu.snapApoapsis': Record<string, never>;
+  readonly 'planner.nodeMenu.noApsides': Record<string, never>;
+  readonly 'planner.nodeMenu.zeroDeltaV': Record<string, never>;
+  readonly 'planner.nodeMenu.delete': Record<string, never>;
+  readonly 'planner.nodeMenu.open': { readonly index: number };
+  /** DEP-07 made visible: this burn is sitting on an apsis because it was snapped there. */
+  readonly 'planner.plan.snappedTo': { readonly kind: string };
+
   // ⑤ Assist tray (#133's snap toggle only; #140 brings the rest in M3)
   readonly 'planner.assists.heading': Record<string, never>;
-  readonly 'planner.assists.snapToApsis': Record<string, never>;
-  readonly 'planner.assists.snapToApsisHint': { readonly windowSeconds: number };
+
+  // §6.6's assist set, as the tray renders it (#140). One name and one description each,
+  // because the tray is where a player learns the vocabulary.
+  readonly 'planner.assists.elements': Record<string, never>;
+  readonly 'planner.assists.elementsHint': Record<string, never>;
+  readonly 'planner.assists.closestApproach': Record<string, never>;
+  readonly 'planner.assists.closestApproachHint': Record<string, never>;
+  readonly 'planner.assists.snapping': Record<string, never>;
+  readonly 'planner.assists.snappingHint': Record<string, never>;
+  readonly 'planner.assists.constraints': Record<string, never>;
+  readonly 'planner.assists.constraintsHint': Record<string, never>;
+  readonly 'planner.assists.targetingComputer': Record<string, never>;
+  readonly 'planner.assists.targetingComputerHint': Record<string, never>;
+  readonly 'planner.assists.porkchop': Record<string, never>;
+  readonly 'planner.assists.porkchopHint': Record<string, never>;
+  readonly 'planner.assists.coachMarks': Record<string, never>;
+  readonly 'planner.assists.coachMarksHint': Record<string, never>;
+  readonly 'planner.assists.prediction': Record<string, never>;
+  readonly 'planner.assists.predictionHint': Record<string, never>;
+  /** The two medal effects, phrased apart on purpose — see `AssistTray.tsx`. */
+  readonly 'planner.assists.effectBlind': Record<string, never>;
+  readonly 'planner.assists.effectCaps': Record<string, never>;
+  readonly 'planner.assists.defaultOn': Record<string, never>;
+  readonly 'planner.assists.defaultOff': Record<string, never>;
+  /** FR-411's cap, stated as a medal rather than as a warning. */
+  readonly 'planner.assists.capClean': Record<string, never>;
+  readonly 'planner.assists.capAt': { readonly medal: string; readonly count: number };
+  readonly 'planner.assists.medalSilver': Record<string, never>;
 
   // Narrow layout (#123): the tab strip the three side panels collapse into.
   readonly 'planner.tab.plan': { readonly count: number };

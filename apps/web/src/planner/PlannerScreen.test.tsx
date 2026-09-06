@@ -290,24 +290,52 @@ describe('the closest-approach block (#132)', () => {
   });
 });
 
-describe('the assist tray (#133’s toggle only)', () => {
-  it('offers the snap toggle, on by default, with its window stated', async () => {
+describe('the assist tray, wired to the planner (#140)', () => {
+  // The tray's own behaviour is `AssistTray.test.tsx`, which drives it against #81's model
+  // directly. What is asserted here is the *wiring*: that a toggle reaches the store and
+  // changes the flag DEP-07 actually reads. Those are different claims, and the second one
+  // is the one that broke when the store held a lone `snapToApsis` boolean.
+  const expand = async (): Promise<void> => {
+    await act(() => {
+      el('assist-disclosure')?.click();
+    });
+  };
+
+  it('offers the snap toggle, on by default', async () => {
     await mount();
-    const toggle = el('assist-snap');
+    await expand();
+    const toggle = el('assist-snapping');
     expect(toggle).toBeInstanceOf(HTMLInputElement);
+    // §6.6's assists start enabled and are opted out of.
     expect((toggle as HTMLInputElement).checked).toBe(true);
-    expect(container.querySelector('#hh-assist-snap-hint')?.textContent).toContain('30');
   });
 
-  it('can be turned off', async () => {
+  it('can be turned off, and the planner keeps the new state', async () => {
     await mount();
-    const toggle = el('assist-snap');
+    await expand();
+    const toggle = el('assist-snapping');
     if (!(toggle instanceof HTMLInputElement)) throw new Error('no snap toggle');
     await act(() => {
       toggle.checked = false;
       toggle.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect((el('assist-snap') as HTMLInputElement).checked).toBe(false);
+    expect((el('assist-snapping') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('shows FR-411’s cap without needing the tray open', async () => {
+    await mount();
+    expect(el('assist-cap')).not.toBeNull();
+  });
+
+  it('offers only the assists C03 allows', async () => {
+    await mount();
+    await expand();
+    // C03's `assistsAllowed` omits both capping assists, so neither is rendered — and the
+    // scenario is the real one, so this is a statement about shipped content rather than
+    // about a fixture.
+    expect(el('assist-targeting_computer')).toBeNull();
+    expect(el('assist-porkchop')).toBeNull();
+    expect(el('assist-elements')).not.toBeNull();
   });
 });
 
@@ -681,5 +709,65 @@ describe('the live preview during a gesture (#134, #135)', () => {
     await press('n');
     expect(el('readouts')).not.toBeNull();
     expect(el('plan-node-0')).not.toBeNull();
+  });
+});
+
+describe('§6.5’s constraint bands, end to end (#129)', () => {
+  const expandAssists = async (): Promise<void> => {
+    await act(() => {
+      el('assist-disclosure')?.click();
+    });
+  };
+
+  const bandsOf = (state?: string): readonly HTMLElement[] =>
+    [...container.querySelectorAll('[data-testid="timeline-band"]')].filter(
+      (band) => state === undefined || (band as HTMLElement).dataset['state'] === state,
+    ) as HTMLElement[];
+
+  it('shades the deadline’s region on an empty, perfectly legal plan', async () => {
+    await mount();
+    // *"A player never discovers a constraint by failing it."* C03's deadline is at
+    // T+03:00:00 and its horizon at T+06:00:00, so there are three hours a burn cannot go
+    // in — and before #129 nothing shaded them until a plan actually crossed the wall.
+    const preview = bandsOf('preview');
+    expect(preview).toHaveLength(1);
+    expect(preview[0]?.dataset['kind']).toBe('deadline');
+  });
+
+  it('says in text what the band shows, so the canvas is not the only channel', async () => {
+    await mount();
+    // §8.8's canvas-parity rule and NFR-019: a screen reader user gets the constraint's
+    // name and its interval from the DOM without seeing the shading.
+    const text = bandsOf('preview')[0]?.textContent ?? '';
+    expect(text).toContain('deadline');
+    expect(text).toContain('would break');
+  });
+
+  it('removes the preview when §6.6’s constraints assist is switched off', async () => {
+    await mount();
+    await expandAssists();
+    const toggle = el('assist-constraints');
+    if (!(toggle instanceof HTMLInputElement)) throw new Error('no constraints assist');
+    await act(() => {
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(bandsOf('preview')).toHaveLength(0);
+  });
+
+  it('leaves the plan untouched when the assist is toggled', async () => {
+    await mount();
+    await press('n');
+    const before = text('plan-panel');
+    await expandAssists();
+    const toggle = el('assist-constraints');
+    if (!(toggle instanceof HTMLInputElement)) throw new Error('no constraints assist');
+    await act(() => {
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // #129: *"with it off the bands are absent and the plan is unchanged"*. An assist is a
+    // display and scoring choice; it must never edit what the player built.
+    expect(text('plan-panel')).toBe(before);
   });
 });

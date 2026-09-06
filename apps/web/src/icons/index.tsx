@@ -89,6 +89,16 @@ const PATHS = {
   'burn-count': ['M12 3c3 4 5 6 5 9a5 5 0 0 1-10 0c0-3 2-5 5-9', 'M12 20v1'],
   /** Something is wrong, or close to a limit — §8.6. */
   warning: ['M12 4 2.5 20h19z', 'M12 10v5', 'M12 17.5v.5'],
+  /**
+   * More actions — §8.5.2's context menu, from a control rather than a right-click (#136).
+   *
+   * The platform's own vertical ellipsis, because a menu opened from a row is the one
+   * affordance every player already knows, and inventing a glyph for it would be
+   * originality spent where recognition is the whole job. Three dots as three short
+   * strokes rather than three circles: the stroke set below has no fill, and a filled dot
+   * would be the only one in the set.
+   */
+  more: ['M12 5.5v.5', 'M12 11.75v.5', 'M12 18v.5'],
 } as const satisfies Record<string, readonly string[]>;
 
 /** Every glyph the application draws. */

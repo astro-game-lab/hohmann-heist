@@ -312,6 +312,7 @@ export const App = (): JSX.Element => {
       heading={headingFor(route, t)}
       focusHeading={focusHeading}
       transitionMs={screenTransitionMs(reducedMotion)}
+      t={t}
     >
       {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
       {bodyFor(route, t, saved.save, acceptContract, completeContract)}

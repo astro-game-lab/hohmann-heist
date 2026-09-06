@@ -72,7 +72,18 @@ const legality = (reasons: readonly LegalityReason[]): Legality => ({
   },
 });
 
-const mount = async (value: Legality): Promise<ReturnType<typeof vi.fn>> => {
+/** The undo stack's state, for the tests that are not about it. */
+interface HistoryProps {
+  readonly canUndo?: boolean;
+  readonly canRedo?: boolean;
+  readonly onUndo?: () => void;
+  readonly onRedo?: () => void;
+}
+
+const mount = async (
+  value: Legality,
+  history: HistoryProps = {},
+): Promise<ReturnType<typeof vi.fn>> => {
   const onCommit = vi.fn();
   await act(() => {
     render(
@@ -81,6 +92,10 @@ const mount = async (value: Legality): Promise<ReturnType<typeof vi.fn>> => {
         resolveDynamic={catalogue.resolveDynamic}
         legality={value}
         onCommit={onCommit}
+        canUndo={history.canUndo ?? false}
+        canRedo={history.canRedo ?? false}
+        onUndo={history.onUndo ?? (() => undefined)}
+        onRedo={history.onRedo ?? (() => undefined)}
       />,
       container,
     );
@@ -186,5 +201,52 @@ describe('a plan that produced no trajectory (§6.4’s non-evaluable case)', ()
     });
     expect((el('commit') as HTMLButtonElement).disabled).toBe(true);
     expect(el('commit-reason-plan')).not.toBeNull();
+  });
+});
+
+describe('FR-110’s undo and redo controls (#138)', () => {
+  it('offers both, in the space §8.3.4’s commit bar already reserved', async () => {
+    await mount(legality([]));
+    expect(el('commit-undo')).not.toBeNull();
+    expect(el('commit-redo')).not.toBeNull();
+  });
+
+  it('disables each one when its stack is empty', async () => {
+    await mount(legality([]));
+    expect((el('commit-undo') as HTMLButtonElement).disabled).toBe(true);
+    expect((el('commit-redo') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('gives a reason rather than being silently inert', async () => {
+    await mount(legality([]));
+    // #138's last criterion in full: *"disabled with a reason when the stack is empty,
+    // never silently inert"*. A dimmed button a screen reader announces only as "dimmed"
+    // is the failure it names, so the hint is associated rather than merely present.
+    const hint = el('commit-undo-hint');
+    expect(hint?.textContent).toBe('Nothing to undo.');
+    expect(el('commit-undo')?.getAttribute('aria-describedby')).toBe(hint?.id);
+  });
+
+  it('enables each one independently, and drops the hint when it does', async () => {
+    await mount(legality([]), { canUndo: true });
+    expect((el('commit-undo') as HTMLButtonElement).disabled).toBe(false);
+    expect((el('commit-redo') as HTMLButtonElement).disabled).toBe(true);
+    // No dangling `aria-describedby` pointing at a hint that is no longer rendered.
+    expect(el('commit-undo')?.getAttribute('aria-describedby')).toBeNull();
+    expect(el('commit-undo-hint')).toBeNull();
+  });
+
+  it('calls back when pressed', async () => {
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    await mount(legality([]), { canUndo: true, canRedo: true, onUndo, onRedo });
+    await act(() => {
+      el('commit-undo')?.click();
+    });
+    await act(() => {
+      el('commit-redo')?.click();
+    });
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(onRedo).toHaveBeenCalledTimes(1);
   });
 });

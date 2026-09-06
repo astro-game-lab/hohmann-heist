@@ -36,16 +36,19 @@
  * a reduced feature set"*. Because the panels are the same instances, this is structural:
  * there is no narrow variant of `PlanPanel` that could quietly drop the delete button.
  */
-import { arcAt, type Plan, type Timeline } from '@hh/sim';
+import { arcAt, fromEpochTicks, type Plan, type Timeline } from '@hh/sim';
 import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
-import { isProximityEvaluation, snapToNamedApsis } from '@hh/game';
+import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
-import { approachReadout, componentsOfCounts, orbitReadout } from '@hh/ui';
+import { approachReadout, canRedo, canUndo, componentsOfCounts, orbitReadout } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { AssistTray } from './AssistTray.js';
+import { NodeContextMenu } from './NodeContextMenu.js';
+import { bandsFor } from './constraint-bands.js';
+import { ContractPanel, contractPanelSession } from './ContractPanel.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
 import { actionFor, isTypingTarget } from './keys.js';
@@ -58,7 +61,7 @@ import type { Evaluation } from './evaluate.js';
 import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf, type PlannerSeed } from './store.js';
 
 /** Which side panel the narrow layout is showing. Ignored above the breakpoint. */
-type Tab = 'plan' | 'readouts' | 'assists';
+type Tab = 'plan' | 'readouts' | 'assists' | 'contract';
 
 export interface PlannerScreenProps {
   readonly t: Catalogue['resolve'];
@@ -114,9 +117,32 @@ export const PlannerScreen = ({
 }: PlannerScreenProps): JSX.Element => {
   const [state, actions] = usePlanner(scenario, seed ?? {});
   const [tab, setTab] = useState<Tab>('plan');
+  // Seeded from the session's value and written back on every change, so the preference
+  // survives the unmount a contract change causes — `contractPanelSession` says why it
+  // lives there rather than in component state or in the save (#264).
+  const [contractOpen, setContractOpen] = useState(contractPanelSession.open);
+  const toggleContract = useCallback(() => {
+    setContractOpen((was) => {
+      contractPanelSession.open = !was;
+      return !was;
+    });
+  }, []);
   // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
   // screen, or when the plan produced no trajectory to draw it on — see below.
   const [anchor, setAnchor] = useState<{ readonly x: number; readonly y: number } | null>(null);
+  /**
+   * §8.5.2's context menu: which node it is acting on, and where it is anchored (#136).
+   *
+   * The position is carried here rather than derived from `anchor`, because the two answer
+   * different questions. `anchor` is *where the node is drawn*, which is what §8.3.5's
+   * overlay follows; a menu opens *where the player asked*, which for a right-click two
+   * pixels off the marker is two pixels off the marker. The keyboard route has no pointer
+   * position and falls back to the node's own — see `openMenuForSelected` below.
+   */
+  const [menu, setMenu] = useState<{
+    readonly nodeId: NodeId;
+    readonly at: { readonly x: number; readonly y: number };
+  } | null>(null);
 
   /**
    * Whether a pointer is currently held down inside the overlay.
@@ -273,6 +299,70 @@ export const PlannerScreen = ({
     );
   })();
 
+  /**
+   * Which apsis each node is sitting on — DEP-07 made visible (#136).
+   *
+   * §8.5.2 and #136 both ask for a snapped node to be *distinguishable from one that
+   * happens to be near an apsis*, because DEP-07 moves a burn to an epoch the player did
+   * not choose and a departure the player cannot see is one they cannot account for.
+   *
+   * Derived rather than stored. A flag set when the snap happened would have to be cleared
+   * every time the node moved for any other reason — a nudge, a typed epoch, an earlier
+   * burn reshaping the arc this one sits on — and the first one missed would leave a node
+   * claiming to be on an apsis it had left. `apsisAt` asks the geometry instead, so the
+   * mark cannot be stale by construction.
+   */
+  const snappedKinds =
+    evaluation.timeline === null
+      ? []
+      : model.plan.nodes.map((node) =>
+          evaluation.timeline === null ? null : apsisAt(evaluation.timeline, node.epoch),
+        );
+
+  /**
+   * Whether this orbit has apsides at all, for the context menu's snap entries.
+   *
+   * Asked at the *selected* node's epoch, because a plan can cross several arcs and only
+   * the one the menu is acting on matters. Every Act I contract starts on a near-circular
+   * orbit, so `false` here is the common case rather than an edge one — see
+   * `NodeContextMenu.tsx` on why that makes the entries disabled rather than absent.
+   */
+  const menuIndex = menu === null ? null : indexOfNodeId(model.plan, menu.nodeId);
+  const menuNode = menuIndex === null ? undefined : model.plan.nodes[menuIndex];
+  const menuApsides = ((): boolean => {
+    const { timeline } = evaluation;
+    if (menuNode === undefined || timeline === null) return false;
+    return (['periapsis', 'apoapsis'] as const).some(
+      (kind) => snapToNamedApsis(timeline, menuNode.epoch, kind) !== null,
+    );
+  })();
+
+  /**
+   * §6.5's bands — violations, and the regions a burn would be illegal in (#129).
+   *
+   * Built from the constraint *evaluations* rather than from the reason list, so a
+   * constraint that raises no `LegalityReason` — the burn-count cap is soft and raises none
+   * by design — can still be drawn. `constraint-bands.ts` carries the representation table
+   * and the reasoning.
+   *
+   * Gated on §6.6's `constraints` assist, which is the flag #129 provides and #81's model
+   * scores: disabling it earns *Blind*. It reaches here from the same `AssistState` the tray
+   * writes, so there is one answer to "is preview on" rather than a prop and a setting.
+   *
+   * A plan the engine could not evaluate has no constraints to band. That is not the same
+   * as a legal plan and the timeline shows nothing rather than pretending it is clear —
+   * the commit bar carries the reason in that case.
+   */
+  const bands = legality.evaluable
+    ? bandsFor({
+        constraints: legality.constraints,
+        startEpoch: scenario.startEpoch,
+        horizon: scenario.horizon,
+        deadlineSeconds: scenario.rules.deadlineSeconds,
+        previewEnabled: state.assists.constraints,
+      })
+    : [];
+
   // §8.3.4's closest-approach block belongs to an encounter with a second body. A
   // `reach_orbit` goal compares element sets and a `station` goal measures a longitude;
   // neither has an approach to read out (#77).
@@ -292,7 +382,10 @@ export const PlannerScreen = ({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (isTypingTarget(event.target)) return;
-      const action = actionFor(event.key, { shift: event.shiftKey, ctrl: event.ctrlKey });
+      const action = actionFor('planner', event.key, {
+        shift: event.shiftKey,
+        ctrl: event.ctrlKey,
+      });
       if (action === null) return;
 
       const at = selectedIndex({ ...state });
@@ -315,12 +408,11 @@ export const PlannerScreen = ({
           break;
         }
         case 'nudgeEpoch':
-          if (at !== null) {
-            const node = model.plan.nodes[at];
-            if (node !== undefined) {
-              actions.setEpoch(at, metAt(scenario.startEpoch, node.epoch) + action.seconds);
-            }
-          }
+          // Through `nudgeEpochBy` rather than `setEpoch`, because DEP-07 applies to a
+          // nudge and the snap has to know which way the player pushed — see `snap.ts`'s
+          // `snapNudge` and #136. A nudge routed through `setEpoch` would either not snap
+          // at all or snap the node straight back onto the apsis it was leaving.
+          if (at !== null) actions.nudgeEpochBy(at, action.seconds);
           break;
         case 'nudgeDeltaV':
           if (at !== null) {
@@ -345,16 +437,52 @@ export const PlannerScreen = ({
               : ((scenario.startEpoch + scenario.rules.deadlineSeconds) as Epoch),
           );
           break;
+        case 'undo':
+          actions.undo();
+          break;
+        case 'redo':
+          actions.redo();
+          break;
+        case 'toggleContract':
+          toggleContract();
+          break;
+        case 'nodeMenu':
+          // §8.8's canvas-parity rule: every pointer action on the orbit view has a
+          // keyboard route, and this is the menu's. Anchored at the node's drawn position
+          // when the orbit view has reported one, and docked at the stage's corner when it
+          // has not — a menu that opened at (0, 0) because the node is off screen would be
+          // worse than one that admits it does not know.
+          if (at !== null) {
+            const node = model.plan.nodes[at];
+            if (node !== undefined)
+              setMenu({ nodeId: nodeIdOf(node), at: anchor ?? { x: 16, y: 16 } });
+          }
+          break;
         case 'commit':
           actions.commit();
           break;
         case 'cancel':
-          // Escape closes the overlay if it is open, and otherwise clears the selection.
-          // A drag's Escape is the orbit view's, which sees it first because it is
-          // holding the pointer capture (#134, #135).
-          if (state.editorFor !== null) actions.closeEditor();
+          // Escape closes the innermost thing that is open, then the overlay, and only
+          // then clears the selection. The menu is checked first because it is the most
+          // recently opened and the most modal — a player pressing Escape with a menu up
+          // means the menu. A drag's Escape is the orbit view's, which sees it first
+          // because it is holding the pointer capture (#134, #135).
+          //
+          // The menu's *own* handler also stops propagation, so this arm is what runs when
+          // focus has left the menu without it closing.
+          if (menu !== null) setMenu(null);
+          else if (state.editorFor !== null) actions.closeEditor();
           else actions.deselect();
           break;
+        case 'playPause':
+        case 'skipToEnd':
+        case 'setSpeedIndex':
+        case 'retry':
+          // Execution's and the debrief's bindings. Unreachable here — the table scopes
+          // them to those screens — and listed so the switch stays exhaustive over
+          // `PlannerAction`: a new action is then a compile error rather than a key that
+          // silently does nothing.
+          return;
         case 'zoom':
         case 'recentre':
           // Handled by the orbit view, which owns the camera — see `OrbitView.tsx`. This
@@ -369,7 +497,7 @@ export const PlannerScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, model, scenario, state]);
+  }, [actions, anchor, menu, model, scenario, state, toggleContract]);
 
   /**
    * §8.5.1's exit to EXECUTION.
@@ -431,6 +559,8 @@ export const PlannerScreen = ({
         startEpoch={scenario.startEpoch}
         scrubEpoch={model.scrub.epoch}
         onOpenHelp={() => undefined}
+        contractOpen={contractOpen}
+        onToggleContract={toggleContract}
       />
 
       <div class="hh-planner__stage">
@@ -441,6 +571,7 @@ export const PlannerScreen = ({
           timeline={evaluation.timeline}
           scrubEpoch={model.scrub.epoch}
           selectedNodeId={selectedNodeId}
+          snappedKinds={snappedKinds}
           onSelectNode={(id) => {
             const at = model.plan.nodes.findIndex((node) => nodeIdOf(node) === id);
             if (at !== -1) actions.selectIndex(at);
@@ -450,6 +581,9 @@ export const PlannerScreen = ({
           onOpenEditor={(id) => {
             const at = indexOfNodeId(model.plan, id);
             if (at !== null) actions.openEditor(at);
+          }}
+          onOpenNodeMenu={(id, at) => {
+            setMenu({ nodeId: id, at });
           }}
           onBeginEpochDrag={(id) => {
             const at = indexOfNodeId(model.plan, id);
@@ -475,6 +609,7 @@ export const PlannerScreen = ({
                 ['plan', t('planner.tab.plan', { count: model.plan.nodes.length })],
                 ['readouts', t('planner.tab.readouts', {})],
                 ['assists', t('planner.tab.assists', {})],
+                ['contract', t('planner.tab.contract', {})],
               ] as const
             ).map(([name, label]) => (
               <button
@@ -501,9 +636,37 @@ export const PlannerScreen = ({
               plan={model.plan}
               startEpoch={scenario.startEpoch}
               selectedIndex={index}
+              snappedKinds={snappedKinds}
+              dragging={
+                dragPreview === null || draggingInteraction === null
+                  ? null
+                  : {
+                      index: dragPreview.index,
+                      // An epoch drag carries ticks; a Δv drag leaves the epoch alone, so
+                      // the plan's own value is the live one for it.
+                      metSeconds:
+                        draggingInteraction.drag.kind === 'epoch'
+                          ? metAt(
+                              scenario.startEpoch,
+                              fromEpochTicks(draggingInteraction.drag.ticks),
+                            )
+                          : metAt(
+                              scenario.startEpoch,
+                              model.plan.nodes[dragPreview.index]?.epoch ?? scenario.startEpoch,
+                            ),
+                      progradeMps: dragPreview.progradeMps,
+                      radialMps: dragPreview.radialMps,
+                    }
+              }
               onSelect={actions.selectIndex}
               onDelete={actions.deleteIndex}
               onExpand={actions.openEditor}
+              onOpenMenu={(nodeIndex) => {
+                const node = model.plan.nodes[nodeIndex];
+                if (node !== undefined) {
+                  setMenu({ nodeId: nodeIdOf(node), at: anchor ?? { x: 16, y: 16 } });
+                }
+              }}
               onAdd={() => {
                 // §8.5.3's `N`: add a node at the scrub head. The pointer route — clicking
                 // the trajectory — is #133 and lands with the rest of the interactions.
@@ -515,15 +678,49 @@ export const PlannerScreen = ({
             'readouts',
             <Readouts t={t} orbit={orbit} approach={approach} startEpoch={scenario.startEpoch} />,
           )}
+          {/*
+            The wide layout's collapsible half of #264: the section is in the column with
+            the other three and `contractOpen` decides whether it is there. In the narrow
+            layout the tab strip decides instead, which is why the panel is still mounted
+            when it is merely on another tab — that is #123's guarantee and a fourth panel
+            inherits it.
+          */}
+          {contractOpen || tab === 'contract'
+            ? panel(
+                'contract',
+                <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
+              )
+            : null}
           {panel(
             'assists',
             <AssistTray
               t={t}
-              snapToApsis={state.snapToApsis}
-              onToggleSnap={actions.setSnapToApsis}
+              assists={state.assists}
+              allowed={scenario.document.assistsAllowed ?? []}
+              onToggle={actions.setAssist}
             />,
           )}
         </div>
+        {menu === null || menuIndex === null ? null : (
+          <NodeContextMenu
+            t={t}
+            at={menu.at}
+            nodeIndex={menuIndex}
+            apsidesAvailable={menuApsides}
+            onSnap={(kind) => {
+              actions.snapNode(menuIndex, kind);
+            }}
+            onZeroDeltaV={() => {
+              actions.zeroDeltaV(menuIndex);
+            }}
+            onDelete={() => {
+              actions.deleteIndex(menuIndex);
+            }}
+            onClose={() => {
+              setMenu(null);
+            }}
+          />
+        )}
         {editorNode === undefined || editorIndex === null ? null : (
           <div
             class="hh-editor__anchor"
@@ -565,6 +762,9 @@ export const PlannerScreen = ({
               onEpoch={(metSeconds) => {
                 actions.setEpoch(editorIndex, metSeconds);
               }}
+              onEpochSlide={(metSeconds) => {
+                actions.slideEpochTo(editorIndex, metSeconds);
+              }}
               onDeltaV={(progradeMps, radialMps) => {
                 actions.setDeltaV(editorIndex, progradeMps, radialMps);
               }}
@@ -589,7 +789,7 @@ export const PlannerScreen = ({
         horizon={scenario.horizon}
         deadlineSeconds={scenario.rules.deadlineSeconds}
         scrubEpoch={model.scrub.epoch}
-        reasons={legality.evaluable ? legality.reasons : []}
+        bands={bands}
         objectiveMetEpoch={
           evaluation.objective?.met === true ? (evaluation.objective.atEpoch ?? null) : null
         }
@@ -603,6 +803,10 @@ export const PlannerScreen = ({
         resolveDynamic={resolveDynamic}
         legality={legality}
         onCommit={actions.commit}
+        canUndo={canUndo(state.history)}
+        canRedo={canRedo(state.history)}
+        onUndo={actions.undo}
+        onRedo={actions.redo}
       />
 
       {state.lastRefusal === null ? null : (

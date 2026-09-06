@@ -38,9 +38,11 @@
  * never discovers a constraint by failing it).
  */
 import { metAt, type Epoch } from '@hh/astro';
-import type { ConstraintKind, ConstraintViolation, LegalityReason } from '@hh/game';
+import type { ConstraintKind } from '@hh/game';
 import type { Plan } from '@hh/sim';
 import type { Catalogue } from '@hh/ui';
+
+import type { Band } from './constraint-bands.js';
 import type { JSX } from 'preact';
 
 /**
@@ -104,6 +106,10 @@ export const scrubStepFor = (windowSeconds: number): number => {
  * bands are flattened out of the reason list — and it is listed anyway: the compiler
  * checks this array against the union, and leaving a kind out would make the next
  * constraint that *is* drawn silently label itself "constraint".
+ *
+ * The `burn_count` note above is now the only reason this differs from
+ * `CONSTRAINT_REPRESENTATION`'s key set: that table decides *whether* a kind is drawn and
+ * this array decides what its label says. They are checked against the same union.
  */
 const BAND_KIND_ORDER: readonly ConstraintKind[] = [
   'dv_budget',
@@ -120,8 +126,15 @@ export interface TimelineStripProps {
   /** MET of the contract's deadline — the wall. Past it a plan is `L3`. */
   readonly deadlineSeconds: number;
   readonly scrubEpoch: Epoch;
-  /** Every reason's intervals, shaded during planning (§6.5). */
-  readonly reasons: readonly LegalityReason[];
+  /**
+   * The bands to shade — violations and previews together (#129).
+   *
+   * Built by `bandsFor` rather than derived here, because deciding *what* a constraint
+   * looks like is a policy question with a table behind it and this component's job is to
+   * position things. It used to flatten `LegalityReason[]`, which tied what was drawn to
+   * what was blocking; `constraint-bands.ts` says why that had to change.
+   */
+  readonly bands: readonly Band[];
   /** Where the objective was first satisfied, or `null`. */
   readonly objectiveMetEpoch: Epoch | null;
   readonly selectedNodeIndex: number | null;
@@ -140,7 +153,7 @@ export const TimelineStrip = ({
   horizon,
   deadlineSeconds,
   scrubEpoch,
-  reasons,
+  bands,
   objectiveMetEpoch,
   selectedNodeIndex,
   onScrub,
@@ -151,40 +164,37 @@ export const TimelineStrip = ({
   const scrubMet = metAt(startEpoch, scrubEpoch);
   const at = (metSeconds: number): number => positionPercent(metSeconds, windowSeconds);
 
-  // Every interval from every reason, flattened. A reason can carry several — three dips
-  // below the floor is three bands — and §6.5 asks for all of them, not the first.
-  const bands: readonly ConstraintViolation[] = reasons.flatMap((reason) => reason.intervals);
-
   return (
     <section class="hh-timeline" aria-label={t('planner.timeline.label', {})}>
       <div class="hh-timeline__track" data-testid="timeline-track">
         {bands.map((band) => {
-          const startMet = metAt(startEpoch, band.start);
-          const endMet = metAt(startEpoch, band.end);
           const kind = BAND_KIND_ORDER.indexOf(band.kind);
+          // §8.6: a preview is shaded and a violation is solid. The distinction is carried
+          // as data rather than as a class, so the stylesheet states it once and a test can
+          // assert it without reading CSS.
+          const label = t(
+            band.state === 'violated' ? 'planner.timeline.band' : 'planner.timeline.bandPreview',
+            { kind, startMetSeconds: band.startMet, endMetSeconds: band.endMet },
+          );
           return (
             <div
-              key={`${band.kind}:${String(band.start)}:${String(band.end)}`}
+              key={`${band.kind}:${band.state}:${String(band.startMet)}:${String(band.endMet)}`}
               class="hh-timeline__band"
               data-kind={band.kind}
+              data-state={band.state}
               data-testid="timeline-band"
               style={{
-                left: `${String(at(startMet))}%`,
-                width: `${String(Math.max(0.4, at(endMet) - at(startMet)))}%`,
+                left: `${String(at(band.startMet))}%`,
+                width: `${String(Math.max(0.4, at(band.endMet) - at(band.startMet)))}%`,
               }}
-              title={t('planner.timeline.band', {
-                kind,
-                startMetSeconds: startMet,
-                endMetSeconds: endMet,
-              })}
+              title={label}
             >
-              <span class="hh-sr-only">
-                {t('planner.timeline.band', {
-                  kind,
-                  startMetSeconds: startMet,
-                  endMetSeconds: endMet,
-                })}
-              </span>
+              {/*
+                NFR-019 and §8.8: the band is never the only channel. A screen reader user
+                gets the same sentence from the DOM without seeing the shading, and the
+                sentence names the constraint and its interval rather than saying "band".
+              */}
+              <span class="hh-sr-only">{label}</span>
             </div>
           );
         })}

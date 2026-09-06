@@ -8,7 +8,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { EPOCH_NUDGE_SECONDS, SCRUB_NUDGE_SECONDS, actionFor, isTypingTarget } from './keys.js';
+import {
+  BINDINGS,
+  EPOCH_NUDGE_SECONDS,
+  SCRUB_NUDGE_SECONDS,
+  actionFor,
+  bindingFor,
+  isTypingTarget,
+} from './keys.js';
 
 const NONE = { shift: false, ctrl: false };
 const SHIFT = { shift: true, ctrl: false };
@@ -16,34 +23,34 @@ const CTRL = { shift: false, ctrl: true };
 
 describe('§8.5.3’s planner bindings', () => {
   it('maps the node keys', () => {
-    expect(actionFor('n', NONE)).toEqual({ kind: 'addNode' });
-    expect(actionFor('N', NONE)).toEqual({ kind: 'addNode' });
-    expect(actionFor('Delete', NONE)).toEqual({ kind: 'deleteNode' });
-    expect(actionFor('Backspace', NONE)).toEqual({ kind: 'deleteNode' });
-    expect(actionFor('e', NONE)).toEqual({ kind: 'editNode' });
+    expect(actionFor('planner', 'n', NONE)).toEqual({ kind: 'addNode' });
+    expect(actionFor('planner', 'N', NONE)).toEqual({ kind: 'addNode' });
+    expect(actionFor('planner', 'Delete', NONE)).toEqual({ kind: 'deleteNode' });
+    expect(actionFor('planner', 'Backspace', NONE)).toEqual({ kind: 'deleteNode' });
+    expect(actionFor('planner', 'e', NONE)).toEqual({ kind: 'editNode' });
   });
 
   it('cycles nodes with Tab, backwards with Shift', () => {
-    expect(actionFor('Tab', NONE)).toEqual({ kind: 'cycleNode', delta: 1 });
-    expect(actionFor('Tab', SHIFT)).toEqual({ kind: 'cycleNode', delta: -1 });
+    expect(actionFor('planner', 'Tab', NONE)).toEqual({ kind: 'cycleNode', delta: 1 });
+    expect(actionFor('planner', 'Tab', SHIFT)).toEqual({ kind: 'cycleNode', delta: -1 });
   });
 
   it('maps commit and cancel', () => {
-    expect(actionFor('Enter', NONE)).toEqual({ kind: 'commit' });
-    expect(actionFor('Escape', NONE)).toEqual({ kind: 'cancel' });
+    expect(actionFor('planner', 'Enter', NONE)).toEqual({ kind: 'commit' });
+    expect(actionFor('planner', 'Escape', NONE)).toEqual({ kind: 'cancel' });
   });
 
   it('maps the camera keys', () => {
-    expect(actionFor('f', NONE)).toEqual({ kind: 'recentre' });
-    expect(actionFor('+', NONE)?.kind).toBe('zoom');
-    expect(actionFor('-', NONE)?.kind).toBe('zoom');
+    expect(actionFor('planner', 'f', NONE)).toEqual({ kind: 'recentre' });
+    expect(actionFor('planner', '+', NONE)?.kind).toBe('zoom');
+    expect(actionFor('planner', '-', NONE)?.kind).toBe('zoom');
     // `=` is the unshifted `+` on most layouts, and a player pressing it means zoom in.
-    expect(actionFor('=', NONE)).toEqual(actionFor('+', NONE));
+    expect(actionFor('planner', '=', NONE)).toEqual(actionFor('planner', '+', NONE));
   });
 
   it('returns null for a key it does not own', () => {
     for (const key of ['q', 'F5', 'PageUp', 'z']) {
-      expect(actionFor(key, NONE)).toBeNull();
+      expect(actionFor('planner', key, NONE)).toBeNull();
     }
   });
 });
@@ -51,33 +58,33 @@ describe('§8.5.3’s planner bindings', () => {
 describe('the epoch nudge — §8.5.3’s `,` and `.`', () => {
   it('is ∓1 s, a tenth with Shift, a minute with Ctrl', () => {
     expect(EPOCH_NUDGE_SECONDS).toBe(1);
-    expect(actionFor('.', NONE)).toEqual({ kind: 'nudgeEpoch', seconds: 1 });
-    expect(actionFor(',', NONE)).toEqual({ kind: 'nudgeEpoch', seconds: -1 });
-    expect(actionFor('.', SHIFT)).toEqual({ kind: 'nudgeEpoch', seconds: 0.1 });
+    expect(actionFor('planner', '.', NONE)).toEqual({ kind: 'nudgeEpoch', seconds: 1 });
+    expect(actionFor('planner', ',', NONE)).toEqual({ kind: 'nudgeEpoch', seconds: -1 });
+    expect(actionFor('planner', '.', SHIFT)).toEqual({ kind: 'nudgeEpoch', seconds: 0.1 });
     // ×60, not ×10: a minute is the coarse step anyone thinks in for an epoch, and
     // §8.5.3's table says so. The Δv map's Ctrl is ×10, which is not an inconsistency.
-    expect(actionFor('.', CTRL)).toEqual({ kind: 'nudgeEpoch', seconds: 60 });
+    expect(actionFor('planner', '.', CTRL)).toEqual({ kind: 'nudgeEpoch', seconds: 60 });
   });
 });
 
 describe('the Δv nudges — §8.5.3’s arrows', () => {
   it('puts prograde on the vertical axis and radial on the horizontal', () => {
-    expect(actionFor('ArrowUp', NONE)).toEqual({
+    expect(actionFor('planner', 'ArrowUp', NONE)).toEqual({
       kind: 'nudgeDeltaV',
       progradeMps: 1,
       radialMps: 0,
     });
-    expect(actionFor('ArrowDown', NONE)).toEqual({
+    expect(actionFor('planner', 'ArrowDown', NONE)).toEqual({
       kind: 'nudgeDeltaV',
       progradeMps: -1,
       radialMps: 0,
     });
-    expect(actionFor('ArrowRight', NONE)).toEqual({
+    expect(actionFor('planner', 'ArrowRight', NONE)).toEqual({
       kind: 'nudgeDeltaV',
       progradeMps: 0,
       radialMps: 1,
     });
-    expect(actionFor('ArrowLeft', NONE)).toEqual({
+    expect(actionFor('planner', 'ArrowLeft', NONE)).toEqual({
       kind: 'nudgeDeltaV',
       progradeMps: 0,
       radialMps: -1,
@@ -86,23 +93,23 @@ describe('the Δv nudges — §8.5.3’s arrows', () => {
 
   it('uses the same step rule as §8.3.5’s steppers', () => {
     // One statement of the rule, reached two ways — `deltaVStep` in `@hh/ui`.
-    expect(actionFor('ArrowUp', SHIFT)?.kind).toBe('nudgeDeltaV');
-    expect(actionFor('ArrowUp', SHIFT)).toMatchObject({ progradeMps: 0.1 });
-    expect(actionFor('ArrowUp', CTRL)).toMatchObject({ progradeMps: 10 });
+    expect(actionFor('planner', 'ArrowUp', SHIFT)?.kind).toBe('nudgeDeltaV');
+    expect(actionFor('planner', 'ArrowUp', SHIFT)).toMatchObject({ progradeMps: 0.1 });
+    expect(actionFor('planner', 'ArrowUp', CTRL)).toMatchObject({ progradeMps: 10 });
   });
 });
 
 describe('the scrub keys — §8.5.3’s `[`, `]`, Home and End', () => {
   it('is ∓1 min with the same modifiers', () => {
     expect(SCRUB_NUDGE_SECONDS).toBe(60);
-    expect(actionFor(']', NONE)).toEqual({ kind: 'scrub', seconds: 60 });
-    expect(actionFor('[', NONE)).toEqual({ kind: 'scrub', seconds: -60 });
-    expect(actionFor(']', SHIFT)).toEqual({ kind: 'scrub', seconds: 6 });
+    expect(actionFor('planner', ']', NONE)).toEqual({ kind: 'scrub', seconds: 60 });
+    expect(actionFor('planner', '[', NONE)).toEqual({ kind: 'scrub', seconds: -60 });
+    expect(actionFor('planner', ']', SHIFT)).toEqual({ kind: 'scrub', seconds: 6 });
   });
 
   it('jumps to the start and the deadline', () => {
-    expect(actionFor('Home', NONE)).toEqual({ kind: 'scrubTo', where: 'start' });
-    expect(actionFor('End', NONE)).toEqual({ kind: 'scrubTo', where: 'deadline' });
+    expect(actionFor('planner', 'Home', NONE)).toEqual({ kind: 'scrubTo', where: 'start' });
+    expect(actionFor('planner', 'End', NONE)).toEqual({ kind: 'scrubTo', where: 'deadline' });
   });
 });
 
@@ -133,5 +140,108 @@ describe('bindings do not fire into a field', () => {
       expect(isTypingTarget(element(html))).toBe(false);
     }
     expect(isTypingTarget(null)).toBe(false);
+  });
+});
+
+describe('the map is data, scoped by screen (#141)', () => {
+  it('gives every binding a stable id, and no two the same', () => {
+    const ids = BINDINGS.map((binding) => binding.id);
+    // The id is what #187 stores a remapping against and what #124 lists. Two rows sharing
+    // one would make a remapping ambiguous and an overlay entry duplicated.
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('gives every binding at least one key and one screen', () => {
+    for (const binding of BINDINGS) {
+      expect(binding.keys.length, binding.id).toBeGreaterThan(0);
+      expect(binding.screens.length, binding.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('gives every binding a description for the overlay to render', () => {
+    // #124's last criterion: *"the map rendered by the help overlay is the same data the
+    // handler runs"*. A row with no description could not be rendered, so the overlay would
+    // have to invent one — which is the drift the shared table exists to prevent.
+    for (const binding of BINDINGS) {
+      expect(binding.descriptionKey, binding.id).toMatch(/^keys\./);
+    }
+  });
+
+  it('either resolves to an action or names the issue that will make it', () => {
+    for (const binding of BINDINGS) {
+      // Exactly one of the two. A row with neither is a key that does nothing and says
+      // nothing about why; a row with both would claim to be waiting on an issue while
+      // already working.
+      const resolves = binding.toAction !== undefined;
+      const waiting = binding.pending !== undefined;
+      expect(resolves !== waiting, binding.id).toBe(true);
+      if (waiting) expect(binding.pending, binding.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('orders a more specific modifier rule before a looser one on the same key', () => {
+    // The property, not the instance: `bindingFor` takes the first match, so a row whose
+    // rules are a strict superset of an earlier row's could never be reached.
+    for (let i = 0; i < BINDINGS.length; i++) {
+      for (let j = i + 1; j < BINDINGS.length; j++) {
+        const earlier = BINDINGS[i];
+        const later = BINDINGS[j];
+        if (earlier === undefined || later === undefined) continue;
+        const sharesKey = earlier.keys.some((key) => later.keys.includes(key));
+        const sharesScreen = earlier.screens.some((screen) => later.screens.includes(screen));
+        if (!sharesKey || !sharesScreen) continue;
+        // They collide, so the earlier row must be at least as specific: it cannot leave a
+        // modifier unconstrained that the later one constrains.
+        const looser =
+          (earlier.ctrl === undefined && later.ctrl !== undefined) ||
+          (earlier.shift === undefined && later.shift !== undefined);
+        expect(looser, `${earlier.id} shadows ${later.id}`).toBe(false);
+      }
+    }
+  });
+});
+
+describe('scoping (#141)', () => {
+  it('gives S to execution and nothing to the planner', () => {
+    // The reason the map is scoped at all: one key, two meanings, and a flat table would
+    // need a condition somewhere to resolve it.
+    expect(actionFor('execution', 's', NONE)).toEqual({ kind: 'skipToEnd' });
+    expect(actionFor('planner', 's', NONE)).toBeNull();
+  });
+
+  it('gives the planner’s editing keys to no other screen', () => {
+    for (const key of ['n', 'Delete', 'e', ',', '.', '[', ']']) {
+      expect(actionFor('execution', key, NONE), key).toBeNull();
+      expect(actionFor('debrief', key, NONE), key).toBeNull();
+    }
+  });
+
+  it('gives Escape to every screen, because every screen can be left', () => {
+    for (const screen of ['briefing', 'planner', 'execution', 'debrief'] as const) {
+      expect(actionFor(screen, 'Escape', NONE), screen).toEqual({ kind: 'cancel' });
+    }
+  });
+
+  it('maps 1–5 to a speed index during execution only', () => {
+    expect(actionFor('execution', '1', NONE)).toEqual({ kind: 'setSpeedIndex', index: 0 });
+    expect(actionFor('execution', '5', NONE)).toEqual({ kind: 'setSpeedIndex', index: 4 });
+    expect(actionFor('planner', '1', NONE)).toBeNull();
+  });
+
+  it('gives R to the debrief', () => {
+    expect(actionFor('debrief', 'r', NONE)).toEqual({ kind: 'retry' });
+    expect(actionFor('planner', 'r', NONE)).toBeNull();
+  });
+});
+
+describe('bindings whose features are not built (#141)', () => {
+  it('resolves ? and C to nothing, while still listing them', () => {
+    // §8.5.3 lists both. They resolve to `null` — indistinguishable from unbound at the
+    // call site, so no screen has to know which bindings are waiting on an issue — and
+    // remain in `BINDINGS` so #124 can show them and #187 can offer them.
+    expect(actionFor('planner', '?', NONE)).toBeNull();
+    expect(actionFor('planner', 'c', NONE)).toBeNull();
+    expect(bindingFor('planner', '?', NONE)?.pending).toBe(124);
+    expect(bindingFor('planner', 'c', NONE)?.pending).toBe(161);
   });
 });

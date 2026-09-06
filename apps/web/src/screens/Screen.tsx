@@ -35,8 +35,18 @@
  * accepted flag, later a planner's selection — belong to the contract it was opened for
  * rather than leaking into the next one.
  */
+import type { Catalogue } from '@hh/ui';
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
+
+/**
+ * The heading's id, shared by the skip link and by every screen.
+ *
+ * One id rather than one per screen because only one `Screen` is mounted at a time — the
+ * router keys this component by route — so it cannot collide with itself, and a stable
+ * fragment means `#content` works the same way on every screen.
+ */
+const HEADING_ID = 'hh-content';
 
 export interface ScreenProps {
   /** Machine name of the screen, for styling hooks and tests. Never rendered. */
@@ -53,6 +63,8 @@ export interface ScreenProps {
   readonly focusHeading: boolean;
   /** §9.4's screen-change duration, already collapsed to 0 under reduced motion. */
   readonly transitionMs: number;
+  /** For §8.8's skip link. The one string this shell renders of its own. */
+  readonly t: Catalogue['resolve'];
   readonly children?: ComponentChildren;
 }
 
@@ -61,6 +73,7 @@ export const Screen = ({
   heading,
   focusHeading,
   transitionMs,
+  t,
   children,
 }: ScreenProps): JSX.Element => {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
@@ -74,16 +87,38 @@ export const Screen = ({
   }, []);
 
   return (
-    <main
-      class="hh-screen"
-      data-screen={name}
-      data-testid="screen"
-      style={`--hh-screen-in-duration:${String(transitionMs)}ms`}
-    >
-      <h1 class="hh-screen__heading" tabIndex={-1} ref={headingRef} data-testid="screen-heading">
-        {heading}
-      </h1>
-      {children}
-    </main>
+    <>
+      {/*
+        §8.8's skip-to-content link (#141).
+        
+        First in the DOM and visible only on focus, which is the whole point: a keyboard
+        user tabbing into a screen should reach the content without walking the HUD, and a
+        pointer user should never see a link they cannot use. It targets the heading rather
+        than the `<main>` because the heading is already focusable — `Screen` gives it
+        `tabIndex={-1}` so a route change can move focus there — so the skip link and the
+        route change land in the same place, and a player who uses both does not learn two
+        different "top of the screen"s.
+      */}
+      <a class="hh-skip-link" href={`#${HEADING_ID}`} data-testid="skip-to-content">
+        {t('app.skipToContent', {})}
+      </a>
+      <main
+        class="hh-screen"
+        data-screen={name}
+        data-testid="screen"
+        style={`--hh-screen-in-duration:${String(transitionMs)}ms`}
+      >
+        <h1
+          class="hh-screen__heading"
+          id={HEADING_ID}
+          tabIndex={-1}
+          ref={headingRef}
+          data-testid="screen-heading"
+        >
+          {heading}
+        </h1>
+        {children}
+      </main>
+    </>
   );
 };
