@@ -47,6 +47,15 @@ export interface SettingsApi {
   readonly settings: Settings;
   /** What is actually stored — sparse. What the Data group exports and resets. */
   readonly stored: StoredSettings;
+  /**
+   * #187's rebinds, resolved to a map so no consumer has to handle the absent case.
+   *
+   * Typed as a plain record rather than as `planner/keys.ts`'s `Rebinds`, which it is
+   * structurally: the settings layer has no business importing the planner's key table,
+   * and the two types being identical is what lets the value cross the boundary without
+   * either side depending on the other.
+   */
+  readonly keybindings: Readonly<Record<string, string>>;
   readonly set: <K extends SettingKey>(key: K, value: Settings[K]) => void;
   /** Back to the code default, which is not the same as back to what was stored. */
   readonly reset: (key: SettingKey) => void;
@@ -60,6 +69,7 @@ const noop = (): void => undefined;
 const DEFAULTS: SettingsApi = Object.freeze({
   settings: resolveSettings(emptySettings()),
   stored: emptySettings(),
+  keybindings: Object.freeze({}),
   set: noop,
   reset: noop,
   resetAll: noop,
@@ -87,6 +97,7 @@ export const SettingsProvider = ({
     () => ({
       settings: resolveSettings(stored),
       stored,
+      keybindings: stored.keybindings ?? {},
       set: (key, value) => {
         onChange(withSetting(stored, key, value));
       },
@@ -111,6 +122,10 @@ export const SettingsProvider = ({
 
 /** The whole settings API. What the settings screen and the Data group use. */
 export const useSettings = (): SettingsApi => useContext(SettingsContext);
+
+/** #187's rebind map. Empty when the player has changed nothing. */
+export const useKeybindings = (): Readonly<Record<string, string>> =>
+  useContext(SettingsContext).keybindings;
 
 /**
  * One setting's value.

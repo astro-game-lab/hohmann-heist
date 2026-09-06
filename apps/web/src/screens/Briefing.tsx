@@ -43,7 +43,9 @@ import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
 
+import { actionFor } from '../planner/keys.js';
 import type { ContractProgress } from '../save/index.js';
+import { useKeybindings } from '../settings/context.js';
 import { hrefFor } from '../router.js';
 import { ContractConstraints, ContractNumbers, ContractSetup } from './contract-content.js';
 
@@ -84,11 +86,22 @@ export const Briefing = ({
    * an editable field, a modifier held, or an event something else has already handled.
    * Without that guard, clicking ACCEPT with the keyboard would accept twice.
    */
+  const rebinds = useKeybindings();
+
   useEffect(() => {
     if (locked) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Enter' || event.defaultPrevented) return;
-      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.defaultPrevented || event.altKey || event.metaKey) return;
+      // Through §8.5.3's table rather than comparing `event.key` — #187. `Enter` was
+      // hard-coded here, which made "commit / confirm" the one row in the map that a
+      // rebind could not reach: the planner honoured it and the briefing did not.
+      const action = actionFor(
+        'briefing',
+        event.key,
+        { shift: event.shiftKey, ctrl: event.ctrlKey },
+        rebinds,
+      );
+      if (action?.kind !== 'commit') return;
       const target = event.target;
       if (target instanceof HTMLElement) {
         if (target.isContentEditable) return;
@@ -100,7 +113,7 @@ export const Briefing = ({
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [locked, onAccept]);
+  }, [locked, onAccept, rebinds]);
 
   return (
     <div class="hh-briefing">

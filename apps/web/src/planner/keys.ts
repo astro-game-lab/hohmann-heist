@@ -382,6 +382,12 @@ export const BINDINGS: readonly Binding[] = [
     id: 'confirm',
     keys: ['Enter'],
     ctrl: 'forbidden',
+    // Shift too, and that is a fix rather than a tightening for its own sake. §8.5.3 lists
+    // `Enter`, not `Shift+Enter`; before #187 the briefing rejected every modifier in its
+    // own handler while the planner consulted this row, so the two screens disagreed about
+    // what `Shift+Enter` meant. Stating it here makes them agree, and leaves `Shift+Enter`
+    // to whatever the browser or a future binding wants it for.
+    shift: 'forbidden',
     // §8.5.3's one "Commit / confirm" row. The briefing's ACCEPT is the same binding on a
     // different screen, and `Briefing.tsx` resolves it — which is why the row names both.
     screens: ['briefing', 'planner'],
@@ -415,6 +421,55 @@ export const BINDINGS: readonly Binding[] = [
 ];
 
 /**
+ * A player's rebinds: binding id → the one key that now triggers it (#187).
+ *
+ * **Sparse.** Only bindings that differ from the default appear, so a changed default
+ * reaches a player who never rebound that action — the same rule the rest of the settings
+ * follow, and the reason an exported save of a player who rebound one key contains one
+ * entry.
+ *
+ * One key, where a default row may name several (`Delete` and `Backspace`, `1`–`5`). A
+ * rebind replaces the row's whole key set: a player who binds "delete node" to `x` means
+ * `x`, not `x` as well as `Backspace`. Reset brings the full default set back.
+ *
+ * The type and its resolution live here rather than in `keymap.ts` because *what this
+ * table responds to* is this module's question — `keymap.ts` owns how a player changes it,
+ * and one-way imports keep the two from becoming a cycle.
+ */
+export type Rebinds = Readonly<Record<string, string>>;
+
+/**
+ * A letter in both cases, anything else as itself.
+ *
+ * `event.key` for a shifted `n` is `N`, and §8.5.3 treats them as one binding — the
+ * default rows already list `['n', 'N']` for that reason. A rebind stores one of them and
+ * has to match both, or half of every letter binding would stop working the moment Caps
+ * Lock was on.
+ */
+export const variantsOf = (key: string): readonly string[] => {
+  if (key.length !== 1) return [key];
+  const lower = key.toLowerCase();
+  const upper = key.toUpperCase();
+  return lower === upper ? [key] : [lower, upper];
+};
+
+/** Whether a binding has been rebound away from its default keys. */
+export const isRebound = (binding: Binding, rebinds: Rebinds): boolean =>
+  rebinds[binding.id] !== undefined;
+
+/**
+ * The keys a binding responds to right now.
+ *
+ * The single source both the handler and #124's overlay read, which is what makes *"the
+ * map a player is shown and the map that runs"* survive remapping. A rebind naming a
+ * binding id this build does not have is simply never asked for.
+ */
+export const keysFor = (binding: Binding, rebinds: Rebinds): readonly string[] => {
+  const rebound = rebinds[binding.id];
+  return rebound === undefined ? binding.keys : variantsOf(rebound);
+};
+
+/**
  * Whether a key press belongs to whatever the player is typing into.
  *
  * Everything editable, plus `contenteditable`, plus anything that has opted out with
@@ -442,12 +497,24 @@ const satisfied = (rule: ModifierRule | undefined, held: boolean): boolean => {
   return true;
 };
 
-/** The binding a key press matches on a screen, or `null`. A pending row still matches. */
-export const bindingFor = (screen: Screen, key: string, modifiers: Modifiers): Binding | null =>
+/**
+ * The binding a key press matches on a screen, or `null`. A pending row still matches.
+ *
+ * `rebinds` is the player's map (#187), defaulting to empty so a caller that has no reason
+ * to care — a test of the default table, the guardrail suite — reads exactly as before.
+ * Which keys a row answers to is `keysFor`'s question, not this one's: this module owns
+ * the scoping and the modifiers, and `keymap.ts` owns what a rebind means.
+ */
+export const bindingFor = (
+  screen: Screen,
+  key: string,
+  modifiers: Modifiers,
+  rebinds: Rebinds = {},
+): Binding | null =>
   BINDINGS.find(
     (binding) =>
       binding.screens.includes(screen) &&
-      binding.keys.includes(key) &&
+      keysFor(binding, rebinds).includes(key) &&
       satisfied(binding.ctrl, modifiers.ctrl) &&
       satisfied(binding.shift, modifiers.shift),
   ) ?? null;
@@ -468,8 +535,9 @@ export const actionFor = (
   screen: Screen,
   key: string,
   modifiers: Modifiers,
+  rebinds: Rebinds = {},
 ): PlannerAction | null => {
-  const binding = bindingFor(screen, key, modifiers);
+  const binding = bindingFor(screen, key, modifiers, rebinds);
   if (binding?.toAction === undefined) return null;
   if (binding.id === 'playbackSpeed') {
     const index = Number.parseInt(key, 10) - 1;

@@ -37,6 +37,7 @@ import { isProximityEvaluation } from '@hh/game';
 import type { Timeline } from '@hh/sim';
 import type { Catalogue, PlaybackSpeed } from '@hh/ui';
 import { actionFor } from '../planner/keys.js';
+import { useKeybindings } from '../settings/context.js';
 import { PLAYBACK_SPEEDS, elapsedSeconds, progressOf } from '@hh/ui';
 import type { JSX } from 'preact';
 
@@ -124,6 +125,10 @@ export const ExecutionScreen = ({
    * needed it. The flight log is focusable and scrolls with the arrow keys, which are
    * deliberately unbound here.
    */
+  // The player's map rather than the shipped one (#187), read here so the effect
+  // re-installs when a rebind lands.
+  const rebinds = useKeybindings();
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.metaKey || event.altKey) return;
@@ -132,10 +137,12 @@ export const ExecutionScreen = ({
       // renders and #187 re-keys. `S` means *skip* on this screen and nothing in the
       // planner, and that difference is now the table's rather than a matter of which
       // component happens to be mounted.
-      const action = actionFor('execution', event.key, {
-        shift: event.shiftKey,
-        ctrl: event.ctrlKey,
-      });
+      const action = actionFor(
+        'execution',
+        event.key,
+        { shift: event.shiftKey, ctrl: event.ctrlKey },
+        rebinds,
+      );
       if (action === null) return;
 
       switch (action.kind) {
@@ -170,7 +177,7 @@ export const ExecutionScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, onAbort]);
+  }, [actions, onAbort, rebinds]);
 
   return (
     <div class="hh-execution" data-testid="execution">
