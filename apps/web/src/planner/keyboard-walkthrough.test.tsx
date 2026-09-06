@@ -107,6 +107,9 @@ const mount = async (): Promise<void> => {
         resolveDynamic={catalogue.resolveDynamic}
         scenario={c02()}
         onAccept={() => undefined}
+        coachMarksSeen={[]}
+        onCoachMarkSeen={() => undefined}
+        onOpenCodex={() => undefined}
       />,
       container,
     );

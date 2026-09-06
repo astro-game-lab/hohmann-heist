@@ -64,7 +64,7 @@ const Row = ({
 );
 
 export const Readouts = ({ t, orbit, approach, startEpoch }: ReadoutsProps): JSX.Element => (
-  <section class="hh-readouts" data-testid="readouts">
+  <section class="hh-readouts" data-testid="readouts" data-hh-anchor="readouts">
     <h2 class="hh-panel__heading">{t('planner.readouts.heading', {})}</h2>
 
     <dl class="hh-readouts__list">

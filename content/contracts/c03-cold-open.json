@@ -64,5 +64,5 @@
   },
   "unlocks": [],
   "assistsAllowed": ["closest_approach", "coach_marks", "constraints", "elements", "snapping"],
-  "coachMarks": ["mark.c03.departureWindow"]
+  "coachMarks": ["mark.c03.departureWindow", "mark.c03.closestApproach"]
 }

@@ -45,7 +45,6 @@ export const SETTING_LABELS = {
   'accessibility.lineWeights': 'settings.lineWeights.label',
   'accessibility.verbosity': 'settings.verbosity.label',
   'gameplay.assists': 'settings.assists.label',
-  'gameplay.coachMarks': 'settings.coachMarks.label',
   'gameplay.confirmCommit': 'settings.confirmCommit.label',
   'gameplay.autoSkipAfter': 'settings.autoSkipAfter.label',
   'audio.master': 'settings.audioMaster.label',

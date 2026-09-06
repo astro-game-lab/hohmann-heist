@@ -989,7 +989,7 @@ export const OrbitView = ({
   }, [scrubEpoch, selectedNodeId, snappedKinds, dragging, anchorNodeId, t, resolveDynamic]);
 
   return (
-    <div class="hh-orbit" ref={frameRef} data-testid="orbit-view">
+    <div class="hh-orbit" ref={frameRef} data-testid="orbit-view" data-hh-anchor="orbit">
       <canvas
         class="hh-orbit__canvas"
         ref={canvasRef}

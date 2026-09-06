@@ -272,11 +272,21 @@ export interface UiMessageParams {
   readonly 'client.orbitalMutual': Record<string, never>;
 
   // Coach marks. FR-902 allows them in C01–C04 only, at most three per contract, so this
-  // list is closed at four and does not grow with Act II.
+  // list is closed at eight and does not grow with Act II.
+  //
+  // Two per contract rather than the ceiling of three: one names the idea §6.12 says the
+  // contract teaches, and one names *where to look* for it. `../onboarding/marks.ts` is
+  // where each is anchored and triggered, and it derives `MarkKey` from this block — so a
+  // string written here without a row there, or a row there with no string, is a compile
+  // error rather than a mark that never appears.
   readonly 'mark.c01.oppositeSide': Record<string, never>;
+  readonly 'mark.c01.commit': Record<string, never>;
   readonly 'mark.c02.secondBurn': Record<string, never>;
+  readonly 'mark.c02.apoapsis': Record<string, never>;
   readonly 'mark.c03.departureWindow': Record<string, never>;
+  readonly 'mark.c03.closestApproach': Record<string, never>;
   readonly 'mark.c04.scale': Record<string, never>;
+  readonly 'mark.c04.burnCap': Record<string, never>;
 
   // ── The briefing (§8.3.3, #120) ────────────────────────────────────────────
   //
@@ -910,7 +920,6 @@ export interface UiMessageParams {
 
   readonly 'settings.assists.label': Record<string, never>;
   readonly 'settings.assists.hint': Record<string, never>;
-  readonly 'settings.coachMarks.label': Record<string, never>;
   readonly 'settings.confirmCommit.label': Record<string, never>;
   readonly 'settings.autoSkipAfter.label': Record<string, never>;
   readonly 'settings.autoSkipAfter.value': { readonly count: number };
@@ -993,6 +1002,169 @@ export interface UiMessageParams {
   readonly 'help.close': Record<string, never>;
   /** The link out to §8.3.12's remapper — two places to rebind is one too many. */
   readonly 'help.remap': Record<string, never>;
+
+  // ── Coach marks (FR-902, §8.6, #159) ───────────────────────────────────────
+  //
+  // The marks themselves are up with the contracts they belong to, beside their briefs.
+  // These four are the frame around one: what it is, and the two ways out of it.
+  //
+  // Both dismissals are here because FR-902 asks for two and they are not the same
+  // sentence. "Got it" closes this mark for the attempt; the other writes its key to
+  // `flags.coachMarksSeen` and it never comes back. Neither is the feature switch — that
+  // is the `coach_marks` assist, which lives in the tray and in Settings.
+  readonly 'coachMark.label': Record<string, never>;
+  readonly 'coachMark.dismiss': Record<string, never>;
+  readonly 'coachMark.dismissPermanently': Record<string, never>;
+  /** The link into the Codex entry a mark is the one-line version of. */
+  readonly 'coachMark.readMore': Record<string, never>;
+
+  // ── The Codex frame (FR-903, FR-904, §8.3.10, #161) ────────────────────────
+  readonly 'codex.heading': Record<string, never>;
+  readonly 'codex.intro': Record<string, never>;
+  /**
+   * One contract in §8.3.10's "Seen in" line.
+   *
+   * Its own key rather than `planner.hud.contract`, which today renders the same two
+   * fields the same way. They are the same string by coincidence: the HUD's is a label on
+   * a screen where the contract is already known, and this one is a cross-reference in
+   * running prose. A locale that wanted "Contract 01" here and "01" there should not have
+   * to choose.
+   */
+  readonly 'codex.contractLabel': { readonly index: number; readonly title: string };
+  /** §8.3.10's "Seen in" line. Contract labels, already formatted by the caller. */
+  readonly 'codex.seenIn': { readonly contracts: readonly string[] };
+  /** An entry no contract has reached yet — the Codex is readable ahead of play. */
+  readonly 'codex.seenInNone': Record<string, never>;
+  readonly 'codex.read': Record<string, never>;
+
+  // The four layer headings. §8.3.10's own labels, and the order is the disclosure
+  // order — a heading that moved would move the layer with it.
+  readonly 'codex.layer.sentence': Record<string, never>;
+  readonly 'codex.layer.diagram': Record<string, never>;
+  readonly 'codex.layer.numbers': Record<string, never>;
+  readonly 'codex.layer.simplifications': Record<string, never>;
+
+  /**
+   * The diagram slot's placeholder — and it says so.
+   *
+   * §8.3.10 wants a live simulation and #162 builds one at M4. Until then the slot renders
+   * this rather than a picture, because a static drawing in the space labelled "real sim"
+   * is a claim the game cannot currently make.
+   */
+  readonly 'codex.diagramPending': Record<string, never>;
+
+  /** One departure row: its DEP id and the registry's own summary of it. */
+  readonly 'codex.departure': { readonly id: string; readonly summary: string };
+  /** FR-904's link out to `docs/PHYSICS.md`. */
+  readonly 'codex.physicsLink': Record<string, never>;
+
+  readonly 'codex.backToIndex': Record<string, never>;
+  readonly 'codex.close': Record<string, never>;
+
+  /** §8.7's treatment for a slug that names nothing: say what failed, then the index. */
+  readonly 'codex.unknown': { readonly slug: string };
+  readonly 'codex.unknownHelp': Record<string, never>;
+
+  // ── The entries (FR-903, §6.12, #163) ──────────────────────────────────────
+  //
+  // Five keys per entry, and the entry table in `../codex/entries.ts` names all five so
+  // that a key with no reader is still findable by the rot check. The `.numbers` keys are
+  // the only messages in the catalogue whose parameters are computed rather than passed
+  // by a caller. Their shapes are written **here** rather than beside the arithmetic, which
+  // is the opposite of where they started: a named type imported from `../codex/figures.ts`
+  // is an interface, and an interface does not get the implicit index signature that
+  // `resolveDynamic`'s `Readonly<Record<string, MessageParamValue>>` needs — so every one of
+  // them failed the one call that iterates the whole catalogue. Declared inline they are
+  // anonymous object types, which do, and `figures.ts` re-exports each under its name by
+  // indexing back into this table. One declaration either way; this is the one that types.
+
+  readonly 'codex.burns-and-apsides.title': Record<string, never>;
+  readonly 'codex.burns-and-apsides.subtitle': Record<string, never>;
+  readonly 'codex.burns-and-apsides.sentence': Record<string, never>;
+  readonly 'codex.burns-and-apsides.numbers': {
+    readonly startAltitudeKm: number;
+    readonly raisedAltitudeKm: number;
+    readonly deltaVMps: number;
+    readonly coastMinutes: number;
+  };
+  readonly 'codex.burns-and-apsides.realWorld': Record<string, never>;
+
+  readonly 'codex.the-hohmann-transfer.title': Record<string, never>;
+  readonly 'codex.the-hohmann-transfer.subtitle': Record<string, never>;
+  readonly 'codex.the-hohmann-transfer.sentence': Record<string, never>;
+  readonly 'codex.the-hohmann-transfer.numbers': {
+    readonly startAltitudeKm: number;
+    readonly endAltitudeKm: number;
+    readonly firstBurnMps: number;
+    readonly secondBurnMps: number;
+    readonly totalMps: number;
+    readonly transferMinutes: number;
+  };
+  readonly 'codex.the-hohmann-transfer.realWorld': Record<string, never>;
+
+  readonly 'codex.departure-timing.title': Record<string, never>;
+  readonly 'codex.departure-timing.subtitle': Record<string, never>;
+  readonly 'codex.departure-timing.sentence': Record<string, never>;
+  readonly 'codex.departure-timing.numbers': {
+    readonly transferMinutes: number;
+    readonly targetPeriodMinutes: number;
+    readonly targetSweepDeg: number;
+    readonly leadAngleDeg: number;
+  };
+  readonly 'codex.departure-timing.realWorld': Record<string, never>;
+
+  readonly 'codex.the-cost-of-altitude.title': Record<string, never>;
+  readonly 'codex.the-cost-of-altitude.subtitle': Record<string, never>;
+  readonly 'codex.the-cost-of-altitude.sentence': Record<string, never>;
+  readonly 'codex.the-cost-of-altitude.numbers': {
+    readonly startAltitudeKm: number;
+    readonly geoAltitudeKm: number;
+    readonly firstBurnMps: number;
+    readonly secondBurnMps: number;
+    readonly totalMps: number;
+    readonly transferHours: number;
+  };
+  readonly 'codex.the-cost-of-altitude.realWorld': Record<string, never>;
+
+  readonly 'codex.phasing-orbits.title': Record<string, never>;
+  readonly 'codex.phasing-orbits.subtitle': Record<string, never>;
+  readonly 'codex.phasing-orbits.sentence': Record<string, never>;
+  readonly 'codex.phasing-orbits.numbers': {
+    readonly altitudeKm: number;
+    readonly basePeriodMinutes: number;
+    readonly phasingPeriodMinutes: number;
+    readonly phasingPeriapsisKm: number;
+    readonly phasingSemiMajorKm: number;
+    readonly gainPerRevMinutes: number;
+    readonly gainPerRevDeg: number;
+    readonly deltaVMps: number;
+  };
+  readonly 'codex.phasing-orbits.realWorld': Record<string, never>;
+
+  readonly 'codex.the-delta-v-time-trade.title': Record<string, never>;
+  readonly 'codex.the-delta-v-time-trade.subtitle': Record<string, never>;
+  readonly 'codex.the-delta-v-time-trade.sentence': Record<string, never>;
+  readonly 'codex.the-delta-v-time-trade.numbers': {
+    readonly gainDeg: number;
+    readonly fastRevolutions: number;
+    readonly fastDeltaVMps: number;
+    readonly fastHours: number;
+    readonly slowRevolutions: number;
+    readonly slowDeltaVMps: number;
+    readonly slowHours: number;
+  };
+  readonly 'codex.the-delta-v-time-trade.realWorld': Record<string, never>;
+
+  readonly 'codex.rendezvous-versus-intercept.title': Record<string, never>;
+  readonly 'codex.rendezvous-versus-intercept.subtitle': Record<string, never>;
+  readonly 'codex.rendezvous-versus-intercept.sentence': Record<string, never>;
+  readonly 'codex.rendezvous-versus-intercept.numbers': {
+    readonly interceptRangeM: number;
+    readonly rendezvousRangeM: number;
+    readonly rendezvousSpeedMps: number;
+    readonly closingSpeedMps: number;
+  };
+  readonly 'codex.rendezvous-versus-intercept.realWorld': Record<string, never>;
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

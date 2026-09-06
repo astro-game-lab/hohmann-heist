@@ -75,6 +75,16 @@ export interface ContractScreenProps {
   readonly onAccept: () => void;
   /** Records a completed run (FR-302). Called once, when the debrief is reached. */
   readonly onComplete?: (outcome: Outcome, replay: string) => void;
+  /**
+   * FR-902's coach marks — `flags.coachMarksSeen`, its writer, and the way into the Codex.
+   *
+   * Passed straight through to the planner, which is the only screen that shows a mark.
+   * They come from the save, which `apps/web`'s shell owns (§11.2), and this screen is the
+   * one place between the two.
+   */
+  readonly coachMarksSeen: readonly string[];
+  readonly onCoachMarkSeen: (key: string) => void;
+  readonly onOpenCodex: (slug: string) => void;
 }
 
 /**
@@ -147,6 +157,9 @@ export const ContractScreen = ({
   progress,
   onAccept,
   onComplete,
+  coachMarksSeen,
+  onCoachMarkSeen,
+  onOpenCodex,
 }: ContractScreenProps): JSX.Element => {
   const [phase, setPhase] = useState<Phase>('briefing');
 
@@ -241,6 +254,9 @@ export const ContractScreen = ({
         t={t}
         resolveDynamic={resolveDynamic}
         scenario={scenario}
+        coachMarksSeen={coachMarksSeen}
+        onCoachMarkSeen={onCoachMarkSeen}
+        onOpenCodex={onOpenCodex}
         // The plan comes back on an abort or a retry, with the place the player was
         // working in it (FR-603, #145, §6.11). Absent on a first entry.
         {...(run === null

@@ -14,6 +14,7 @@ describe('parseHash', () => {
     expect(parseHash('#/daily').name).toBe('daily');
     expect(parseHash('#/replay').name).toBe('replay');
     expect(parseHash('#/settings').name).toBe('settings');
+    expect(parseHash('#/codex').name).toBe('codexIndex');
   });
 
   it('captures parameters', () => {
@@ -29,6 +30,27 @@ describe('parseHash', () => {
   });
 
   // Order matters in the route table: the specific pattern must win.
+  it('prefers /codex/:slug over /codex', () => {
+    expect(parseHash('#/codex/phasing-orbits')).toMatchObject({
+      name: 'codex',
+      params: { slug: 'phasing-orbits' },
+    });
+    // And a trailing slash is the index rather than an entry with an empty name — the
+    // segment filter drops it, which is what makes `#/codex/` and `#/codex` the same place.
+    expect(parseHash('#/codex/').name).toBe('codexIndex');
+  });
+
+  // §8.3.10's entries are deep-linkable *into a layer*, which travels as a query rather
+  // than as a path segment: the entry is the resource and the layer is a view of it.
+  it('keeps the layer query beside the slug', () => {
+    expect(parseHash('#/codex/phasing-orbits?layer=numbers')).toMatchObject({
+      name: 'codex',
+      params: { slug: 'phasing-orbits' },
+      path: '/codex/phasing-orbits',
+      search: 'layer=numbers',
+    });
+  });
+
   it('prefers /daily/:date over /daily', () => {
     expect(parseHash('#/daily/2026-09-01')).toMatchObject({
       name: 'dailyDate',

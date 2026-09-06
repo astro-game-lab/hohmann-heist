@@ -303,11 +303,13 @@ describe('the Input group — remapping (#187)', () => {
   it('lists every binding in §8.5.3s table', async () => {
     await mount();
     // Pending rows included — a binding the remapper could not offer is a binding a player
-    // could not reach once its feature lands. `C` for the Codex is the remaining one;
-    // `?` stopped being pending when #124 landed.
+    // could not reach once its feature lands. There are none left to show as pending: `?`
+    // stopped being one when #124 landed and `C` when #161 did, so what this now asserts
+    // is that neither is marked while both are still offered.
     expect(el('binding-addNode')).not.toBeNull();
     expect(el('binding-help')).not.toBeNull();
-    expect(el('binding-codex')?.textContent).toContain('Not built yet');
+    expect(el('binding-codex')).not.toBeNull();
+    expect(el('binding-codex')?.textContent).not.toContain('Not built yet');
     expect(el('binding-help')?.textContent).not.toContain('Not built yet');
   });
 

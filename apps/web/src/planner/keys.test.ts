@@ -288,24 +288,41 @@ describe('the typing guards (#124)', () => {
 });
 
 describe('bindings whose features are not built (#141)', () => {
-  it('resolves C to nothing, while still listing it', () => {
-    // §8.5.3 lists it. It resolves to `null` — indistinguishable from unbound at the call
-    // site, so no screen has to know which bindings are waiting on an issue — and remains
-    // in `BINDINGS` so #124 can show it and #187 can offer it.
-    expect(actionFor('planner', 'c', NONE)).toBeNull();
-    expect(bindingFor('planner', 'c', NONE)?.pending).toBe(161);
-  });
-
+  /**
+   * A pending marker is a promise with an issue number on it, not a permanent state, and
+   * these are the assertions that would fail if a row were left marked after its issue
+   * closed. `?` stopped being pending when #124 landed; `C` stopped when #161 did, and
+   * with it the last pending row in the table.
+   */
   it('stops being pending when its feature lands, which is what the marker is for', () => {
-    // `?` was pending on #124 until the overlay existed. Its row now carries an action
-    // like any other: a pending marker is a promise with an issue number on it, not a
-    // permanent state, and this is the assertion that would fail if a row were left
-    // marked after its issue closed.
     expect(bindingFor('planner', '?', NONE)?.pending).toBeUndefined();
     expect(actionFor('planner', '?', NONE)).toEqual({ kind: 'help' });
-    // On every screen, because §8.5.3 scopes it everywhere.
+
+    expect(bindingFor('planner', 'c', NONE)?.pending).toBeUndefined();
+    expect(actionFor('planner', 'c', NONE)).toEqual({ kind: 'codex' });
+
+    // On every screen, because §8.5.3 scopes both everywhere.
     for (const screen of ['briefing', 'planner', 'execution', 'debrief'] as const) {
       expect(actionFor(screen, '?', NONE), screen).toEqual({ kind: 'help' });
+      expect(actionFor(screen, 'c', NONE), screen).toEqual({ kind: 'codex' });
+    }
+  });
+
+  /**
+   * The mechanism itself, which now has no user.
+   *
+   * A row with `pending` set resolves to `null` — indistinguishable from unbound at the
+   * call site, so no screen has to know which bindings are waiting on an issue — while
+   * staying in `BINDINGS` so #124 can show it and #187 can offer it. Nothing in the table
+   * exercises that today, and the invariant that keeps it honest is the one below: a
+   * pending row must not also carry an action, because the two would disagree about what
+   * the key does.
+   */
+  it('never lets a row be both pending and actionable', () => {
+    for (const binding of BINDINGS) {
+      expect(binding.pending === undefined || binding.toAction === undefined, binding.id).toBe(
+        true,
+      );
     }
   });
 });

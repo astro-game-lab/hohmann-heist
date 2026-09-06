@@ -42,7 +42,10 @@ describe('the table', () => {
   const EXPECTED: Readonly<Record<string, readonly string[]>> = {
     display: ['units', 'angles', 'timeFormat', 'theme', 'uiScale'],
     accessibility: ['palette', 'reduceMotion', 'backgroundAnimation', 'lineWeights', 'verbosity'],
-    gameplay: ['assists', 'coachMarks', 'confirmCommit', 'autoSkipAfter'],
+    // No `coachMarks`: §8.3.12's coach-marks switch is the `coach_marks` bit of
+    // `gameplay.assists`, which the assist-set control renders as one of its seven
+    // checkboxes. It was briefly both, which #159 called out as one flag seen twice.
+    gameplay: ['assists', 'confirmCommit', 'autoSkipAfter'],
     audio: ['master', 'effects', 'ambience', 'muted'],
     input: ['pointerSensitivity', 'invertScrollZoom'],
     data: ['handle'],
