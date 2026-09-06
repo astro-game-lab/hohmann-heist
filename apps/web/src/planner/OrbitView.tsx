@@ -30,6 +30,35 @@
  * §11.8's step 6. A scrub moves the ship marker and changes nothing a click can land on,
  * so rebuilding the index for it would be work with no result. Zoom, resize, a plan edit
  * and a camera move are layout changes; the scrub head is not.
+ *
+ * ## The canvas is built once; the picture is repainted often (#263)
+ *
+ * Three effects, and the split is what #263 turned out to be about.
+ *
+ * The **first** acquires the context, builds the renderer, the tessellation cache and the
+ * framing, and installs the seven listeners. It depends on the scenario, the palette and
+ * the motion preference — three things that change when the player changes contract or
+ * theme, and never while they are doing anything. The **second** re-frames when the plan
+ * changes shape, because new content may cross §8.4's 20% threshold. The **third** simply
+ * repaints: a new scrub position, a new selection, a gesture in flight.
+ *
+ * It was one effect, with twenty-one dependencies including the scrub head, the selection
+ * and the drag payload. So a renderer, a cache, a hit index, a label layer and seven
+ * listeners were destroyed and rebuilt on every scrub tick and on every pointer event of a
+ * drag — and because the gesture lived in that effect's closure, **the drag died with
+ * them**. `pointerdown` selected the node, the selection change re-ran the effect, and the
+ * first `pointermove` arrived at a fresh closure whose `pressed` was `null`. Dragging a
+ * node did nothing at all in `v0.1.0`, which is the primary verb of §8.5.2.
+ *
+ * The fix is therefore two things that belong together: the gesture moved to a ref that no
+ * re-render can take away ({@link Pressed}), and the fast-changing props moved behind
+ * `latestRef` so the listener effect stops depending on them. Either alone would leave
+ * half the bug — a ref with the old dependency array still rebuilds the world sixty times
+ * a second, and a narrow dependency array with the gesture back in the closure breaks
+ * again the moment anything is added to it.
+ *
+ * `OrbitView.drag.test.tsx` holds the regression test, and it asserts the listener count
+ * as well as the behaviour: **installed once at mount, zero times during a drag.**
  */
 import { R_EARTH_EQ, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
@@ -57,7 +86,7 @@ import { observeViewport } from '@hh/render/resize';
 import type { Catalogue, HandleAxis } from '@hh/ui';
 import { EMPTY_PLAN, buildTimeline, type Timeline } from '@hh/sim';
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 
 import { useReducedMotion } from '../motion.js';
 import {
@@ -112,6 +141,39 @@ const DRAG_MPS_PER_PX = 0.5;
 
 /** One press of ⊕ or ⊖. Coarser than a wheel notch, because a button is a deliberate act. */
 const BUTTON_ZOOM_FACTOR = 1.4;
+
+/** A press that moves more than this is a drag; less, and it is a click. */
+const DRAG_THRESHOLD_PX = 4;
+
+/** What the press started on, and therefore what moving it means. */
+type Gesture =
+  | { readonly kind: 'camera' }
+  | { readonly kind: 'node'; readonly nodeId: string }
+  | { readonly kind: 'handle'; readonly nodeId: string; readonly axis: HandleAxis };
+
+/**
+ * A gesture in flight.
+ *
+ * **Module scope, and held in a ref rather than in the effect's closure — #263.** This
+ * used to be a `let` inside the effect that installs the pointer handlers, and that is
+ * the whole of the bug: `onPointerDown` calls `onSelectNode`, the selection was in that
+ * effect's dependency array, so the effect re-ran *between* `pointerdown` and the first
+ * `pointermove` and the new closure's `pressed` was `null`. Every drag was orphaned at
+ * birth.
+ *
+ * The listener effect below no longer depends on anything that changes during a gesture,
+ * so the tear-down is gone as well — but the ref stays, and would stay even if the
+ * dependency array were empty. A gesture is state that spans several events; the closure
+ * of whichever render happened to install the listeners is the wrong place to keep it,
+ * and putting it back there would make the bug reachable again by any future dependency.
+ */
+interface Pressed {
+  readonly x: number;
+  readonly y: number;
+  readonly moved: boolean;
+  readonly gesture: Gesture;
+  readonly started: boolean;
+}
 
 export interface OrbitViewProps {
   readonly t: Catalogue['resolve'];
@@ -197,8 +259,58 @@ export const OrbitView = ({
   // a second owner on the framing #103 deliberately keeps in one place.
   const recentreRef = useRef<(() => void) | null>(null);
   const zoomRef = useRef<((factor: number) => void) | null>(null);
-  const [recentreRequested, setRecentreRequested] = useState(0);
   const anchorRef = useRef<ScreenPoint | null>(null);
+
+  /** The gesture in flight. See {@link Pressed} — this is #263's fix. */
+  const pressedRef = useRef<Pressed | null>(null);
+
+  /**
+   * Everything the handlers and the draw need that changes faster than they should be
+   * rebuilt for.
+   *
+   * The scrub head moves on every input event, the selection changes on every press, and
+   * `dragging` changes on every frame of a gesture. Putting any of them in the listener
+   * effect's dependency array is what #263 was: four listeners, a renderer, a
+   * tessellation cache and a hit index torn down and rebuilt on each one.
+   *
+   * So they arrive through a ref that is refreshed on every render, and the effect below
+   * depends on none of them. The callbacks come the same way rather than being wrapped in
+   * `useCallback` at the call site: `PlannerScreen.tsx` builds most of them as inline
+   * arrows, and requiring stable identities there would push this component's frame budget
+   * into its caller's source.
+   */
+  const latest = {
+    timeline,
+    scrubEpoch,
+    selectedNodeId,
+    dragging,
+    anchorNodeId,
+    onSelectNode,
+    onDeselect,
+    onPlaceNode,
+    onOpenEditor,
+    onBeginEpochDrag,
+    onBeginDeltaVDrag,
+    onDragEpochTo,
+    onDragDeltaVTo,
+    onReleaseDrag,
+    onCancelDrag,
+    onAnchor,
+    resolveDynamic,
+  };
+  const latestRef = useRef(latest);
+  latestRef.current = latest;
+
+  /**
+   * The effect's own operations, published for the render passes below.
+   *
+   * `draw` repaints from the current `latestRef`; `reframe` re-derives the camera's union
+   * first, because the content moved. They are refs rather than state for the reason
+   * `recentreRef` and `zoomRef` already are: the camera lives inside the effect, and a
+   * second owner is exactly what #103 keeps the framing in one place to avoid.
+   */
+  const drawRef = useRef<(() => void) | null>(null);
+  const reframeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -249,8 +361,17 @@ export const OrbitView = ({
       horizon: scenario.horizon,
       mu: scenario.mu,
     });
-    const drawn = timeline ?? (fallback.ok ? fallback.timeline : null);
-    if (drawn === null) return;
+    const fallbackTimeline = fallback.ok ? fallback.timeline : null;
+
+    /**
+     * The timeline being drawn, right now.
+     *
+     * A function rather than a `const` because the effect no longer re-runs when the plan
+     * changes — that was #263's tear-down. The fallback is still built once per effect
+     * run, since it depends only on the scenario, and only the choice between the two is
+     * made per read.
+     */
+    const drawnNow = (): Timeline | null => latestRef.current.timeline ?? fallbackTimeline;
 
     /**
      * The target orbit, when the contract has one — for the camera's framing union only.
@@ -273,7 +394,7 @@ export const OrbitView = ({
     const contentBounds = (scale: number): ViewBounds => {
       const parts: ViewBounds[] = [boundsOfSphere(R_EARTH_EQ)];
 
-      for (const arc of drawn.arcs) {
+      for (const arc of drawnNow()?.arcs ?? []) {
         const tessellation = cache.get({
           elements: arc.elements,
           scale,
@@ -312,6 +433,13 @@ export const OrbitView = ({
       const framing = framingRef.current;
       if (framing === null) return;
       const { camera } = framing;
+      // The plan, the scrub head, the selection and the anchor as of *this* frame. The
+      // effect no longer re-runs for any of them — see `latestRef` — so they are read
+      // here rather than closed over, and one read keeps the whole frame consistent.
+      const { scrubEpoch, selectedNodeId, anchorNodeId, onAnchor, resolveDynamic } =
+        latestRef.current;
+      const drawn = drawnNow();
+      if (drawn === null) return;
 
       // Rebuilt per draw rather than hoisted with `targetSpec`: the offset is where the
       // body is, so it changes with the scrub head and a hoisted spec would freeze it.
@@ -426,6 +554,11 @@ export const OrbitView = ({
       draw();
     };
 
+    // Published for the two render passes below, which is how a scrub or a plan edit
+    // reaches the camera now that neither re-runs this effect.
+    drawRef.current = draw;
+    reframeRef.current = reframe;
+
     reframe();
 
     const stopObserving = observeViewport({
@@ -443,23 +576,13 @@ export const OrbitView = ({
 
     // ── Pointer ────────────────────────────────────────────────────────────
     //
-    // §8.5.2's table, minus the edits that are #133–#135. A press that moves more than a
-    // few pixels is a pan; one that does not is a click, and the distinction is made on
-    // release rather than by a timer, so a slow deliberate click still selects.
-    const DRAG_THRESHOLD_PX = 4;
-    /** What the press started on, and therefore what moving it means. */
-    type Gesture =
-      | { readonly kind: 'camera' }
-      | { readonly kind: 'node'; readonly nodeId: string }
-      | { readonly kind: 'handle'; readonly nodeId: string; readonly axis: HandleAxis };
-
-    let pressed: {
-      x: number;
-      y: number;
-      moved: boolean;
-      gesture: Gesture;
-      started: boolean;
-    } | null = null;
+    // §8.5.2's table. A press that moves more than a few pixels is a pan; one that does
+    // not is a click, and the distinction is made on release rather than by a timer, so a
+    // slow deliberate click still selects.
+    //
+    // The gesture itself lives in `pressedRef` at component scope — see {@link Pressed}
+    // and #263. Everything below reads it from there rather than from a local, which is
+    // what lets a drag outlive any re-render it provokes.
 
     const localPoint = (event: PointerEvent | WheelEvent): ScreenPoint => {
       const box = canvas.getBoundingClientRect();
@@ -491,40 +614,59 @@ export const OrbitView = ({
 
     const onPointerDown = (event: PointerEvent): void => {
       const gesture = gestureFor(localPoint(event));
-      pressed = { x: event.clientX, y: event.clientY, moved: false, gesture, started: false };
+      pressedRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        gesture,
+        started: false,
+      };
       // Selecting on press rather than on release, because §8.5.1 requires SELECTED
       // before DRAGGING — `beginDrag` accepts no other state — and a drag has to be able
       // to start on the very next pointermove.
-      if (gesture.kind !== 'camera') onSelectNode(gesture.nodeId);
+      //
+      // **This is the call #263 died on.** It changes the selection, which re-renders the
+      // parent; the gesture now survives that because it is in a ref rather than in this
+      // closure, and the listeners survive it because the effect no longer depends on the
+      // selection at all.
+      if (gesture.kind !== 'camera') latestRef.current.onSelectNode(gesture.nodeId);
       canvas.setPointerCapture(event.pointerId);
     };
 
     const onPointerMove = (event: PointerEvent): void => {
+      const pressed = pressedRef.current;
       if (pressed === null) return;
       const dx = event.clientX - pressed.x;
       const dy = event.clientY - pressed.y;
       if (!pressed.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-      pressed = { ...pressed, moved: true };
+      pressedRef.current = { ...pressed, moved: true };
 
       const framing = framingRef.current;
       if (framing === null) return;
       const point = localPoint(event);
+      const drawn = drawnNow();
+      if (drawn === null) return;
+      const {
+        scrubEpoch,
+        dragging,
+        onBeginEpochDrag,
+        onBeginDeltaVDrag,
+        onDragEpochTo,
+        onDragDeltaVTo,
+      } = latestRef.current;
 
-      // Captured once. `pressed` is reassigned below and TypeScript widens the
-      // discriminated union back out across the assignment, so every later branch would
-      // otherwise have to re-narrow it.
       const gesture = pressed.gesture;
 
       if (gesture.kind === 'camera') {
         // A pan is manual control: FR-404 suspends auto-framing until ⌖.
-        pressed = { ...pressed, x: event.clientX, y: event.clientY };
+        pressedRef.current = { ...pressed, moved: true, x: event.clientX, y: event.clientY };
         framingRef.current = manualCamera(framing, panCamera(framing.camera, dx, dy));
         draw();
         return;
       }
 
       if (!pressed.started) {
-        pressed = { ...pressed, started: true };
+        pressedRef.current = { ...pressed, moved: true, started: true };
         if (gesture.kind === 'node') onBeginEpochDrag(gesture.nodeId);
         else onBeginDeltaVDrag(gesture.nodeId, gesture.axis);
       }
@@ -571,10 +713,11 @@ export const OrbitView = ({
     };
 
     const onPointerUp = (event: PointerEvent): void => {
-      const press = pressed;
-      pressed = null;
+      const press = pressedRef.current;
+      pressedRef.current = null;
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (press === null) return;
+      const { scrubEpoch, onReleaseDrag, onPlaceNode, onDeselect } = latestRef.current;
 
       if (press.started) {
         // §8.5.1's `release → recompute arcs k…n`, and where FR-105 quantises (#134).
@@ -590,7 +733,8 @@ export const OrbitView = ({
       if (hit?.kind === 'handle') return;
       if (hit?.kind === 'trajectory') {
         const framing = framingRef.current;
-        if (framing === null) return;
+        const drawn = drawnNow();
+        if (framing === null || drawn === null) return;
         // #133. The scrub head is the reference: the pass the player is looking at is the
         // one the scrub head is on, and without a reference a closed orbit is ambiguous.
         onPlaceNode(pickEpoch(drawn, framing.camera, point, scrubEpoch).epoch);
@@ -602,7 +746,7 @@ export const OrbitView = ({
     const onDoubleClick = (event: MouseEvent): void => {
       const box = canvas.getBoundingClientRect();
       const hit = hitTest(index, { x: event.clientX - box.left, y: event.clientY - box.top });
-      if (hit?.kind === 'node') onOpenEditor(hit.id);
+      if (hit?.kind === 'node') latestRef.current.onOpenEditor(hit.id);
     };
 
     const onWheel = (event: WheelEvent): void => {
@@ -630,10 +774,10 @@ export const OrbitView = ({
       if (isTypingTarget(event.target)) return;
 
       if (event.key === 'Escape') {
-        if (pressed?.started !== true) return;
+        if (pressedRef.current?.started !== true) return;
         event.preventDefault();
-        pressed = null;
-        onCancelDrag();
+        pressedRef.current = null;
+        latestRef.current.onCancelDrag();
         return;
       }
 
@@ -683,6 +827,8 @@ export const OrbitView = ({
       labels.destroy();
       recentreRef.current = null;
       zoomRef.current = null;
+      drawRef.current = null;
+      reframeRef.current = null;
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
@@ -691,29 +837,40 @@ export const OrbitView = ({
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [
-    scenario,
-    timeline,
-    scrubEpoch,
-    selectedNodeId,
-    reducedMotion,
-    colours,
-    recentreRequested,
-    t,
-    onSelectNode,
-    onDeselect,
-    onPlaceNode,
-    onOpenEditor,
-    onBeginEpochDrag,
-    onBeginDeltaVDrag,
-    onDragEpochTo,
-    onDragDeltaVTo,
-    onReleaseDrag,
-    onCancelDrag,
-    dragging,
-    anchorNodeId,
-    onAnchor,
-  ]);
+    // **Three dependencies, and #263's fix is mostly this line.**
+    //
+    // It used to be twenty-one, and included `scrubEpoch`, `selectedNodeId`, `dragging`
+    // and every callback — so the renderer, the tessellation cache, the hit index, the
+    // framing and all seven listeners were destroyed and rebuilt on every scrub tick and
+    // on every frame of a drag. The gesture died because of it, and NFR-011's frame
+    // budget was paying for it even when nothing was being dragged.
+    //
+    // What is left is what genuinely needs a fresh renderer: a different contract, a
+    // different palette, and a change of motion preference (which the ease reads). Each
+    // of those is a rare, deliberate event. Everything else arrives through `latestRef`
+    // and repaints through `drawRef` below.
+    //
+    // The measured consequence, which #263's last criterion asks the PR to state: the
+    // pointer handlers are installed **once, when the view mounts, and zero times during
+    // a drag** — against once per pointer event before.
+  }, [scenario, reducedMotion, colours]);
+
+  /**
+   * A plan change re-derives the camera's union; everything else just repaints.
+   *
+   * Two passes rather than one because they are different operations. `reframe` runs
+   * §8.4's 20% threshold against new content and may start an ease, which is right when
+   * the trajectory changes shape and wrong sixty times a second while the scrub head
+   * moves — that is the distinction the "hit index is rebuilt on layout change, never per
+   * frame" note at the top of this file is drawing, and this is where it is enforced.
+   */
+  useEffect(() => {
+    reframeRef.current?.();
+  }, [timeline]);
+
+  useEffect(() => {
+    drawRef.current?.();
+  }, [scrubEpoch, selectedNodeId, dragging, anchorNodeId, t, resolveDynamic]);
 
   return (
     <div class="hh-orbit" ref={frameRef} data-testid="orbit-view">
@@ -752,11 +909,15 @@ export const OrbitView = ({
           class="hh-orbit__control"
           data-testid="orbit-recentre"
           onClick={() => {
-            // The ⌖ control (FR-404, §8.5.2). Bumping the counter re-runs the effect,
-            // which re-installs the handlers and re-frames — the effect owns the camera,
-            // so the button asks it rather than reaching past it.
+            // The ⌖ control (FR-404, §8.5.2). The effect owns the camera, so the button
+            // asks it rather than reaching past it.
+            //
+            // This used to *also* bump a counter that was in the effect's dependency
+            // array, to force a re-frame by re-running the whole effect. That is gone
+            // with the rest of #263's churn: `recentreFraming` already re-frames and
+            // draws, so the second route was doing the work twice and rebuilding seven
+            // listeners to do it.
             recentreRef.current?.();
-            setRecentreRequested((n) => n + 1);
           }}
         >
           <Icon name="recentre" label={t('planner.camera.recentre', {})} />

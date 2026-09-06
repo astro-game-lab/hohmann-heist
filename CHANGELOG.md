@@ -198,6 +198,20 @@ Curtis, Vallado and a `hapsira` fixture.
   read back verbatim into bug reports, so there is nothing in it to translate.
 
 ### Fixed
+- **Dragging a maneuver node works again (#263).** It did nothing in `v0.1.0`, deployed: the node
+  selected on press and then stayed exactly where it was however far the pointer travelled, and the
+  Δv handles behaved the same way. §8.5.2 makes dragging the primary way a burn is placed and moved,
+  so the released build was missing its main verb. The gesture was held in a local of the effect
+  that installs the pointer handlers, and `onPointerDown` calls `onSelectNode` — which changed a
+  value in that effect's dependency array, so the effect re-ran *between* `pointerdown` and the
+  first `pointermove` and the new closure's gesture was `null`. The gesture now lives in a ref, and
+  the listener effect's dependencies went from twenty-one to three, so a scrub tick or a drag frame
+  no longer destroys and rebuilds the renderer, the tessellation cache, the hit index and seven
+  listeners. The pointer handlers are installed **once at mount and never again during a drag**;
+  before, it was once per pointer event. Nothing in CI could have caught this, because there was no
+  pointer-drag test in the repository at all — #134 and #135 closed on `pick.ts` unit tests and on
+  the keyboard paths, both of which bypass the effect that owns the listeners. There is one now, and
+  it fails against the old code.
 - **The ship and the target now move.** Both markers were drawn at a fixed offset along their
   opening orbit and stayed there — through a scrub of the planner's timeline, and through an
   entire playback run. `MarkerSpec.offsetSeconds` is *where a body is* ("seconds from the arc's
