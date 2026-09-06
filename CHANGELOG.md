@@ -12,6 +12,23 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **§8.5.3's keyboard map, complete and scoped by screen (#141).** The map was a `switch` over
+  `event.key` covering the planner, and §8.3.12 makes every binding remappable — a switch has
+  to be *rewritten* to re-key where a table only has to be re-keyed. It is now `BINDINGS`, an
+  array carrying each binding's keys, the screens it applies on, a stable id independent of
+  its key, and a description; the map the handler runs, the map #187 will re-key and the map
+  #124 will render are the same array rather than three that agree today. Scoping is what
+  makes one table possible: `S` is *skip to end* during execution and nothing in the planner,
+  and `Enter` commits a plan and accepts a briefing. Execution's four bindings and the orbit
+  view's three camera keys were comparing `event.key` in their own components and are now
+  rows like the rest — NFR-016's guarantee cannot hold for keys that live outside the map.
+  `?` and `C` are listed with their features unbuilt, resolving to nothing but visible to the
+  overlay and the remapper, because a binding missing from the table is one neither can offer.
+  §8.8's skip-to-content link is present on every screen and targets the same heading a route
+  change focuses. And **§13.5's E4 runs as a test**: C02 played from briefing to debrief on key
+  events alone, with every pointer constructor and `HTMLElement.click` replaced by a throw for
+  the duration — so a walkthrough that quietly reached for a pointer fails rather than passing
+  for the wrong reason, which counting dispatches afterwards would not have caught.
 - **The contract stays readable while planning (#264).** ACCEPT is a one-way door: §8.3.3 states
   the job in numbers and the planner then showed the Δv budget and the deadline and **nothing
   else** — not the objective, not par, not the constraints, not the target's setup. Tolerable

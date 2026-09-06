@@ -675,6 +675,27 @@ body {
   opacity: 0.8;
 }
 
+/* §8.8's skip-to-content link (#141).
+
+   Off-screen rather than `display: none` — a hidden element is not focusable, and a skip
+   link that cannot be focused is not a skip link. It comes back on focus, over everything,
+   which is the one moment it should be visible at all. */
+.hh-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  border: 1px solid var(--accent);
+}
+
+.hh-skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
 /* ── §8.3.3's contract, in the planner (#264) ────────────────────────────── *
  *
  * Scrolls within the panel rather than growing it: C07's objective is three numbers and a

@@ -437,6 +437,37 @@ export interface UiMessageParams {
   readonly 'planner.history.nothingToUndo': Record<string, never>;
   readonly 'planner.history.nothingToRedo': Record<string, never>;
 
+  /** §8.8's skip-to-content link (#141). */
+  readonly 'app.skipToContent': Record<string, never>;
+
+  // §8.5.3's bindings, one description each — what #124's overlay renders and what #187
+  // re-keys. Keyed by binding id rather than by key, because the key is the part that
+  // changes (#141).
+  readonly 'keys.addNode': Record<string, never>;
+  readonly 'keys.deleteNode': Record<string, never>;
+  readonly 'keys.editNode': Record<string, never>;
+  readonly 'keys.cycleNode': Record<string, never>;
+  readonly 'keys.nudgeEpoch': Record<string, never>;
+  readonly 'keys.prograde': Record<string, never>;
+  readonly 'keys.radial': Record<string, never>;
+  readonly 'keys.scrub': Record<string, never>;
+  readonly 'keys.scrubToStart': Record<string, never>;
+  readonly 'keys.scrubToDeadline': Record<string, never>;
+  readonly 'keys.zoom': Record<string, never>;
+  readonly 'keys.recentre': Record<string, never>;
+  readonly 'keys.toggleContract': Record<string, never>;
+  readonly 'keys.nodeMenu': Record<string, never>;
+  readonly 'keys.undo': Record<string, never>;
+  readonly 'keys.redo': Record<string, never>;
+  readonly 'keys.playPause': Record<string, never>;
+  readonly 'keys.skipToEnd': Record<string, never>;
+  readonly 'keys.playbackSpeed': Record<string, never>;
+  readonly 'keys.retry': Record<string, never>;
+  readonly 'keys.confirm': Record<string, never>;
+  readonly 'keys.cancel': Record<string, never>;
+  readonly 'keys.help': Record<string, never>;
+  readonly 'keys.codex': Record<string, never>;
+
   // §8.3.3's contract, carried into the planner (#264).
   readonly 'planner.contract.heading': Record<string, never>;
   readonly 'planner.contract.toggle': Record<string, never>;

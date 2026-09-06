@@ -1296,20 +1296,47 @@ Handles have a **32 px hit target** regardless of visual size, and the visual si
 
 Complete map. All remappable (§8.3.12).
 
-| Key | Action | | Key | Action |
-| --- | --- | --- | --- | --- |
-| `N` | Add node at scrub head | | `Space` | Play/pause (execution) |
-| `Del` / `Backspace` | Delete selected node | | `1`–`5` | Playback speed |
-| `E` | Edit selected node | | `S` | Skip to end |
-| `Tab` / `Shift+Tab` | Cycle nodes | | `Enter` | Commit / confirm |
-| `,` / `.` | Nudge node epoch ∓1 s (`Shift` ×0.1, `Ctrl` ×60) | | `Esc` | Back / close overlay |
-| `↑` / `↓` | Prograde ±1 m/s (`Shift` ×0.1, `Ctrl` ×10) | | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
-| `←` / `→` | Radial ±1 m/s (same modifiers) | | `R` | Retry (debrief) |
-| `Home` / `End` | Scrub to start / deadline | | `?` | Keyboard help overlay |
-| `[` / `]` | Scrub ∓1 min (`Shift` ×0.1, `Ctrl` ×60) | | `F` | Recentre camera |
-| `+` / `-` | Zoom | | `C` | Codex for the current concept |
+Every binding is scoped to the screens it applies on, because the same key means different
+things: `S` is *skip to end* during execution and nothing in the planner. The **Scope**
+column below is that scoping, and `apps/web/src/planner/keys.ts` is the table itself —
+`BINDINGS`, which is simultaneously the map the handler runs, the map §8.3.12's remapper
+re-keys, and the map the help overlay renders. There is no second copy.
 
-Every action in the game is reachable by keyboard alone (NFR-016). The planner is fully operable without a pointer.
+| Key | Action | Scope |
+| --- | --- | --- |
+| `N` | Add node at scrub head | Planner |
+| `Del` / `Backspace` | Delete selected node | Planner |
+| `E` | Edit selected node | Planner |
+| `Tab` / `Shift+Tab` | Cycle nodes | Planner |
+| `,` / `.` | Nudge node epoch ∓1 s (`Shift` ×0.1, `Ctrl` ×60) | Planner |
+| `↑` / `↓` | Prograde ±1 m/s (`Shift` ×0.1, `Ctrl` ×10) | Planner |
+| `←` / `→` | Radial ±1 m/s (same modifiers) | Planner |
+| `Home` / `End` | Scrub to start / deadline | Planner |
+| `[` / `]` | Scrub ∓1 min (`Shift` ×0.1, `Ctrl` ×60) | Planner |
+| `+` / `-` | Zoom | Planner |
+| `F` | Recentre camera | Planner |
+| `B` | Show / hide the contract | Planner |
+| `ContextMenu` / `Shift+F10` | Node actions — delete, snap, zero Δv | Planner |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo | Planner |
+| `Space` | Play / pause | Execution |
+| `1`–`5` | Playback speed | Execution |
+| `S` | Skip to end | Execution |
+| `R` | Retry | Debrief |
+| `Enter` | Commit / confirm | Briefing, planner |
+| `Esc` | Back, or close what is open | Everywhere |
+| `?` | Keyboard help overlay | Everywhere |
+| `C` | Codex for the current concept | Everywhere |
+
+`?` and `C` are listed with their features unbuilt (#124 and #161). They carry a `pending`
+marker in the table rather than being absent from it: a binding the help overlay cannot see
+is a binding the overlay cannot show and the remapper cannot offer, so the row exists and
+resolves to no action.
+
+Every action in the game is reachable by keyboard alone (NFR-016). The planner is fully
+operable without a pointer, and §13.5's E4 is the automated proof: C02 is played from
+briefing to debrief on key events alone, with every pointer constructor and
+`HTMLElement.click` replaced by a throw for the duration, so a walkthrough that quietly
+reached for a pointer fails rather than passing for the wrong reason.
 
 #### 8.5.4 Touch
 

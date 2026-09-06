@@ -36,6 +36,7 @@ import type { FlightLogEntry, LoadedScenario, Outcome } from '@hh/game';
 import { isProximityEvaluation } from '@hh/game';
 import type { Timeline } from '@hh/sim';
 import type { Catalogue, PlaybackSpeed } from '@hh/ui';
+import { actionFor } from '../planner/keys.js';
 import { PLAYBACK_SPEEDS, elapsedSeconds, progressOf } from '@hh/ui';
 import type { JSX } from 'preact';
 
@@ -125,23 +126,42 @@ export const ExecutionScreen = ({
    */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.metaKey || event.altKey) return;
+      // Through §8.5.3's table, scoped to this screen — #141. This used to compare
+      // `event.key` here, which put four of the game's bindings outside the map #124
+      // renders and #187 re-keys. `S` means *skip* on this screen and nothing in the
+      // planner, and that difference is now the table's rather than a matter of which
+      // component happens to be mounted.
+      const action = actionFor('execution', event.key, {
+        shift: event.shiftKey,
+        ctrl: event.ctrlKey,
+      });
+      if (action === null) return;
 
-      if (event.key === ' ' || event.key === 'Spacebar') {
-        actions.togglePause();
-      } else if (event.key === 's' || event.key === 'S') {
-        actions.skipToEnd();
-      } else if (event.key === 'Escape') {
-        // §8.5.3's "Back / close overlay". There is no overlay here, so it is Abort —
-        // and abort is the only way out that keeps the plan (FR-603).
-        onAbort();
-      } else {
-        // `1`–`5` index `PLAYBACK_SPEEDS` directly, so the key map and the button row
-        // read from one list and cannot disagree about which digit is which rate.
-        const index = Number.parseInt(event.key, 10) - 1;
-        const speed = Number.isNaN(index) ? undefined : PLAYBACK_SPEEDS[index];
-        if (speed === undefined) return;
-        actions.setSpeed(speed);
+      switch (action.kind) {
+        case 'playPause':
+          actions.togglePause();
+          break;
+        case 'skipToEnd':
+          actions.skipToEnd();
+          break;
+        case 'cancel':
+          // §8.5.3's "Back / close overlay". There is no overlay here, so it is Abort —
+          // and abort is the only way out that keeps the plan (FR-603).
+          onAbort();
+          break;
+        case 'setSpeedIndex': {
+          // The digit indexes `PLAYBACK_SPEEDS` directly, so the key map and the button
+          // row read one list and cannot disagree about which digit is which rate.
+          const speed = PLAYBACK_SPEEDS[action.index];
+          if (speed === undefined) return;
+          actions.setSpeed(speed);
+          break;
+        }
+        default:
+          // Every other action belongs to another screen. The table scopes them out, so
+          // this is unreachable rather than defensive.
+          return;
       }
       event.preventDefault();
     };

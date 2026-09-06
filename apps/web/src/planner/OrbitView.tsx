@@ -110,7 +110,7 @@ import {
   type FramingState,
 } from './framing.js';
 import { pickEpoch } from './pick.js';
-import { isTypingTarget } from './keys.js';
+import { actionFor, isTypingTarget } from './keys.js';
 import { nodeIdOf } from './store.js';
 
 /**
@@ -858,6 +858,13 @@ export const OrbitView = ({
      * effect, and a second owner is exactly what #103 puts the framing in one place to
      * avoid. Escape cancels a gesture in flight (#134, #135) and is checked first, since
      * a drag is the more immediate thing to be getting out of.
+     *
+     * **The keys themselves come from `keys.ts`, not from a switch here — #141.** This
+     * used to compare `event.key` directly, which meant the camera's three bindings could
+     * not be re-keyed by #187 and would not appear in #124's overlay: the map a player is
+     * shown would have been missing exactly the keys this file owned. Resolving through
+     * `actionFor` keeps the *handling* local, which is the part #103 cares about, while
+     * the *binding* stays in the one table.
      */
     const onKeyDown = (event: KeyboardEvent): void => {
       if (isTypingTarget(event.target)) return;
@@ -870,31 +877,26 @@ export const OrbitView = ({
         return;
       }
 
+      const action = actionFor('planner', event.key, {
+        shift: event.shiftKey,
+        ctrl: event.ctrlKey,
+      });
+      if (action === null) return;
+      if (action.kind !== 'zoom' && action.kind !== 'recentre') return;
+
       const framing = framingRef.current;
       if (framing === null) return;
       const centre = { x: viewport.width / 2, y: viewport.height / 2 };
 
-      switch (event.key) {
-        case '+':
-        case '=':
-          framingRef.current = manualCamera(
-            framing,
-            zoomAt(framing.camera, BUTTON_ZOOM_FACTOR, centre),
-          );
-          break;
-        case '-':
-          framingRef.current = manualCamera(
-            framing,
-            zoomAt(framing.camera, 1 / BUTTON_ZOOM_FACTOR, centre),
-          );
-          break;
-        case 'f':
-        case 'F':
-          framingRef.current = recentreFraming(framing, autoCamera(framing.camera.scale));
-          pump();
-          break;
-        default:
-          return;
+      if (action.kind === 'zoom') {
+        // `BUTTON_ZOOM_FACTOR` rather than the action's own factor: a key press and a
+        // button press are both deliberate acts and §8.5.3 gives them the same notch,
+        // where the wheel's is finer. The action says *zoom*; how far is the camera's.
+        const factor = action.factor > 1 ? BUTTON_ZOOM_FACTOR : 1 / BUTTON_ZOOM_FACTOR;
+        framingRef.current = manualCamera(framing, zoomAt(framing.camera, factor, centre));
+      } else {
+        framingRef.current = recentreFraming(framing, autoCamera(framing.camera.scale));
+        pump();
       }
       event.preventDefault();
       draw();

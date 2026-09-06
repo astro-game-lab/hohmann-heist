@@ -1,39 +1,51 @@
 /**
- * §8.5.3's keyboard map, as much of it as M2 builds — FR-405, NFR-016.
+ * §8.5.3's keyboard map — the whole game, scoped by screen. FR-405, FR-906, NFR-016 (#141).
  *
  * > *Every action in the game is reachable by keyboard alone. The planner is fully
  * > operable without a pointer.*
  *
- * §8.5.3's table has twenty-four bindings across the whole game. The ones here are the
- * planner's, minus the four whose features are M3 — undo and redo (#138), the keyboard
- * help overlay (#141) and the Codex (`C`) — and minus the execution keys, which belong
- * to the phase #121 builds. A binding for a feature that does not exist would be a key
- * that does nothing, which is worse than an absent one.
+ * ## Why this is data, and why that mattered enough to rewrite
  *
- * ## Why this is a table rather than a switch
+ * This was a `switch` over `event.key` returning an action, and §8.3.12 makes every binding
+ * remappable. A switch has to be *rewritten* to re-key; a table only has to be re-keyed.
+ * #187 is the issue that consumes this and #124 renders it, so the map a player is shown
+ * and the map that runs are now the same array rather than two things that agree today.
  *
- * §8.3.12 makes every binding remappable, and #141 is the issue that does it. A `switch`
- * over `event.key` would have to be rewritten for that; a lookup from key to action name
- * only has to be re-keyed. The table is also what a help overlay renders, so the map a
- * player is shown cannot drift from the map that runs.
+ * {@link BINDINGS} is that array. Each row carries the keys that trigger it, the screens it
+ * applies on, a stable `id` for remapping and for the help overlay, and a resolver from
+ * modifiers to an action. The resolver is per row rather than a second switch: §8.5.3 gives
+ * the nudges `Shift` for a tenth and `Ctrl` for a coarse step, so *which* action a key means
+ * is a table lookup and *how big its step is* is arithmetic on the row that owns it.
  *
- * ## Modifiers are read once, and mean the same thing everywhere
+ * ## Scoped by screen, because the same key means different things
  *
- * §8.5.3 gives the nudges `Shift` for a tenth and `Ctrl` for the coarse step, and §8.3.5
- * gives the Δv steppers exactly the same pair. `deltaVStep` in `@hh/ui` is that rule, and
- * both the stepper buttons and `↑`/`↓` here call it — the same operation reached two ways
- * rather than two statements of one rule.
+ * `S` is *skip to end* during execution and nothing in the planner. `Enter` commits a plan
+ * and accepts a briefing. A single flat table would have to resolve those collisions with a
+ * condition somewhere, which is the switch coming back in another shape. Each row names the
+ * screens it lives on and {@link actionFor} takes the screen it is being asked about.
  *
  * ## Nothing here fires while the player is typing
  *
- * The node editor is full of number inputs, and `,` `.` `1` `5` are all things a player
- * types into one. {@link isTypingTarget} is the guard, and it is why the handler is
- * installed on the document rather than per-component: a binding that only worked when
- * focus was nowhere in particular would fail exactly when a keyboard user needed it.
+ * The node editor is full of number inputs, and `,` `.` `1` `5` `b` are all things a player
+ * types into one. {@link isTypingTarget} is the guard, and it is why handlers are installed
+ * on the document rather than per-component: a binding that only worked when focus was
+ * nowhere in particular would fail exactly when a keyboard user needed it.
+ *
+ * ## What is deliberately absent
+ *
+ * `?` (the help overlay, #124) and `C` (the Codex, #161) have rows here with `pending` set
+ * and resolve to no action. That is not a key that does nothing by accident: #124 and #187
+ * both render this table, and a binding missing from it entirely would be a binding the help
+ * overlay could not show and the remapper could not offer. `pending` says "this is §8.5.3's
+ * binding, its feature is not built, and here is the issue" in one place instead of in a
+ * comment that nothing reads.
  */
 import { deltaVStep } from '@hh/ui';
 
-/** What a key press means. Resolved by the planner, never by this module. */
+/** Which screen a binding applies on. §8.5.3's scope, made explicit. */
+export type Screen = 'briefing' | 'planner' | 'execution' | 'debrief';
+
+/** What a key press means. Resolved by the screen, never by this module. */
 export type PlannerAction =
   | { readonly kind: 'addNode' }
   | { readonly kind: 'deleteNode' }
@@ -53,7 +65,13 @@ export type PlannerAction =
   /** §8.5.2's context menu on the selected node — #136, and NFR-016's keyboard route to it. */
   | { readonly kind: 'nodeMenu' }
   /** §8.3.3's contract, shown beside the plan — #264. */
-  | { readonly kind: 'toggleContract' };
+  | { readonly kind: 'toggleContract' }
+  // ── Execution, §8.3.8 ──────────────────────────────────────────────────────
+  | { readonly kind: 'playPause' }
+  | { readonly kind: 'skipToEnd' }
+  | { readonly kind: 'setSpeedIndex'; readonly index: number }
+  // ── Debrief, §8.3.9 ────────────────────────────────────────────────────────
+  | { readonly kind: 'retry' };
 
 export interface Modifiers {
   readonly shift: boolean;
@@ -63,9 +81,9 @@ export interface Modifiers {
 /**
  * §8.5.3's epoch nudge: ∓1 s, ×0.1 with Shift, ×60 with Ctrl.
  *
- * The Ctrl factor is 60 rather than the Δv map's 10, and that is §8.5.3's own table
- * rather than an inconsistency: a minute is the useful coarse step for an epoch, and ten
- * seconds is not a unit anybody thinks in.
+ * The Ctrl factor is 60 rather than the Δv map's 10, and that is §8.5.3's own table rather
+ * than an inconsistency: a minute is the useful coarse step for an epoch, and ten seconds
+ * is not a unit anybody thinks in.
  */
 export const EPOCH_NUDGE_SECONDS = 1;
 
@@ -87,20 +105,329 @@ const scrubNudge = (modifiers: Modifiers): number => {
 /** One notch of `+`/`-`. Matches the wheel's feel without matching its resolution. */
 const KEY_ZOOM_FACTOR = 1.25;
 
+/** Whether a modifier is required, forbidden, or does not decide the match. */
+type ModifierRule = 'required' | 'forbidden' | 'any';
+
+export interface Binding {
+  /**
+   * A stable identity, independent of which key is bound to it.
+   *
+   * What #187 stores a remapping against and what #124 lists. A key can change; this
+   * cannot, which is the whole point of the id existing separately from `keys`.
+   */
+  readonly id: string;
+  /** Every `event.key` that triggers it. Letters appear in both cases — `Shift+Z` is `Z`. */
+  readonly keys: readonly string[];
+  readonly ctrl?: ModifierRule;
+  readonly shift?: ModifierRule;
+  readonly screens: readonly Screen[];
+  /** The catalogue key describing this binding, for #124's overlay. */
+  readonly descriptionKey: string;
+  /**
+   * §8.5.3's binding exists; its feature does not yet. The issue number that provides it.
+   *
+   * A number rather than `'#124'`, because NFR-018's lint rule reads a `#`-prefixed
+   * three-digit string as a hex colour — correctly, in general. The number is also the more
+   * precise value: it is an issue reference, and the `#` is presentation.
+   */
+  readonly pending?: number;
+  /** Modifiers to an action. Absent exactly when {@link Binding.pending} is set. */
+  readonly toAction?: (modifiers: Modifiers) => PlannerAction;
+}
+
+const PLANNER: readonly Screen[] = ['planner'];
+const EXECUTION: readonly Screen[] = ['execution'];
+const EVERYWHERE: readonly Screen[] = ['briefing', 'planner', 'execution', 'debrief'];
+
+/**
+ * §8.5.3's table, as data. **The map a player is shown and the map that runs.**
+ *
+ * Order matters in exactly one way: {@link bindingFor} takes the first row that matches, so
+ * a row with a modifier rule must precede a looser row for the same key. `Ctrl+Shift+Z`
+ * before `Ctrl+Z` is the only case today, and `keys.test.ts` asserts the property rather
+ * than this instance of it.
+ */
+export const BINDINGS: readonly Binding[] = [
+  // Redo before undo: both claim `z` with Ctrl, and the more specific rule has to win.
+  {
+    id: 'redo',
+    keys: ['z', 'Z'],
+    ctrl: 'required',
+    shift: 'required',
+    screens: PLANNER,
+    descriptionKey: 'keys.redo',
+    toAction: () => ({ kind: 'redo' }),
+  },
+  {
+    id: 'undo',
+    keys: ['z', 'Z'],
+    ctrl: 'required',
+    shift: 'forbidden',
+    screens: PLANNER,
+    descriptionKey: 'keys.undo',
+    toAction: () => ({ kind: 'undo' }),
+  },
+
+  // ── The planner (§8.3.4, §8.5.2) ───────────────────────────────────────────────────
+  {
+    id: 'addNode',
+    keys: ['n', 'N'],
+    ctrl: 'forbidden',
+    screens: PLANNER,
+    descriptionKey: 'keys.addNode',
+    toAction: () => ({ kind: 'addNode' }),
+  },
+  {
+    id: 'deleteNode',
+    keys: ['Delete', 'Backspace'],
+    screens: PLANNER,
+    descriptionKey: 'keys.deleteNode',
+    toAction: () => ({ kind: 'deleteNode' }),
+  },
+  {
+    id: 'editNode',
+    keys: ['e', 'E'],
+    ctrl: 'forbidden',
+    screens: PLANNER,
+    descriptionKey: 'keys.editNode',
+    toAction: () => ({ kind: 'editNode' }),
+  },
+  {
+    id: 'cycleNode',
+    keys: ['Tab'],
+    screens: PLANNER,
+    descriptionKey: 'keys.cycleNode',
+    toAction: (modifiers) => ({ kind: 'cycleNode', delta: modifiers.shift ? -1 : 1 }),
+  },
+  {
+    id: 'nudgeEpochBack',
+    keys: [','],
+    screens: PLANNER,
+    descriptionKey: 'keys.nudgeEpoch',
+    toAction: (modifiers) => ({ kind: 'nudgeEpoch', seconds: -epochNudge(modifiers) }),
+  },
+  {
+    id: 'nudgeEpochForward',
+    keys: ['.'],
+    screens: PLANNER,
+    descriptionKey: 'keys.nudgeEpoch',
+    toAction: (modifiers) => ({ kind: 'nudgeEpoch', seconds: epochNudge(modifiers) }),
+  },
+  // `↑`/`↓` prograde, `←`/`→` radial — the keyboard equivalent #135 asks for, and the same
+  // step rule the node editor's steppers use.
+  {
+    id: 'progradeUp',
+    keys: ['ArrowUp'],
+    screens: PLANNER,
+    descriptionKey: 'keys.prograde',
+    toAction: (modifiers) => ({
+      kind: 'nudgeDeltaV',
+      progradeMps: deltaVStep(modifiers),
+      radialMps: 0,
+    }),
+  },
+  {
+    id: 'progradeDown',
+    keys: ['ArrowDown'],
+    screens: PLANNER,
+    descriptionKey: 'keys.prograde',
+    toAction: (modifiers) => ({
+      kind: 'nudgeDeltaV',
+      progradeMps: -deltaVStep(modifiers),
+      radialMps: 0,
+    }),
+  },
+  {
+    id: 'radialOut',
+    keys: ['ArrowRight'],
+    screens: PLANNER,
+    descriptionKey: 'keys.radial',
+    toAction: (modifiers) => ({
+      kind: 'nudgeDeltaV',
+      progradeMps: 0,
+      radialMps: deltaVStep(modifiers),
+    }),
+  },
+  {
+    id: 'radialIn',
+    keys: ['ArrowLeft'],
+    screens: PLANNER,
+    descriptionKey: 'keys.radial',
+    toAction: (modifiers) => ({
+      kind: 'nudgeDeltaV',
+      progradeMps: 0,
+      radialMps: -deltaVStep(modifiers),
+    }),
+  },
+  {
+    id: 'scrubBack',
+    keys: ['['],
+    screens: PLANNER,
+    descriptionKey: 'keys.scrub',
+    toAction: (modifiers) => ({ kind: 'scrub', seconds: -scrubNudge(modifiers) }),
+  },
+  {
+    id: 'scrubForward',
+    keys: [']'],
+    screens: PLANNER,
+    descriptionKey: 'keys.scrub',
+    toAction: (modifiers) => ({ kind: 'scrub', seconds: scrubNudge(modifiers) }),
+  },
+  {
+    id: 'scrubToStart',
+    keys: ['Home'],
+    screens: PLANNER,
+    descriptionKey: 'keys.scrubToStart',
+    toAction: () => ({ kind: 'scrubTo', where: 'start' }),
+  },
+  {
+    id: 'scrubToDeadline',
+    keys: ['End'],
+    screens: PLANNER,
+    descriptionKey: 'keys.scrubToDeadline',
+    toAction: () => ({ kind: 'scrubTo', where: 'deadline' }),
+  },
+  {
+    id: 'zoomIn',
+    keys: ['+', '='],
+    screens: PLANNER,
+    descriptionKey: 'keys.zoom',
+    toAction: () => ({ kind: 'zoom', factor: KEY_ZOOM_FACTOR }),
+  },
+  {
+    id: 'zoomOut',
+    keys: ['-'],
+    screens: PLANNER,
+    descriptionKey: 'keys.zoom',
+    toAction: () => ({ kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR }),
+  },
+  {
+    id: 'recentre',
+    keys: ['f', 'F'],
+    ctrl: 'forbidden',
+    screens: PLANNER,
+    descriptionKey: 'keys.recentre',
+    toAction: () => ({ kind: 'recentre' }),
+  },
+  {
+    id: 'toggleContract',
+    keys: ['b', 'B'],
+    ctrl: 'forbidden',
+    screens: PLANNER,
+    descriptionKey: 'keys.toggleContract',
+    toAction: () => ({ kind: 'toggleContract' }),
+  },
+  // §8.5.2's context menu, by keyboard. `ContextMenu` is the dedicated key where a keyboard
+  // has one; `Shift+F10` is the binding every desktop platform also accepts and is the one a
+  // laptop without the dedicated key can actually press. Both, because §8.8's canvas-parity
+  // rule makes this the only keyboard route to "snap to apoapsis" outside the node editor.
+  {
+    id: 'nodeMenuKey',
+    keys: ['ContextMenu'],
+    screens: PLANNER,
+    descriptionKey: 'keys.nodeMenu',
+    toAction: () => ({ kind: 'nodeMenu' }),
+  },
+  {
+    id: 'nodeMenuF10',
+    keys: ['F10'],
+    shift: 'required',
+    screens: PLANNER,
+    descriptionKey: 'keys.nodeMenu',
+    toAction: () => ({ kind: 'nodeMenu' }),
+  },
+
+  // ── Execution (§8.3.8) ─────────────────────────────────────────────────────────────
+  {
+    id: 'playPause',
+    keys: [' ', 'Spacebar'],
+    ctrl: 'forbidden',
+    screens: EXECUTION,
+    descriptionKey: 'keys.playPause',
+    toAction: () => ({ kind: 'playPause' }),
+  },
+  {
+    id: 'skipToEnd',
+    keys: ['s', 'S'],
+    ctrl: 'forbidden',
+    screens: EXECUTION,
+    descriptionKey: 'keys.skipToEnd',
+    toAction: () => ({ kind: 'skipToEnd' }),
+  },
+  {
+    id: 'playbackSpeed',
+    keys: ['1', '2', '3', '4', '5'],
+    ctrl: 'forbidden',
+    screens: EXECUTION,
+    descriptionKey: 'keys.playbackSpeed',
+    // Five digits share one row rather than getting five near-identical ones: #124 would
+    // list five lines saying the same thing and #187 would offer five things to remap. The
+    // digit becomes an index in {@link actionFor}, which is the one place a binding's action
+    // depends on the key rather than on the modifiers.
+    toAction: () => ({ kind: 'setSpeedIndex', index: 0 }),
+  },
+
+  // ── Debrief (§8.3.9) ───────────────────────────────────────────────────────────────
+  {
+    id: 'retry',
+    keys: ['r', 'R'],
+    ctrl: 'forbidden',
+    screens: ['debrief'],
+    descriptionKey: 'keys.retry',
+    toAction: () => ({ kind: 'retry' }),
+  },
+
+  // ── Across screens ─────────────────────────────────────────────────────────────────
+  {
+    id: 'confirm',
+    keys: ['Enter'],
+    ctrl: 'forbidden',
+    // §8.5.3's one "Commit / confirm" row. The briefing's ACCEPT is the same binding on a
+    // different screen, and `Briefing.tsx` resolves it — which is why the row names both.
+    screens: ['briefing', 'planner'],
+    descriptionKey: 'keys.confirm',
+    toAction: () => ({ kind: 'commit' }),
+  },
+  {
+    id: 'cancel',
+    keys: ['Escape'],
+    screens: EVERYWHERE,
+    descriptionKey: 'keys.cancel',
+    toAction: () => ({ kind: 'cancel' }),
+  },
+  {
+    id: 'help',
+    keys: ['?'],
+    screens: EVERYWHERE,
+    descriptionKey: 'keys.help',
+    // §8.5.3's binding; #124 is the overlay. Listed rather than omitted so the overlay and
+    // the remapper both see the whole table — see the module docstring.
+    pending: 124,
+  },
+  {
+    id: 'codex',
+    keys: ['c', 'C'],
+    ctrl: 'forbidden',
+    screens: EVERYWHERE,
+    descriptionKey: 'keys.codex',
+    pending: 161,
+  },
+];
+
 /**
  * Whether a key press belongs to whatever the player is typing into.
  *
  * Everything editable, plus `contenteditable`, plus anything that has opted out with
- * `role="textbox"`. Checked structurally rather than by tag name alone so a future
- * component cannot quietly escape it.
+ * `role="textbox"`. Checked structurally rather than by tag name alone so a future component
+ * cannot quietly escape it.
  */
 export const isTypingTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
-  // The property *and* the attribute. `isContentEditable` is the correct read in a
-  // browser because it inherits, but it is unimplemented in jsdom — where it is always
-  // false — so relying on it alone would leave this untested in the one place the
-  // planner's tests run. The attribute check is not a workaround for that: it also
-  // catches the element that declares it, which is the case worth being sure of.
+  // The property *and* the attribute. `isContentEditable` is the correct read in a browser
+  // because it inherits, but it is unimplemented in jsdom — where it is always false — so
+  // relying on it alone would leave this untested in the one place the planner's tests run.
+  // The attribute check is not a workaround for that: it also catches the element that
+  // declares it, which is the case worth being sure of.
   if (target.isContentEditable) return true;
   const editable = target.getAttribute('contenteditable');
   if (editable !== null && editable !== 'false') return true;
@@ -109,101 +436,44 @@ export const isTypingTarget = (target: EventTarget | null): boolean => {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 };
 
+const satisfied = (rule: ModifierRule | undefined, held: boolean): boolean => {
+  if (rule === 'required') return held;
+  if (rule === 'forbidden') return !held;
+  return true;
+};
+
+/** The binding a key press matches on a screen, or `null`. A pending row still matches. */
+export const bindingFor = (screen: Screen, key: string, modifiers: Modifiers): Binding | null =>
+  BINDINGS.find(
+    (binding) =>
+      binding.screens.includes(screen) &&
+      binding.keys.includes(key) &&
+      satisfied(binding.ctrl, modifiers.ctrl) &&
+      satisfied(binding.shift, modifiers.shift),
+  ) ?? null;
+
 /**
- * Resolve a key press to an action, or `null`.
+ * Resolve a key press on a screen to an action, or `null`.
  *
- * Pure, so `keys.test.ts` drives the whole map with plain strings and no DOM at all —
- * which is what makes NFR-016's "fully operable without a pointer" checkable as a table
- * rather than as twenty simulated key events.
+ * Pure, so `keys.test.ts` drives the whole map with plain strings and no DOM at all — which
+ * is what makes NFR-016's "fully operable without a pointer" checkable as a table rather
+ * than as twenty simulated key events.
+ *
+ * A **pending** binding resolves to `null`: §8.5.3 lists the key, this table records it, and
+ * the feature behind it does not exist yet. That is deliberately indistinguishable from an
+ * unbound key at the call site — a screen must not have to know which bindings are waiting
+ * on an issue — while staying visible to #124 and #187 through {@link BINDINGS}.
  */
-export const actionFor = (key: string, modifiers: Modifiers): PlannerAction | null => {
-  switch (key) {
-    case 'n':
-    case 'N':
-      return { kind: 'addNode' };
-    case 'Delete':
-    case 'Backspace':
-      return { kind: 'deleteNode' };
-    case 'e':
-    case 'E':
-      return { kind: 'editNode' };
-    case 'Tab':
-      return { kind: 'cycleNode', delta: modifiers.shift ? -1 : 1 };
-
-    // §8.5.3's `,` / `.` — nudge the selected node's epoch.
-    case ',':
-      return { kind: 'nudgeEpoch', seconds: -epochNudge(modifiers) };
-    case '.':
-      return { kind: 'nudgeEpoch', seconds: epochNudge(modifiers) };
-
-    // `↑` / `↓` prograde, `←` / `→` radial. The keyboard equivalent #135 asks for, and
-    // the same step rule the node editor's steppers use.
-    case 'ArrowUp':
-      return { kind: 'nudgeDeltaV', progradeMps: deltaVStep(modifiers), radialMps: 0 };
-    case 'ArrowDown':
-      return { kind: 'nudgeDeltaV', progradeMps: -deltaVStep(modifiers), radialMps: 0 };
-    case 'ArrowRight':
-      return { kind: 'nudgeDeltaV', progradeMps: 0, radialMps: deltaVStep(modifiers) };
-    case 'ArrowLeft':
-      return { kind: 'nudgeDeltaV', progradeMps: 0, radialMps: -deltaVStep(modifiers) };
-
-    case '[':
-      return { kind: 'scrub', seconds: -scrubNudge(modifiers) };
-    case ']':
-      return { kind: 'scrub', seconds: scrubNudge(modifiers) };
-    case 'Home':
-      return { kind: 'scrubTo', where: 'start' };
-    case 'End':
-      return { kind: 'scrubTo', where: 'deadline' };
-
-    case '+':
-    case '=':
-      return { kind: 'zoom', factor: KEY_ZOOM_FACTOR };
-    case '-':
-      return { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR };
-    case 'f':
-    case 'F':
-      return { kind: 'recentre' };
-
-    // §8.3.3's contract panel (#264). `B` for *brief*, which is what the panel shows and
-    // what the player last read before ACCEPT took it away. `C` would have been the
-    // obvious letter and is §8.5.3's Codex; taking it here would have meant re-keying the
-    // Codex before it exists, which is the kind of churn #141's audit is meant to prevent
-    // rather than cause.
-    case 'b':
-    case 'B':
-      return { kind: 'toggleContract' };
-
-    // §8.5.3's undo and redo (#138). `Ctrl+Shift+Z` for redo rather than `Ctrl+Y`, which
-    // is §8.5.3's own choice: `Ctrl+Y` is a Windows convention and this game runs in a
-    // browser on every platform, where `Ctrl+Shift+Z` is the one that is understood
-    // everywhere. Both cases of the letter, because `Shift+Z` reports `Z`.
-    //
-    // These are the only bindings here that read a modifier as part of *which* action they
-    // are rather than how big its step is, so they are checked before the unmodified map
-    // below could claim the key.
-    case 'z':
-    case 'Z':
-      if (!modifiers.ctrl) return null;
-      return modifiers.shift ? { kind: 'redo' } : { kind: 'undo' };
-
-    // §8.5.2's context menu, by keyboard. `ContextMenu` is the dedicated key where a
-    // keyboard has one; `F10` with Shift is the binding every desktop platform also
-    // accepts, and is the one a laptop without the dedicated key can actually press.
-    // Both, because §8.8's canvas-parity rule makes this the *only* keyboard route to
-    // "snap to apoapsis" outside the node editor, and a route that needs a key half of
-    // keyboards lack is not a route.
-    case 'ContextMenu':
-      return { kind: 'nodeMenu' };
-    case 'F10':
-      return modifiers.shift ? { kind: 'nodeMenu' } : null;
-
-    case 'Enter':
-      return { kind: 'commit' };
-    case 'Escape':
-      return { kind: 'cancel' };
-
-    default:
-      return null;
+export const actionFor = (
+  screen: Screen,
+  key: string,
+  modifiers: Modifiers,
+): PlannerAction | null => {
+  const binding = bindingFor(screen, key, modifiers);
+  if (binding?.toAction === undefined) return null;
+  if (binding.id === 'playbackSpeed') {
+    const index = Number.parseInt(key, 10) - 1;
+    return Number.isNaN(index) ? null : { kind: 'setSpeedIndex', index };
   }
+  return binding.toAction(modifiers);
 };

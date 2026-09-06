@@ -382,7 +382,10 @@ export const PlannerScreen = ({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (isTypingTarget(event.target)) return;
-      const action = actionFor(event.key, { shift: event.shiftKey, ctrl: event.ctrlKey });
+      const action = actionFor('planner', event.key, {
+        shift: event.shiftKey,
+        ctrl: event.ctrlKey,
+      });
       if (action === null) return;
 
       const at = selectedIndex({ ...state });
@@ -471,6 +474,15 @@ export const PlannerScreen = ({
           else if (state.editorFor !== null) actions.closeEditor();
           else actions.deselect();
           break;
+        case 'playPause':
+        case 'skipToEnd':
+        case 'setSpeedIndex':
+        case 'retry':
+          // Execution's and the debrief's bindings. Unreachable here — the table scopes
+          // them to those screens — and listed so the switch stays exhaustive over
+          // `PlannerAction`: a new action is then a compile error rather than a key that
+          // silently does nothing.
+          return;
         case 'zoom':
         case 'recentre':
           // Handled by the orbit view, which owns the camera — see `OrbitView.tsx`. This
