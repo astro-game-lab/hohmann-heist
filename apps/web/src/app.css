@@ -327,6 +327,23 @@ body {
   gap: 12px;
 }
 
+/*
+ * #184's two storage states. Laid out as a row so the export affordance sits beside the
+ * sentence rather than under it — the notice is non-blocking and should not push the
+ * screen down more than it must.
+ */
+.hh-save-notice--storage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hh-save-notice--storage p {
+  flex: 1 1 20rem;
+  margin: 0;
+}
+
 .hh-save-notice {
   max-width: 62ch;
   padding: 8px 12px;

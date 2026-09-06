@@ -353,6 +353,10 @@ const samples: AllMessageParams = {
   'save.problem.unreadable': {},
   'save.problem.futureVersion': { found: 2, supported: 1 },
   'save.problem.unknownVersion': { found: 0, supported: 1 },
+  'save.unavailable': {},
+  'save.full': {},
+  'save.notice.export': {},
+  'save.notice.dismiss': {},
 
   // ── Execution (§8.3.8) ─────────────────────────────────────────────────────
   'execution.region.orbitView': {},

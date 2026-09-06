@@ -805,6 +805,16 @@ export const en: Messages = {
     `${fmt.integer(found)}; this build reads ${fmt.integer(supported)}). It has been left ` +
     'untouched.',
 
+  // §8.6's wording is the model for the first of these: *"Progress can't be saved in this
+  // browser mode. The game still works."* Both name the escape hatch rather than only
+  // apologising — carrying the file is the only recovery a player in this state has.
+  'save.unavailable': () =>
+    'Progress can’t be saved in this browser mode. The game still works — export your save to keep it.',
+  'save.full': () =>
+    'This browser’s storage is full, so that didn’t save. Export your progress to keep it.',
+  'save.notice.export': () => 'Export save',
+  'save.notice.dismiss': () => 'Dismiss',
+
   // ── The application shell ──────────────────────────────────────────────────
   'app.title': () => 'Hohmann Heist',
   'app.routesLabel': () => 'Routes',

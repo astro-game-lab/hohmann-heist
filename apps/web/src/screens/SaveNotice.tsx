@@ -7,9 +7,10 @@
  * is told, because a game that silently starts you from nothing is indistinguishable from
  * a game that ate your progress.
  *
- * Deliberately small. #167 owns the storage-unavailable notice and whatever affordance
- * goes with it (export the damaged file, clear it, retry); this is the sentence that has
- * to be true before any of that: *nothing has been overwritten*.
+ * Deliberately small. `StorageNotice` (#184) owns the other two states `storage.ts`
+ * distinguishes — the browser that will not store and the quota that ran out — and carries
+ * the export affordance that goes with them. This is the sentence that has to be true
+ * before any of that: *nothing has been overwritten*.
  *
  * `role="status"` rather than `role="alert"`: it is not urgent, nothing is waiting on it,
  * and an assertive live region would interrupt whatever the screen reader was saying about

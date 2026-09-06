@@ -41,6 +41,7 @@ import {
   type SaveV1,
   type StoredSettings,
 } from './save/index.js';
+import { downloadSave } from './save/download.js';
 import { SettingsOverlay } from './settings/SettingsOverlay.js';
 import { SettingsScreen } from './settings/SettingsScreen.js';
 import { SettingsProvider, useSettings } from './settings/context.js';
@@ -50,6 +51,7 @@ import { ContractScreen } from './screens/ContractScreen.js';
 import { NotFound } from './screens/NotFound.js';
 import { Placeholder } from './screens/Placeholder.js';
 import { SaveNotice } from './screens/SaveNotice.js';
+import { StorageNotice, type StorageProblem } from './screens/StorageNotice.js';
 import { Screen } from './screens/Screen.js';
 import { ScenePage } from './scene-harness/ScenePage.js';
 
@@ -261,8 +263,11 @@ const withResult = (save: SaveV1, id: string, outcome: Outcome, replay: string):
  */
 const AppShell = ({
   saved,
+  storageProblem,
   onAccept,
   onComplete,
+  onExportSave,
+  onDismissStorageNotice,
   onReplaceSave,
   onClearSave,
 }: AppShellProps): JSX.Element => {
@@ -352,6 +357,14 @@ const AppShell = ({
       t={t}
     >
       {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
+      {storageProblem === null ? null : (
+        <StorageNotice
+          t={t}
+          problem={storageProblem}
+          onExport={onExportSave}
+          onDismiss={onDismissStorageNotice}
+        />
+      )}
       {route.name === 'settings' && beneath === null ? (
         <SettingsScreen {...settingsProps} />
       ) : (
@@ -373,6 +386,10 @@ const AppShell = ({
 
 interface AppShellProps {
   readonly saved: LoadOutcome;
+  /** #184: which storage state to report, or null for none and for one dismissed. */
+  readonly storageProblem: StorageProblem | null;
+  readonly onExportSave: () => void;
+  readonly onDismissStorageNotice: () => void;
   readonly onAccept: (id: string) => void;
   readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
   /** #185's import: the whole save, replaced. */
@@ -387,51 +404,89 @@ export const App = (): JSX.Element => {
   // would show "attempts: 0" and then correct itself.
   const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
 
+  /**
+   * #184's notice state — which storage problem to report, and whether it was dismissed.
+   *
+   * `unavailable` is known at load and is true for the whole session. `full` is discovered
+   * at a write and is a *change*: saving used to work and has stopped, which is why it has
+   * to appear at that moment rather than at the next load.
+   *
+   * Dismissal is per problem rather than a single boolean, so dismissing the
+   * load-time notice does not also suppress a quota failure that happens an hour later —
+   * that is a different thing going wrong and the player has not been told about it.
+   * Within a problem it stays dismissed for the session: a quota notice that reappeared on
+   * every subsequent write would be a modal built out of a banner.
+   */
+  const [storageProblem, setStorageProblem] = useState<StorageProblem | null>(
+    // Derived from the load above rather than by probing again: `loadSave` is already the
+    // one place that decides a browser will not store, and asking twice invites the two
+    // answers to differ.
+    saved.status === 'unavailable' ? 'unavailable' : null,
+  );
+  const [dismissed, setDismissed] = useState<readonly StorageProblem[]>([]);
+
+  /**
+   * Every write goes through here, so a failed one cannot be dropped at a call site.
+   *
+   * Before #184 each caller called `writeSave` and discarded the outcome — safe, because
+   * it never throws, and silent, which was the bug. The write still cannot stop anything:
+   * the state update happens either way and the return value only decides whether a notice
+   * appears.
+   */
+  const persist = useCallback((next: SaveV1): void => {
+    const outcome = writeSave(storage, next);
+    if (outcome.status === 'quotaExceeded') setStorageProblem('full');
+    else if (outcome.status === 'unavailable') setStorageProblem('unavailable');
+  }, []);
+
   const acceptContract = (id: string): void => {
     const next = withAttempt(saved.save, id);
-    // A write that fails is not the player's problem right now — they are on their way to
-    // the planner. #167 owns the notice; what matters here is that it cannot throw.
-    writeSave(storage, next);
+    persist(next);
     setSaved({ status: 'loaded', save: next, migrated: false });
   };
 
   const completeContract = (id: string, outcome: Outcome, replay: string): void => {
     const next = withResult(saved.save, id, outcome, replay);
     if (next === saved.save) return;
-    writeSave(storage, next);
+    persist(next);
     setSaved({ status: 'loaded', save: next, migrated: false });
   };
 
   /**
    * A settings change, persisted and applied.
    *
-   * Stable across renders (`useCallback` over the current save), because the provider
-   * memoises its context value on this function: a fresh one every render would rebuild
-   * the context every render and re-run every consumer's effects with it, which for the
-   * palette means repainting thirteen custom properties on every keystroke in the
-   * planner.
+   * Stable across renders (`useCallback`), because the provider memoises its context value
+   * on this function: a fresh one every render would rebuild the context every render and
+   * re-run every consumer's effects with it, which for the palette means repainting
+   * thirteen custom properties on every keystroke in the planner.
    */
-  const changeSettings = useCallback((stored: StoredSettings): void => {
-    setSaved((current) => {
-      const next: SaveV1 = { ...current.save, settings: stored };
-      writeSave(storage, next);
-      return { status: 'loaded', save: next, migrated: false };
-    });
-  }, []);
+  const changeSettings = useCallback(
+    (stored: StoredSettings): void => {
+      setSaved((current) => {
+        const next: SaveV1 = { ...current.save, settings: stored };
+        persist(next);
+        return { status: 'loaded', save: next, migrated: false };
+      });
+    },
+    [persist],
+  );
 
   /**
    * #185's import. The imported document replaces the save wholesale.
    *
-   * It is applied to memory first and persisted second, and a failed write is not undone:
+   * Applied to memory first and persisted second, and a failed write is **not** undone:
    * FR-702's rule is that storage failing must not stop the game, and discarding progress
    * the player just restored because the quota is full would be the most destructive
-   * possible reading of that. The session keeps it; #184's notice says it will not survive
-   * a reload.
+   * possible reading of it. The session keeps it, and #184's notice says it will not
+   * survive a reload.
    */
-  const replaceSave = useCallback((next: SaveV1): void => {
-    writeSave(storage, next);
-    setSaved({ status: 'loaded', save: next, migrated: false });
-  }, []);
+  const replaceSave = useCallback(
+    (next: SaveV1): void => {
+      persist(next);
+      setSaved({ status: 'loaded', save: next, migrated: false });
+    },
+    [persist],
+  );
 
   /** #185's "clear all local data" — the one key removed, and the game keeps running. */
   const clearAll = useCallback((): void => {
@@ -439,12 +494,31 @@ export const App = (): JSX.Element => {
     setSaved({ status: 'empty', save: emptySave() });
   }, []);
 
+  /**
+   * #184's escape hatch, and #185's export, from one place.
+   *
+   * Reads `saved.save` — the in-memory document — and never storage. That is what makes it
+   * work in the state it exists to rescue: a re-read would return nothing, which is the
+   * problem being reported.
+   */
+  const exportNow = useCallback((): void => {
+    downloadSave(saved.save);
+  }, [saved.save]);
+
+  const showing =
+    storageProblem !== null && !dismissed.includes(storageProblem) ? storageProblem : null;
+
   return (
     <SettingsProvider stored={saved.save.settings} onChange={changeSettings}>
       <AppShell
         saved={saved}
+        storageProblem={showing}
         onAccept={acceptContract}
         onComplete={completeContract}
+        onExportSave={exportNow}
+        onDismissStorageNotice={() => {
+          if (storageProblem !== null) setDismissed((current) => [...current, storageProblem]);
+        }}
         onReplaceSave={replaceSave}
         onClearSave={clearAll}
       />

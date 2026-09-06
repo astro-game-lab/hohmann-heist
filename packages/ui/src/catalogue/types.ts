@@ -592,6 +592,16 @@ export interface UiMessageParams {
   readonly 'save.problem.futureVersion': { readonly found: number; readonly supported: number };
   readonly 'save.problem.unknownVersion': { readonly found: number; readonly supported: number };
 
+  // FR-702's player-facing half (#184). Two states the save module already distinguishes
+  // and nothing rendered: a browser that will not store at all, known at load, and a
+  // quota that ran out mid-session after the player had done something worth keeping.
+  // Different words, because they are different situations and only one of them is a
+  // change from how the game was behaving a minute ago.
+  readonly 'save.unavailable': Record<string, never>;
+  readonly 'save.full': Record<string, never>;
+  readonly 'save.notice.export': Record<string, never>;
+  readonly 'save.notice.dismiss': Record<string, never>;
+
   // ── Execution (§8.3.8, #144, #145, #146) ──────────────────────────────────
   readonly 'execution.region.orbitView': Record<string, never>;
   readonly 'execution.region.hud': Record<string, never>;
