@@ -36,8 +36,8 @@
  * a reduced feature set"*. Because the panels are the same instances, this is structural:
  * there is no narrow variant of `PlanPanel` that could quietly drop the delete button.
  */
-import { arcAt, type Plan, type Timeline } from '@hh/sim';
-import { R_EARTH_EQ, elementsFromState, type Epoch } from '@hh/astro';
+import { arcAt, fromEpochTicks, type Plan, type Timeline } from '@hh/sim';
+import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
 import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
@@ -637,6 +637,27 @@ export const PlannerScreen = ({
               startEpoch={scenario.startEpoch}
               selectedIndex={index}
               snappedKinds={snappedKinds}
+              dragging={
+                dragPreview === null || draggingInteraction === null
+                  ? null
+                  : {
+                      index: dragPreview.index,
+                      // An epoch drag carries ticks; a Δv drag leaves the epoch alone, so
+                      // the plan's own value is the live one for it.
+                      metSeconds:
+                        draggingInteraction.drag.kind === 'epoch'
+                          ? metAt(
+                              scenario.startEpoch,
+                              fromEpochTicks(draggingInteraction.drag.ticks),
+                            )
+                          : metAt(
+                              scenario.startEpoch,
+                              model.plan.nodes[dragPreview.index]?.epoch ?? scenario.startEpoch,
+                            ),
+                      progradeMps: dragPreview.progradeMps,
+                      radialMps: dragPreview.radialMps,
+                    }
+              }
               onSelect={actions.selectIndex}
               onDelete={actions.deleteIndex}
               onExpand={actions.openEditor}

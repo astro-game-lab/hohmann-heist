@@ -57,6 +57,25 @@ export interface PlanPanelProps {
    * labour `NodeEditor`'s `snappedTo` already uses.
    */
   readonly snappedKinds: readonly ('periapsis' | 'apoapsis' | null)[];
+  /**
+   * The live value of a gesture in flight, for the node being dragged — #263, #134, #135.
+   *
+   * The plan is deliberately not mutated until the drag is released (FR-105), which is what
+   * makes `Escape` a no-op rather than an undo. So a panel rendering `plan` alone shows the
+   * pre-drag numbers for the whole gesture and jumps on release — and #263's first criterion
+   * is explicit that *"the plan panel and the orbit view both follow the pointer during the
+   * gesture rather than only on release"*.
+   *
+   * The orbit view already had its live picture through `preview`; this is the same value
+   * reaching the DOM half, which is the half §8.8's canvas-parity rule cares about. `null`
+   * whenever nothing is being dragged.
+   */
+  readonly dragging: {
+    readonly index: number;
+    readonly metSeconds: number;
+    readonly progradeMps: number;
+    readonly radialMps: number;
+  } | null;
   readonly onSelect: (index: number) => void;
   readonly onDelete: (index: number) => void;
   readonly onExpand: (index: number) => void;
@@ -71,6 +90,7 @@ export const PlanPanel = ({
   startEpoch,
   selectedIndex,
   snappedKinds,
+  dragging,
   onSelect,
   onDelete,
   onExpand,
@@ -94,9 +114,12 @@ export const PlanPanel = ({
           // (radial, transverse, normal) and DEP-10 calls the transverse one "prograde" —
           // the naming departure lives in the catalogue, so this only has to pick the
           // right index and not re-argue the name.
-          const radialMps = fromDeltaVCounts(node.deltaVCounts[0]);
-          const progradeMps = fromDeltaVCounts(node.deltaVCounts[1]);
-          const metSeconds = metAt(startEpoch, node.epoch);
+          // The gesture's live values for the node being dragged, the plan's for every
+          // other node and whenever nothing is in flight.
+          const live = dragging !== null && dragging.index === index ? dragging : null;
+          const radialMps = live?.radialMps ?? fromDeltaVCounts(node.deltaVCounts[0]);
+          const progradeMps = live?.progradeMps ?? fromDeltaVCounts(node.deltaVCounts[1]);
+          const metSeconds = live?.metSeconds ?? metAt(startEpoch, node.epoch);
           const selected = selectedIndex === index;
           const snappedTo = snappedKinds[index] ?? null;
 

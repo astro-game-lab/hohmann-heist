@@ -306,6 +306,17 @@ Curtis, Vallado and a `hapsira` fixture.
   read back verbatim into bug reports, so there is nothing in it to translate.
 
 ### Fixed
+- **A dragged node follows the pointer for the whole gesture, not just its first move (#263).**
+  Two faults behind one symptom, both found by driving the built app rather than by a test. The
+  reference epoch `pickEpoch` uses to tell one revolution from another was re-derived per move
+  by looking the node up in the drawn timeline — but the drawn timeline is the drag *preview*,
+  so the moment the first move landed, the node's epoch and therefore its derived id had
+  changed and the lookup missed. The reference silently fell back to the scrub head, which is
+  a different pass, and the burn jumped back towards T+0 on the second move of every drag. It
+  is captured once now, at `pointerdown`. And the plan panel showed the pre-drag numbers for
+  the whole gesture and only caught up on release, because the plan is deliberately not
+  mutated until then; it now renders the gesture's live values, which is what §8.8's
+  canvas-parity rule asks for — the orbit view already had them.
 - **Dragging a maneuver node works again (#263).** It did nothing in `v0.1.0`, deployed: the node
   selected on press and then stayed exactly where it was however far the pointer travelled, and the
   Δv handles behaved the same way. §8.5.2 makes dragging the primary way a burn is placed and moved,

@@ -151,7 +151,25 @@ const LONG_PRESS_MS = 500;
 /** What the press started on, and therefore what moving it means. */
 type Gesture =
   | { readonly kind: 'camera' }
-  | { readonly kind: 'node'; readonly nodeId: string }
+  | {
+      readonly kind: 'node';
+      readonly nodeId: string;
+      /**
+       * The node's epoch when the press landed — #134's "the burn's **own** revolution".
+       *
+       * Captured once, at `pointerdown`, and **not** looked up per move. `pickEpoch` needs a
+       * reference to disambiguate a closed orbit, and re-finding the node in the drawn
+       * timeline for it does not work: the drawn timeline is the drag *preview*, so the
+       * moment the first move lands, the node's epoch — and therefore the id derived from it
+       * — has changed and the lookup misses. The reference then silently fell back to the
+       * scrub head, which is a different pass, and the burn snapped back towards T+0 on the
+       * second move of every drag.
+       *
+       * That was invisible until the gesture worked at all: with #263 unfixed there was
+       * never a second move to get it wrong. Found by driving the built app, not by a test.
+       */
+      readonly fromEpoch: Epoch;
+    }
   | { readonly kind: 'handle'; readonly nodeId: string; readonly axis: HandleAxis };
 
 /**
@@ -639,7 +657,16 @@ export const OrbitView = ({
           ? { kind: 'camera' }
           : { kind: 'handle', nodeId: nodeOf(hit.id), axis };
       }
-      if (hit.kind === 'node') return { kind: 'node', nodeId: hit.id };
+      if (hit.kind === 'node') {
+        const drawn = drawnNow();
+        const node = drawn?.plan.nodes.find((candidate) => nodeIdOf(candidate) === hit.id);
+        // Resolved here, while the id still names a node — see `Gesture`.
+        return {
+          kind: 'node',
+          nodeId: hit.id,
+          fromEpoch: node?.epoch ?? latestRef.current.scrubEpoch,
+        };
+      }
       return { kind: 'camera' };
     };
 
@@ -681,14 +708,8 @@ export const OrbitView = ({
       const point = localPoint(event);
       const drawn = drawnNow();
       if (drawn === null) return;
-      const {
-        scrubEpoch,
-        dragging,
-        onBeginEpochDrag,
-        onBeginDeltaVDrag,
-        onDragEpochTo,
-        onDragDeltaVTo,
-      } = latestRef.current;
+      const { dragging, onBeginEpochDrag, onBeginDeltaVDrag, onDragEpochTo, onDragDeltaVTo } =
+        latestRef.current;
 
       const gesture = pressed.gesture;
 
@@ -708,12 +729,13 @@ export const OrbitView = ({
 
       if (gesture.kind === 'node') {
         // #134: the epoch under the cursor, on the burn's **own** revolution. `pickEpoch`
-        // needs a reference for that, and the node's current epoch is it — without one, a
-        // small drag can land on a later pass through the same pixels and teleport the
-        // burn an orbit away. See `pick.ts`.
-        const id = gesture.nodeId;
-        const node = drawn.plan.nodes.find((candidate) => nodeIdOf(candidate) === id);
-        onDragEpochTo(pickEpoch(drawn, framing.camera, point, node?.epoch ?? scrubEpoch).epoch);
+        // needs a reference for that — without one, a small drag can land on a later pass
+        // through the same pixels and teleport the burn an orbit away. See `pick.ts`.
+        //
+        // The reference is the epoch captured at `pointerdown`, not a fresh lookup: the
+        // drawn timeline is the drag preview and the node's id moves with it. `Gesture`
+        // has the full account.
+        onDragEpochTo(pickEpoch(drawn, framing.camera, point, gesture.fromEpoch).epoch);
         return;
       }
 

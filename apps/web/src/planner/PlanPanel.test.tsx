@@ -44,6 +44,7 @@ const mount = async (snappedKinds: readonly ('periapsis' | 'apoapsis' | null)[])
         startEpoch={START}
         selectedIndex={null}
         snappedKinds={snappedKinds}
+        dragging={null}
         onSelect={() => undefined}
         onDelete={() => undefined}
         onExpand={() => undefined}
@@ -137,5 +138,62 @@ describe('the row’s controls (#136, §8.8)', () => {
     expect(el('plan-menu-1')?.querySelector('svg')?.getAttribute('aria-label')).toBe(
       'Open actions for burn 2',
     );
+  });
+});
+
+describe('following a gesture in flight (#263’s first criterion)', () => {
+  const withDrag = async (
+    dragging: {
+      readonly index: number;
+      readonly metSeconds: number;
+      readonly progradeMps: number;
+      readonly radialMps: number;
+    } | null,
+  ): Promise<void> => {
+    await act(() => {
+      render(
+        <PlanPanel
+          t={catalogue.resolve}
+          plan={twoNodes()}
+          startEpoch={START}
+          selectedIndex={0}
+          snappedKinds={[null, null]}
+          dragging={dragging}
+          onSelect={() => undefined}
+          onDelete={() => undefined}
+          onExpand={() => undefined}
+          onOpenMenu={() => undefined}
+          onAdd={() => undefined}
+        />,
+        container,
+      );
+    });
+  };
+
+  it('shows the dragged epoch rather than the plan’s, during the gesture', async () => {
+    await withDrag(null);
+    // The plan's own value: node 0 is at T+00:10:00.
+    expect(rowText(0)).toContain('T+00:10:00');
+
+    await withDrag({ index: 0, metSeconds: 3600, progradeMps: 0, radialMps: 0 });
+    // #263: *"the plan panel and the orbit view both follow the pointer during the gesture
+    // rather than only on release"*. The plan is deliberately unmutated until release, so
+    // without this the panel showed the pre-drag epoch for the whole drag and jumped at the
+    // end — which is exactly what a player reads as the game lagging behind them.
+    expect(rowText(0)).toContain('T+01:00:00');
+  });
+
+  it('shows the dragged Δv live, so #135’s magnitude updates', async () => {
+    await withDrag({ index: 0, metSeconds: 600, progradeMps: 42.5, radialMps: -3.25 });
+    expect(rowText(0)).toContain('42.5');
+    expect(rowText(0)).toContain('3.25');
+  });
+
+  it('leaves every other node showing the plan', async () => {
+    await withDrag({ index: 0, metSeconds: 3600, progradeMps: 99, radialMps: 0 });
+    // Node 1 is not being dragged, so it reads from the plan — a panel that applied the
+    // gesture to every row would be worse than one that applied it to none.
+    expect(rowText(1)).toContain('T+00:20:00');
+    expect(rowText(1)).not.toContain('99');
   });
 });
