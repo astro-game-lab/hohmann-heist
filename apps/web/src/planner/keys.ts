@@ -40,7 +40,7 @@
  * binding, its feature is not built, and here is the issue" in one place instead of in a
  * comment that nothing reads.
  */
-import { deltaVStep } from '@hh/ui';
+import { deltaVStep, type MessageKey } from '@hh/ui';
 
 /** Which screen a binding applies on. §8.5.3's scope, made explicit. */
 export type Screen = 'briefing' | 'planner' | 'execution' | 'debrief';
@@ -122,7 +122,7 @@ export interface Binding {
   readonly shift?: ModifierRule;
   readonly screens: readonly Screen[];
   /** The catalogue key describing this binding, for #124's overlay. */
-  readonly descriptionKey: string;
+  readonly descriptionKey: MessageKey;
   /**
    * §8.5.3's binding exists; its feature does not yet. The issue number that provides it.
    *

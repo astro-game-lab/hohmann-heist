@@ -1596,3 +1596,224 @@ body {
   font-size: 0.9rem;
   opacity: 0.7;
 }
+
+/* ── §8.3.12's settings screen (#122, #186, #187, #185) ──────────────────────
+ *
+ * Two presentations of one screen. On a cold load at `#/settings` it is the body of an
+ * ordinary `Screen`; reached from anywhere else it is a panel over the screen the player
+ * came from, which stays mounted underneath — `SettingsOverlay.tsx` says why. Everything
+ * below the overlay's own two rules is shared, so the controls cannot drift apart.
+ */
+
+.hh-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 44rem;
+}
+
+.hh-settings__immediate {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+.hh-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 6px;
+}
+
+.hh-settings__group > legend {
+  padding-inline: 0.4rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.hh-setting__label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* The options wrap rather than scroll: five palettes at 150% interface scale on a narrow
+ * screen is the case that would otherwise overflow, and §8.8 forbids horizontal scroll. */
+.hh-setting__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
+.hh-setting__option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hh-setting__note {
+  margin: 0;
+  font-size: 0.9em;
+  color: var(--fg-dim);
+}
+
+.hh-setting__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-dim);
+}
+
+/* A disabled control is dimmed and keeps its note, which is the part that explains it. */
+.hh-setting input:disabled + span,
+.hh-setting input:disabled {
+  opacity: 0.55;
+}
+
+/* ── The remapper (#187) ─────────────────────────────────────────────────── */
+
+.hh-bindings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-binding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hh-binding__action {
+  flex: 1 1 14rem;
+}
+
+.hh-binding__pending {
+  margin-inline-start: 0.5rem;
+  font-size: 0.85em;
+  color: var(--warn);
+}
+
+/* The conflict takes the whole row, because it is a question rather than a label. */
+.hh-binding__conflict,
+.hh-binding__message {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--warn);
+}
+
+.hh-keys {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.hh-keys kbd {
+  padding: 0.1rem 0.4rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 3px;
+  background: var(--bg-panel);
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+/* ── The Data group (#185) ───────────────────────────────────────────────── */
+
+.hh-data__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/*
+ * Not modal, deliberately. §8.6 keeps every notice non-blocking, and a confirmation that
+ * covered the screen would hide the very progress it is asking about.
+ */
+.hh-data__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border: var(--hh-line) solid var(--warn);
+  border-radius: 4px;
+}
+
+.hh-data__confirm h3 {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+.hh-data__outcome {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+/* ── Settings over a screen ──────────────────────────────────────────────── */
+
+.hh-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/*
+ * The scrim, as a pseudo-element rather than a translucent background.
+ *
+ * The screen underneath stays visible on purpose: a player adjusting the palette mid-plan
+ * should watch the plan restyle as they do it, which is the whole reason it is still
+ * mounted. That wants `--bg` at partial alpha, and the two obvious spellings are both
+ * unavailable — `color-mix()` is a colour literal as far as `app.css.test.ts` is
+ * concerned, correctly, and `opacity` on the container would fade the panel with it.
+ * A layer of its own carries the opacity and the panel sits above it.
+ */
+.hh-settings-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.72;
+}
+
+.hh-settings-overlay__panel {
+  position: relative;
+  overflow-y: auto;
+  width: min(48rem, 100%);
+  padding: 1.5rem;
+  border-inline-start: var(--hh-line) solid var(--grid);
+  background: var(--bg);
+}
+
+.hh-settings-overlay__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 1rem;
+}
+
+.hh-settings-overlay__header h2 {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .hh-settings-overlay__panel {
+    padding: 1rem;
+  }
+}

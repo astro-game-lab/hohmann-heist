@@ -105,8 +105,11 @@ describe('routing', () => {
     await mount();
     expect(el('screen')?.dataset['screen']).toBe('title');
 
-    await goTo('#/settings');
-    expect(el('screen')?.dataset['screen']).toBe('settings');
+    // `#/board` rather than `#/settings`: settings deliberately does *not* replace the
+    // screen it was opened from — see the settings block below — so it is the one route
+    // that cannot stand in for "any route" here.
+    await goTo('#/board');
+    expect(el('screen')?.dataset['screen']).toBe('board');
 
     // Back is a `hashchange` to the previous hash — the same path through the app.
     await goTo('#/');
@@ -118,6 +121,57 @@ describe('routing', () => {
     const hrefs = [...container.querySelectorAll('nav a')].map((a) => a.getAttribute('href'));
     expect(hrefs).toContain('#/board');
     expect(hrefs.every((h) => h?.startsWith('#/'))).toBe(true);
+  });
+});
+
+/**
+ * §8.3.12's screen, and the one thing about it that is not like the other routes — #122.
+ *
+ * *"Returning from settings goes back to where the player was, not to the board — a player
+ * adjusting the palette mid-plan must not lose their plan."* `Screen` is keyed by route,
+ * so routing to `#/settings` the ordinary way would unmount whatever was mounted. It
+ * therefore renders **over** the previous screen, which stays mounted underneath.
+ */
+describe('the settings route', () => {
+  it('opens over the screen it was reached from, leaving it mounted', async () => {
+    window.location.hash = '#/board';
+    await mount();
+    expect(el('screen')?.dataset['screen']).toBe('board');
+
+    await goTo('#/settings');
+    // The frame is still the board's — that is the assertion. If this ever reads
+    // `settings`, the screen underneath was unmounted and an uncommitted plan went with it.
+    expect(el('screen')?.dataset['screen']).toBe('board');
+    expect(el('settings-overlay')).not.toBeNull();
+    expect(el('settings')).not.toBeNull();
+  });
+
+  it('renders as an ordinary screen on a cold load, where there is nothing underneath', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    expect(el('screen')?.dataset['screen']).toBe('settings');
+    expect(el('settings-overlay')).toBeNull();
+    // The controls are the same ones either way.
+    expect(el('settings')).not.toBeNull();
+  });
+
+  it('closes back to the screen underneath', async () => {
+    window.location.hash = '#/board';
+    await mount();
+    await goTo('#/settings');
+    expect(el('settings-overlay')).not.toBeNull();
+
+    await goTo('#/board');
+    expect(el('settings-overlay')).toBeNull();
+    expect(el('screen')?.dataset['screen']).toBe('board');
+  });
+
+  it('shows all six of §8.3.12s groups', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    for (const group of ['display', 'accessibility', 'gameplay', 'audio', 'input', 'data']) {
+      expect(el(`settings-group-${group}`), group).not.toBeNull();
+    }
   });
 });
 
@@ -149,14 +203,14 @@ describe('focus', () => {
 
   it('moves to the new screen’s heading on a route change', async () => {
     await mount();
-    await goTo('#/settings');
+    await goTo('#/board');
     expect(document.activeElement).toBe(heading());
     expect(text('screen-heading').trim()).not.toBe('');
   });
 
   it('moves again on the next change, not only the first', async () => {
     await mount();
-    await goTo('#/settings');
+    await goTo('#/daily');
     await goTo('#/board');
     expect(document.activeElement).toBe(heading());
     expect(el('screen')?.dataset['screen']).toBe('board');

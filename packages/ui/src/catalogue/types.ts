@@ -699,6 +699,159 @@ export interface UiMessageParams {
    * one thing it is for. See `apps/web/src/version.ts`.
    */
   readonly 'debrief.build.label': Record<string, never>;
+
+  // ── §8.5.3's key names (#124, #187) ────────────────────────────────────────
+  //
+  // Only the keys whose label is a *word*. A printable character renders as itself —
+  // `,` is `,` in every locale, and an entry per glyph would be a table of identity
+  // functions — and a function key is a legend rather than a word. See
+  // `apps/web/src/planner/keymap.ts`.
+  readonly 'keys.label.ctrl': Record<string, never>;
+  readonly 'keys.label.shift': Record<string, never>;
+  readonly 'keys.label.space': Record<string, never>;
+  readonly 'keys.label.escape': Record<string, never>;
+  readonly 'keys.label.enter': Record<string, never>;
+  readonly 'keys.label.tab': Record<string, never>;
+  readonly 'keys.label.delete': Record<string, never>;
+  readonly 'keys.label.backspace': Record<string, never>;
+  readonly 'keys.label.home': Record<string, never>;
+  readonly 'keys.label.end': Record<string, never>;
+  readonly 'keys.label.arrowUp': Record<string, never>;
+  readonly 'keys.label.arrowDown': Record<string, never>;
+  readonly 'keys.label.arrowLeft': Record<string, never>;
+  readonly 'keys.label.arrowRight': Record<string, never>;
+  readonly 'keys.label.contextMenu': Record<string, never>;
+
+  // ── §8.3.12's settings screen (#122, #186, #187, #185) ─────────────────────
+  //
+  // One label per setting and one per enum option. Verbose, and the alternative is worse:
+  // a generic `settings.option` taking the value as a parameter would build a sentence
+  // from a fragment, which is exactly what this file's header forbids and what makes a
+  // second locale impossible.
+  readonly 'settings.immediate': Record<string, never>;
+  readonly 'settings.back': Record<string, never>;
+  readonly 'settings.group.display': Record<string, never>;
+  readonly 'settings.group.accessibility': Record<string, never>;
+  readonly 'settings.group.gameplay': Record<string, never>;
+  readonly 'settings.group.audio': Record<string, never>;
+  readonly 'settings.group.input': Record<string, never>;
+  readonly 'settings.group.data': Record<string, never>;
+  readonly 'settings.reset': Record<string, never>;
+  readonly 'settings.resetAll': Record<string, never>;
+  readonly 'settings.resetAll.confirm': Record<string, never>;
+
+  readonly 'settings.units.label': Record<string, never>;
+  readonly 'settings.units.metric': Record<string, never>;
+  readonly 'settings.units.si': Record<string, never>;
+  readonly 'settings.angles.label': Record<string, never>;
+  readonly 'settings.angles.degrees': Record<string, never>;
+  readonly 'settings.angles.radians': Record<string, never>;
+  readonly 'settings.timeFormat.label': Record<string, never>;
+  readonly 'settings.timeFormat.met': Record<string, never>;
+  readonly 'settings.timeFormat.tai': Record<string, never>;
+  readonly 'settings.theme.label': Record<string, never>;
+  readonly 'settings.theme.dark': Record<string, never>;
+  readonly 'settings.theme.light': Record<string, never>;
+  readonly 'settings.theme.system': Record<string, never>;
+  /** The honest note §8.3.12 requires for a group that is stored and inert — see #122. */
+  readonly 'settings.theme.note': Record<string, never>;
+  readonly 'settings.uiScale.label': Record<string, never>;
+  readonly 'settings.uiScale.value': { readonly percent: number };
+
+  readonly 'settings.palette.label': Record<string, never>;
+  readonly 'settings.palette.default': Record<string, never>;
+  readonly 'settings.palette.deuteranopia': Record<string, never>;
+  readonly 'settings.palette.protanopia': Record<string, never>;
+  readonly 'settings.palette.tritanopia': Record<string, never>;
+  readonly 'settings.palette.highContrast': Record<string, never>;
+  readonly 'settings.reduceMotion.label': Record<string, never>;
+  readonly 'settings.reduceMotion.system': Record<string, never>;
+  readonly 'settings.reduceMotion.on': Record<string, never>;
+  readonly 'settings.reduceMotion.off': Record<string, never>;
+  readonly 'settings.backgroundAnimation.label': Record<string, never>;
+  readonly 'settings.lineWeights.label': Record<string, never>;
+  readonly 'settings.verbosity.label': Record<string, never>;
+  readonly 'settings.verbosity.terse': Record<string, never>;
+  readonly 'settings.verbosity.verbose': Record<string, never>;
+
+  readonly 'settings.assists.label': Record<string, never>;
+  readonly 'settings.assists.hint': Record<string, never>;
+  readonly 'settings.coachMarks.label': Record<string, never>;
+  readonly 'settings.confirmCommit.label': Record<string, never>;
+  readonly 'settings.autoSkipAfter.label': Record<string, never>;
+  readonly 'settings.autoSkipAfter.value': { readonly count: number };
+
+  readonly 'settings.audio.note': Record<string, never>;
+  readonly 'settings.audioMaster.label': Record<string, never>;
+  readonly 'settings.audioEffects.label': Record<string, never>;
+  readonly 'settings.audioAmbience.label': Record<string, never>;
+  readonly 'settings.audioMuted.label': Record<string, never>;
+  readonly 'settings.percent.value': { readonly percent: number };
+
+  readonly 'settings.pointerSensitivity.label': Record<string, never>;
+  readonly 'settings.invertScrollZoom.label': Record<string, never>;
+  readonly 'settings.bindings.label': Record<string, never>;
+  readonly 'settings.bindings.reserved': Record<string, never>;
+  readonly 'settings.bindings.change': { readonly action: string };
+  /** The button's visible text; `settings.bindings.change` is its accessible name. */
+  readonly 'settings.bindings.changeShort': Record<string, never>;
+  readonly 'settings.bindings.capturing': Record<string, never>;
+  readonly 'settings.bindings.unbound': Record<string, never>;
+  readonly 'settings.bindings.pending': Record<string, never>;
+  readonly 'settings.bindings.conflict': { readonly action: string };
+  readonly 'settings.bindings.swap': Record<string, never>;
+  readonly 'settings.bindings.cancel': Record<string, never>;
+  readonly 'settings.bindings.resetOne': { readonly action: string };
+  readonly 'settings.bindings.resetAll': Record<string, never>;
+  readonly 'settings.bindings.rejected': Record<string, never>;
+  readonly 'settings.bindings.scope.briefing': Record<string, never>;
+  readonly 'settings.bindings.scope.planner': Record<string, never>;
+  readonly 'settings.bindings.scope.execution': Record<string, never>;
+  readonly 'settings.bindings.scope.debrief': Record<string, never>;
+  readonly 'settings.bindings.scope.everywhere': Record<string, never>;
+
+  readonly 'settings.handle.label': Record<string, never>;
+  readonly 'settings.handle.note': Record<string, never>;
+  readonly 'settings.export.label': Record<string, never>;
+  readonly 'settings.export.hint': Record<string, never>;
+  readonly 'settings.import.label': Record<string, never>;
+  readonly 'settings.clear.label': Record<string, never>;
+  readonly 'settings.whatWeStore': Record<string, never>;
+  /**
+   * What an import or a clear is about to replace, in concrete terms.
+   *
+   * Five counts rather than a rendered phrase. #185 asks the confirmation to state
+   * *"contracts completed, best medals"*, and a message built from a fragment parameter
+   * cannot be translated — the medal names and their pluralisation belong inside the
+   * sentence, in the language the sentence is written in.
+   *
+   * One field per medal rather than a list of `{ medal, count }`, because
+   * `MessageParamValue` admits a string, a number, and a list of strings, and widening it
+   * to carry a record would let any message take a shape only its own renderer
+   * understands. Four numbers is the same information inside the existing contract.
+   */
+  readonly 'settings.confirm.replacing': {
+    readonly contracts: number;
+    readonly bronze: number;
+    readonly silver: number;
+    readonly gold: number;
+    readonly clean: number;
+  };
+  readonly 'settings.confirm.nothing': Record<string, never>;
+  readonly 'settings.confirm.importHeading': Record<string, never>;
+  readonly 'settings.confirm.clearHeading': Record<string, never>;
+  readonly 'settings.confirm.exportFirst': Record<string, never>;
+  readonly 'settings.confirm.import': Record<string, never>;
+  readonly 'settings.confirm.clear': Record<string, never>;
+  readonly 'settings.confirm.cancel': Record<string, never>;
+  readonly 'settings.import.unreadable': Record<string, never>;
+  readonly 'settings.import.futureVersion': {
+    readonly found: number;
+    readonly supported: number;
+  };
+  readonly 'settings.import.fileUnreadable': Record<string, never>;
+  readonly 'settings.import.done': Record<string, never>;
+  readonly 'settings.cleared': Record<string, never>;
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

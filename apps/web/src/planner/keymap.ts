@@ -56,6 +56,8 @@
  * (`#/settings`), so there is no binding to lose. The reserved set protects the capture
  * control; the routing protects the screen.
  */
+import type { MessageKey } from '@hh/ui';
+
 import { BINDINGS, keysFor, variantsOf, type Binding, type Rebinds } from './keys.js';
 
 /**
@@ -165,7 +167,7 @@ export const withSwap = (
  * states the rule as *"every non-printable key has a name"* with the function keys
  * exempted, so a row that acquires a genuinely nameless key is still caught.
  */
-export const KEY_LABEL_KEYS: Readonly<Record<string, string>> = Object.freeze({
+export const KEY_LABEL_KEYS: Readonly<Record<string, MessageKey>> = Object.freeze({
   ' ': 'keys.label.space',
   Spacebar: 'keys.label.space',
   Escape: 'keys.label.escape',
@@ -193,7 +195,7 @@ export interface KeyLabel {
   readonly ctrl: boolean;
   readonly shift: boolean;
   /** A catalogue key when the key has a name, otherwise the glyph itself. */
-  readonly parts: readonly { readonly messageKey?: string; readonly glyph?: string }[];
+  readonly parts: readonly { readonly messageKey?: MessageKey; readonly glyph?: string }[];
 }
 
 export const labelFor = (binding: Binding, rebinds: Rebinds): KeyLabel => {

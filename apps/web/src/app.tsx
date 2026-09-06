@@ -32,6 +32,8 @@ import { screenTransitionMs, useReducedMotion } from './motion.js';
 import { onRouteChange, parseHash, type Route } from './router.js';
 import {
   browserStorage,
+  clearSave,
+  emptySave,
   loadSave,
   medalRank,
   writeSave,
@@ -39,6 +41,8 @@ import {
   type SaveV1,
   type StoredSettings,
 } from './save/index.js';
+import { SettingsOverlay } from './settings/SettingsOverlay.js';
+import { SettingsScreen } from './settings/SettingsScreen.js';
 import { SettingsProvider, useSettings } from './settings/context.js';
 import { applyDocumentSettings } from './settings/document.js';
 import { UnknownContract } from './screens/Briefing.js';
@@ -255,14 +259,20 @@ const withResult = (save: SaveV1, id: string, outcome: Outcome, replay: string):
  * them back through the same context every other consumer uses, so there is exactly one
  * path from a stored setting to a rendered value and no shortcut for the shell.
  */
-const AppShell = ({ saved, onAccept, onComplete }: AppShellProps): JSX.Element => {
+const AppShell = ({
+  saved,
+  onAccept,
+  onComplete,
+  onReplaceSave,
+  onClearSave,
+}: AppShellProps): JSX.Element => {
   // Resolve the route during the first render rather than in an effect. Effects
   // run after paint, so deferring this would show a placeholder for a frame on
   // every load — and would make the route unobservable to a synchronous test.
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => onRouteChange(setRoute), []);
 
-  const { settings } = useSettings();
+  const { settings, keybindings, set, resetAll, setKeybindings } = useSettings();
   const reducedMotion = useReducedMotion(settings['accessibility.reduceMotion']);
 
   // §9.2's palette and the other three document-level settings, published onto the root
@@ -273,6 +283,25 @@ const AppShell = ({ saved, onAccept, onComplete }: AppShellProps): JSX.Element =
   useEffect(() => {
     applyDocumentSettings(document.documentElement, settings);
   }, [settings]);
+
+  /**
+   * The screen Settings is showing over — #122's *"returning goes back to where the player
+   * was"*.
+   *
+   * A ref rather than state, and it is the whole mechanism. `Screen` is keyed by
+   * `route.path`, so routing to `#/settings` would unmount whatever was mounted and take
+   * an uncommitted plan with it. Holding the last non-settings route means `app.tsx` can
+   * keep rendering *that* screen, under its own unchanged key, and put the settings dialog
+   * over the top: nothing unmounts, so there is no state to preserve.
+   *
+   * Written in an effect so it lags by exactly one route — during the render in which
+   * `route` is settings, this still holds where the player came from. Null on a cold load
+   * at `#/settings`, which is the case that renders as an ordinary full screen.
+   */
+  const cameFrom = useRef<Route | null>(null);
+  useEffect(() => {
+    if (route.name !== 'settings') cameFrom.current = route;
+  }, [route]);
 
   // Focus moves to the new screen's heading on every route change *except the first*.
   // On a cold load there is no previous screen to have stranded anyone on, and taking
@@ -292,20 +321,52 @@ const AppShell = ({ saved, onAccept, onComplete }: AppShellProps): JSX.Element =
   // actually plans a mission would be keeping the prototype after the product.
   if (route.name === 'scene') return <ScenePage />;
 
+  const settingsProps = {
+    t,
+    settings,
+    rebinds: keybindings,
+    save: saved.save,
+    onSet: set,
+    onSetRebinds: setKeybindings,
+    onResetAll: resetAll,
+    onReplaceSave,
+    onClearSave,
+  };
+
+  // Settings over a screen, or Settings as a screen. `beneath` is null exactly when there
+  // is nothing to go back to.
+  const beneath = route.name === 'settings' ? cameFrom.current : null;
+  const framed = beneath ?? route;
+
   return (
     // Keyed by path, so a route change unmounts one screen and mounts the next: that is
     // what re-runs the entry transition and what stops a screen's local state outliving
-    // the contract it was opened for.
+    // the contract it was opened for. When Settings opens over a screen the key is that
+    // screen's and does not change, which is what keeps its state alive.
     <Screen
-      key={route.path}
-      name={route.name}
-      heading={headingFor(route, t)}
+      key={framed.path}
+      name={framed.name}
+      heading={headingFor(framed, t)}
       focusHeading={focusHeading}
       transitionMs={screenTransitionMs(reducedMotion)}
       t={t}
     >
       {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
-      {bodyFor(route, t, saved.save, onAccept, onComplete)}
+      {route.name === 'settings' && beneath === null ? (
+        <SettingsScreen {...settingsProps} />
+      ) : (
+        bodyFor(framed, t, saved.save, onAccept, onComplete)
+      )}
+      {beneath === null ? null : (
+        <SettingsOverlay
+          {...settingsProps}
+          onClose={() => {
+            // Back rather than a fixed route: the browser knows where the player came
+            // from, and this makes its own Back button and this one agree.
+            window.history.back();
+          }}
+        />
+      )}
     </Screen>
   );
 };
@@ -314,6 +375,10 @@ interface AppShellProps {
   readonly saved: LoadOutcome;
   readonly onAccept: (id: string) => void;
   readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
+  /** #185's import: the whole save, replaced. */
+  readonly onReplaceSave: (save: SaveV1) => void;
+  /** #185's "clear all local data". */
+  readonly onClearSave: () => void;
 }
 
 export const App = (): JSX.Element => {
@@ -354,9 +419,35 @@ export const App = (): JSX.Element => {
     });
   }, []);
 
+  /**
+   * #185's import. The imported document replaces the save wholesale.
+   *
+   * It is applied to memory first and persisted second, and a failed write is not undone:
+   * FR-702's rule is that storage failing must not stop the game, and discarding progress
+   * the player just restored because the quota is full would be the most destructive
+   * possible reading of that. The session keeps it; #184's notice says it will not survive
+   * a reload.
+   */
+  const replaceSave = useCallback((next: SaveV1): void => {
+    writeSave(storage, next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  }, []);
+
+  /** #185's "clear all local data" — the one key removed, and the game keeps running. */
+  const clearAll = useCallback((): void => {
+    clearSave(storage);
+    setSaved({ status: 'empty', save: emptySave() });
+  }, []);
+
   return (
     <SettingsProvider stored={saved.save.settings} onChange={changeSettings}>
-      <AppShell saved={saved} onAccept={acceptContract} onComplete={completeContract} />
+      <AppShell
+        saved={saved}
+        onAccept={acceptContract}
+        onComplete={completeContract}
+        onReplaceSave={replaceSave}
+        onClearSave={clearAll}
+      />
     </SettingsProvider>
   );
 };
