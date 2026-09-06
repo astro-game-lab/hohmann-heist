@@ -40,6 +40,37 @@
   --hh-screen-in-duration: 160ms;
 
   /*
+   * §8.3.12's UI scale, 90–150%, as a unitless multiplier on the root font size.
+   *
+   * One property rather than a size per component: every length in this stylesheet that
+   * should scale is written in `rem`, so multiplying the root size moves all of them
+   * together and a new component inherits the behaviour without knowing the setting
+   * exists. `settings/document.ts` publishes it; the declaration here is the value before
+   * any script has run, and it must always resolve or the `calc` below collapses.
+   *
+   * Deliberately *not* applied with `zoom` or a `transform`: both scale the rendered
+   * result including the canvas bitmap, which would make the orbit view blurry rather
+   * than bigger, and neither reflows text.
+   */
+  --hh-ui-scale: 1;
+
+  /*
+   * §8.3.12's "increase line weights", as three widths every rule reads.
+   *
+   * Three rather than one because the stylesheet already has three: a hairline for panel
+   * and control edges, a heavier ring for focus (§8.8 requires it be visible and never
+   * suppressed), and a thick rule for the bars that mark a section. Scaling them with a
+   * single multiplier would take the focus ring to 4 px while the hairline reached 2 px,
+   * which is not "heavier lines" so much as "one enormous line" — so each has its own
+   * pair of values and `[data-line-weights]` below states the heavy set outright.
+   */
+  --hh-line: 1px;
+  --hh-line-strong: 2px;
+  --hh-rule: 3px;
+
+  font-size: calc(100% * var(--hh-ui-scale));
+
+  /*
    * §9.2's thirteen tokens and §8.3.2's medal ramp, in the default palette.
    *
    * **These are duplicates, and a test keeps them honest.** `@hh/ui`'s palette module is
@@ -96,6 +127,33 @@ body {
 }
 
 /*
+ * §8.3.12's "increase line weights" (#186, #122).
+ *
+ * An attribute rather than a class, and its *presence* rather than its value — see
+ * `settings/document.ts`. Every width below is one step up from the default set, chosen so
+ * the hairline becomes visible on a low-contrast display without the focus ring growing
+ * into the content beside it.
+ */
+:root[data-line-weights] {
+  --hh-line: 2px;
+  --hh-line-strong: 3px;
+  --hh-rule: 5px;
+}
+
+/*
+ * §8.3.12's "disable background animation".
+ *
+ * Distinct from reduce-motion, which collapses *transitions* — the durations above. This
+ * is for the ambient, always-running kind, which has no duration to collapse because it
+ * never ends. Nothing in the application has one yet; the rule is stated here so the first
+ * thing that does inherits the opt-out rather than inventing a second one, and so the
+ * control is not a switch wired to nothing.
+ */
+:root[data-no-background-animation] .hh-background-animated {
+  animation: none;
+}
+
+/*
  * §9.4 calls this a cross-fade, and it is a fade-in: the outgoing screen is unmounted
  * before the incoming one renders, so there is nothing to cross with. Holding both in
  * the document to cross them properly would mean two live screens — two focus targets,
@@ -122,7 +180,7 @@ body {
  * is the same failure as no ring at all, for the user who needs it.
  */
 .hh-screen__heading:focus {
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: 3px;
 }
 
@@ -269,10 +327,27 @@ body {
   gap: 12px;
 }
 
+/*
+ * #184's two storage states. Laid out as a row so the export affordance sits beside the
+ * sentence rather than under it — the notice is non-blocking and should not push the
+ * screen down more than it must.
+ */
+.hh-save-notice--storage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hh-save-notice--storage p {
+  flex: 1 1 20rem;
+  margin: 0;
+}
+
 .hh-save-notice {
   max-width: 62ch;
   padding: 8px 12px;
-  border: 1px solid currentColor;
+  border: var(--hh-line) solid currentColor;
   border-radius: 4px;
 }
 
@@ -334,14 +409,14 @@ body {
 
 .hh-planner__tabs button[aria-selected='true'] {
   font-weight: 600;
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: -2px;
 }
 
 .hh-planner__refusal {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--bad);
+  border-left: var(--hh-rule) solid var(--bad);
 }
 
 @media (min-width: 1024px) {
@@ -490,7 +565,7 @@ body {
 .hh-timeline__track {
   position: relative;
   height: 34px;
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 3px;
 }
 
@@ -539,13 +614,13 @@ body {
   padding: 0;
   transform: translateX(-50%) rotate(45deg);
   background: var(--plan);
-  border: 1px solid var(--bg);
+  border: var(--hh-line) solid var(--bg);
   cursor: pointer;
 }
 
 .hh-timeline__node[aria-pressed='true'] {
   background: var(--accent);
-  outline: 2px solid var(--accent);
+  outline: var(--hh-line-strong) solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -573,14 +648,14 @@ body {
 }
 
 .hh-plan__row {
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 3px;
   padding: 4px 6px;
 }
 
 .hh-plan__row[data-selected='true'] {
   border-color: var(--accent);
-  outline: 1px solid var(--accent);
+  outline: var(--hh-line) solid var(--accent);
 }
 
 .hh-plan__select {
@@ -641,7 +716,7 @@ body {
   gap: 2px;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 6px;
 }
 
@@ -688,7 +763,7 @@ body {
   padding: 8px 12px;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid var(--accent);
+  border: var(--hh-line) solid var(--accent);
 }
 
 .hh-skip-link:focus {
@@ -818,7 +893,7 @@ body {
   white-space: nowrap;
   background: var(--bg-panel);
   color: var(--fg);
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 3px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -934,7 +1009,7 @@ body {
 .hh-commit__history {
   padding: 8px 12px;
   background: none;
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 4px;
   font: inherit;
   color: inherit;
@@ -1017,7 +1092,7 @@ body {
  */
 
 .hh-editor {
-  border: 1px solid var(--grid);
+  border: var(--hh-line) solid var(--grid);
   border-radius: 4px;
   padding: 8px 10px;
   display: flex;
@@ -1163,7 +1238,7 @@ body {
 .hh-planner__committed {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--ok);
+  border-left: var(--hh-rule) solid var(--ok);
 }
 
 .hh-orbit__control {
@@ -1177,7 +1252,7 @@ body {
 
 .hh-editor__snap [role='radio'][aria-checked='true'] {
   font-weight: 600;
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: -2px;
 }
 
@@ -1235,7 +1310,7 @@ body {
 .hh-execution__paused {
   margin: 0;
   padding: 6px 10px;
-  border-left: 3px solid var(--warn);
+  border-left: var(--hh-rule) solid var(--warn);
 }
 
 .hh-execution__transport {
@@ -1280,7 +1355,7 @@ body {
    does — §8.8: no information by colour alone. */
 .hh-execution__speeds button[aria-pressed='true'] {
   font-weight: 600;
-  outline: 2px solid currentColor;
+  outline: var(--hh-line-strong) solid currentColor;
   outline-offset: -2px;
 }
 
@@ -1470,7 +1545,7 @@ body {
 .hh-debrief__miss {
   margin: 0;
   padding: 8px 12px;
-  border-inline-start: 3px solid var(--bad);
+  border-inline-start: var(--hh-rule) solid var(--bad);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1509,7 +1584,7 @@ body {
    answer than ours, which means ours is wrong. */
 .hh-debrief__beat-par {
   padding: 8px 12px;
-  border-inline-start: 3px solid var(--warn);
+  border-inline-start: var(--hh-rule) solid var(--warn);
 }
 
 .hh-debrief__beat-par p {
@@ -1537,4 +1612,349 @@ body {
   margin: 0;
   font-size: 0.9rem;
   opacity: 0.7;
+}
+
+/* ── §8.3.12's settings screen (#122, #186, #187, #185) ──────────────────────
+ *
+ * Two presentations of one screen. On a cold load at `#/settings` it is the body of an
+ * ordinary `Screen`; reached from anywhere else it is a panel over the screen the player
+ * came from, which stays mounted underneath — `SettingsOverlay.tsx` says why. Everything
+ * below the overlay's own two rules is shared, so the controls cannot drift apart.
+ */
+
+.hh-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 44rem;
+}
+
+.hh-settings__immediate {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+.hh-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 6px;
+}
+
+.hh-settings__group > legend {
+  padding-inline: 0.4rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.hh-setting__label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* The options wrap rather than scroll: five palettes at 150% interface scale on a narrow
+ * screen is the case that would otherwise overflow, and §8.8 forbids horizontal scroll. */
+.hh-setting__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
+.hh-setting__option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hh-setting__note {
+  margin: 0;
+  font-size: 0.9em;
+  color: var(--fg-dim);
+}
+
+.hh-setting__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-dim);
+}
+
+/* A disabled control is dimmed and keeps its note, which is the part that explains it. */
+.hh-setting input:disabled + span,
+.hh-setting input:disabled {
+  opacity: 0.55;
+}
+
+/* ── The remapper (#187) ─────────────────────────────────────────────────── */
+
+/* The map's own heading, since the Input group also holds the pointer settings. */
+.hh-bindings__heading {
+  margin-block: 0.5rem 0;
+}
+
+/* Reset-all's confirmation, laid out like the Data group's for the same reason: it is a
+ * question in the flow rather than something covering the screen. */
+.hh-settings__reset-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: flex-start;
+}
+
+.hh-settings__reset-all p {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+.hh-bindings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hh-binding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hh-binding__action {
+  flex: 1 1 14rem;
+}
+
+.hh-binding__pending {
+  margin-inline-start: 0.5rem;
+  font-size: 0.85em;
+  color: var(--warn);
+}
+
+/* The conflict takes the whole row, because it is a question rather than a label. */
+.hh-binding__conflict,
+.hh-binding__message {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--warn);
+}
+
+.hh-keys {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.hh-keys kbd {
+  padding: 0.1rem 0.4rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 3px;
+  background: var(--bg-panel);
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+/* ── The Data group (#185) ───────────────────────────────────────────────── */
+
+.hh-data__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/*
+ * Not modal, deliberately. §8.6 keeps every notice non-blocking, and a confirmation that
+ * covered the screen would hide the very progress it is asking about.
+ */
+.hh-data__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border: var(--hh-line) solid var(--warn);
+  border-radius: 4px;
+}
+
+.hh-data__confirm h3 {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+.hh-data__outcome {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+/* ── Settings over a screen ──────────────────────────────────────────────── */
+
+.hh-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/*
+ * The scrim, as a pseudo-element rather than a translucent background.
+ *
+ * The screen underneath stays visible on purpose: a player adjusting the palette mid-plan
+ * should watch the plan restyle as they do it, which is the whole reason it is still
+ * mounted. That wants `--bg` at partial alpha, and the two obvious spellings are both
+ * unavailable — `color-mix()` is a colour literal as far as `app.css.test.ts` is
+ * concerned, correctly, and `opacity` on the container would fade the panel with it.
+ * A layer of its own carries the opacity and the panel sits above it.
+ */
+.hh-settings-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.72;
+}
+
+.hh-settings-overlay__panel {
+  position: relative;
+  overflow-y: auto;
+  width: min(48rem, 100%);
+  padding: 1.5rem;
+  border-inline-start: var(--hh-line) solid var(--grid);
+  background: var(--bg);
+}
+
+.hh-settings-overlay__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 1rem;
+}
+
+.hh-settings-overlay__header h2 {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .hh-settings-overlay__panel {
+    padding: 1rem;
+  }
+}
+
+/* ── §8.5.3's keyboard help overlay (#124) ───────────────────────────────────
+ *
+ * §8.3.4's HUD shows a `?` affordance and §8.8 requires that the keyboard-only path not be
+ * the only path, so the shell carries one button that opens the overlay from anywhere.
+ * Fixed to the corner rather than placed in each screen's chrome: there are nine routes
+ * and only two of them have chrome to put it in.
+ */
+
+.hh-help-affordance {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  z-index: 10;
+}
+
+.hh-help {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* The scrim, as its own layer — `app.css.test.ts` reads `color-mix()` as a colour literal,
+ * correctly, and `opacity` on the container would fade the panel with it. */
+.hh-help::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.82;
+}
+
+.hh-help__panel {
+  position: relative;
+  overflow-y: auto;
+  max-height: 100%;
+  width: min(42rem, 100%);
+  padding: 1.25rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+
+.hh-help__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hh-help__header h2 {
+  margin: 0;
+}
+
+.hh-help__scope h3 {
+  margin-block: 1rem 0.4rem;
+  font-size: 0.9em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-help__list {
+  margin: 0;
+}
+
+/*
+ * Two columns that collapse to one rather than scrolling. §8.8 forbids horizontal scroll,
+ * and twenty-four action/key pairs at 150% interface scale on a narrow screen is precisely
+ * the case that would produce it.
+ */
+.hh-help__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding-block: 0.15rem;
+}
+
+.hh-help__row dt {
+  flex: 1 1 16rem;
+}
+
+.hh-help__row dd {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.hh-help__pending {
+  font-size: 0.85em;
+  color: var(--warn);
+}
+
+.hh-help__remap {
+  display: inline-block;
+  margin-block-start: 1rem;
 }

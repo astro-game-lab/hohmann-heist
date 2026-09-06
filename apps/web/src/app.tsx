@@ -25,25 +25,36 @@
 import { createCatalogue, type Catalogue } from '@hh/ui';
 import type { Outcome } from '@hh/game';
 import type { JSX } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { contractById } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
-import { applyPalette, usePalette } from './palette.js';
 import { onRouteChange, parseHash, type Route } from './router.js';
 import {
   browserStorage,
+  clearSave,
+  emptySave,
   loadSave,
   medalRank,
   writeSave,
   type LoadOutcome,
   type SaveV1,
+  type StoredSettings,
 } from './save/index.js';
+import { HelpOverlay } from './help/HelpOverlay.js';
+import { actionFor, isTextEntryTarget, type Screen as KeyScope } from './planner/keys.js';
+import { KeyboardScopeProvider } from './planner/scope.js';
+import { downloadSave } from './save/download.js';
+import { SettingsOverlay } from './settings/SettingsOverlay.js';
+import { SettingsScreen } from './settings/SettingsScreen.js';
+import { SettingsProvider, useSettings } from './settings/context.js';
+import { applyDocumentSettings } from './settings/document.js';
 import { UnknownContract } from './screens/Briefing.js';
 import { ContractScreen } from './screens/ContractScreen.js';
 import { NotFound } from './screens/NotFound.js';
 import { Placeholder } from './screens/Placeholder.js';
 import { SaveNotice } from './screens/SaveNotice.js';
+import { StorageNotice, type StorageProblem } from './screens/StorageNotice.js';
 import { Screen } from './screens/Screen.js';
 import { ScenePage } from './scene-harness/ScenePage.js';
 
@@ -245,44 +256,103 @@ const withResult = (save: SaveV1, id: string, outcome: Outcome, replay: string):
   };
 };
 
-export const App = (): JSX.Element => {
+/**
+ * The shell, inside the settings context.
+ *
+ * Split from {@link App} for one structural reason: a component cannot consume a context
+ * it provides. `App` owns the save — which is where the settings live — and this reads
+ * them back through the same context every other consumer uses, so there is exactly one
+ * path from a stored setting to a rendered value and no shortcut for the shell.
+ */
+const AppShell = ({
+  saved,
+  storageProblem,
+  onAccept,
+  onComplete,
+  onExportSave,
+  onDismissStorageNotice,
+  onReplaceSave,
+  onClearSave,
+}: AppShellProps): JSX.Element => {
   // Resolve the route during the first render rather than in an effect. Effects
   // run after paint, so deferring this would show a placeholder for a frame on
   // every load — and would make the route unobservable to a synchronous test.
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => onRouteChange(setRoute), []);
 
-  const reducedMotion = useReducedMotion();
+  const { settings, keybindings, set, resetAll, setKeybindings } = useSettings();
+  const reducedMotion = useReducedMotion(settings['accessibility.reduceMotion']);
 
-  // §9.2's palette, published onto the document element so every rule and every canvas
-  // below resolves against the same thirteen values (#116). An effect rather than a render
-  // -time write because it touches the document outside this tree; the stylesheet already
-  // carries the default palette, so the first paint is correct before this runs and this
-  // only ever changes it.
-  const palette = usePalette();
+  /**
+   * §8.5.3's `?` — the help overlay (#124).
+   *
+   * The handler lives here rather than on any screen, for the reason `?` is scoped to
+   * *everywhere*: the overlay is not a planner feature, and a screen that had to install
+   * it would be a screen that could forget. The two screens that do handle keys return on
+   * the `help` action before their own `preventDefault`, so opening the overlay during a
+   * run neither pauses playback nor advances it and opening it while planning does not
+   * touch the plan.
+   *
+   * The scope is reported upward by whichever screen is showing — see `planner/scope.ts`.
+   * `?` resolves on every scope, so it is only the overlay's section order that depends on
+   * it; `'briefing'` is a safe stand-in for resolution when there is no contract open.
+   */
+  const [scope, setScope] = useState<KeyScope | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+
   useEffect(() => {
-    applyPalette(document.documentElement, palette);
-  }, [palette]);
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // `isTextEntryTarget`, not `isTypingTarget`: most of the settings screen is
+      // checkboxes and radios, and treating those as typing would make the overlay
+      // unreachable from the screen a confused player is most likely to be on. Typing `?`
+      // into the handle field still does not open it.
+      if (isTextEntryTarget(event.target)) return;
+      const action = actionFor(
+        scope ?? 'briefing',
+        event.key,
+        { shift: event.shiftKey, ctrl: event.ctrlKey },
+        keybindings,
+      );
+      if (action?.kind !== 'help') return;
+      event.preventDefault();
+      setHelpOpen((open) => !open);
+    };
 
-  // Read once, on the first render rather than in an effect: the briefing needs the
-  // attempt count in the markup it first paints, and a save that arrived a frame later
-  // would show "attempts: 0" and then correct itself.
-  const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [keybindings, scope]);
 
-  const acceptContract = (id: string): void => {
-    const next = withAttempt(saved.save, id);
-    // A write that fails is not the player's problem right now — they are on their way to
-    // the planner. #167 owns the notice; what matters here is that it cannot throw.
-    writeSave(storage, next);
-    setSaved({ status: 'loaded', save: next, migrated: false });
-  };
+  const scopeApi = useMemo(() => ({ scope, setScope }), [scope]);
 
-  const completeContract = (id: string, outcome: Outcome, replay: string): void => {
-    const next = withResult(saved.save, id, outcome, replay);
-    if (next === saved.save) return;
-    writeSave(storage, next);
-    setSaved({ status: 'loaded', save: next, migrated: false });
-  };
+  // §9.2's palette and the other three document-level settings, published onto the root
+  // element so every rule and every canvas below resolves against the same values
+  // (#116, #186). An effect rather than a render-time write because it touches the
+  // document outside this tree; the stylesheet already carries the defaults, so the first
+  // paint is correct before this runs and this only ever changes it.
+  useEffect(() => {
+    applyDocumentSettings(document.documentElement, settings);
+  }, [settings]);
+
+  /**
+   * The screen Settings is showing over — #122's *"returning goes back to where the player
+   * was"*.
+   *
+   * A ref rather than state, and it is the whole mechanism. `Screen` is keyed by
+   * `route.path`, so routing to `#/settings` would unmount whatever was mounted and take
+   * an uncommitted plan with it. Holding the last non-settings route means `app.tsx` can
+   * keep rendering *that* screen, under its own unchanged key, and put the settings dialog
+   * over the top: nothing unmounts, so there is no state to preserve.
+   *
+   * Written in an effect so it lags by exactly one route — during the render in which
+   * `route` is settings, this still holds where the player came from. Null on a cold load
+   * at `#/settings`, which is the case that renders as an ordinary full screen.
+   */
+  const cameFrom = useRef<Route | null>(null);
+  useEffect(() => {
+    if (route.name !== 'settings') cameFrom.current = route;
+  }, [route]);
 
   // Focus moves to the new screen's heading on every route change *except the first*.
   // On a cold load there is no previous screen to have stranded anyone on, and taking
@@ -302,20 +372,229 @@ export const App = (): JSX.Element => {
   // actually plans a mission would be keeping the prototype after the product.
   if (route.name === 'scene') return <ScenePage />;
 
+  const settingsProps = {
+    t,
+    settings,
+    rebinds: keybindings,
+    save: saved.save,
+    onSet: set,
+    onSetRebinds: setKeybindings,
+    onResetAll: resetAll,
+    onReplaceSave,
+    onClearSave,
+  };
+
+  // Settings over a screen, or Settings as a screen. `beneath` is null exactly when there
+  // is nothing to go back to.
+  const beneath = route.name === 'settings' ? cameFrom.current : null;
+  const framed = beneath ?? route;
+
   return (
-    // Keyed by path, so a route change unmounts one screen and mounts the next: that is
-    // what re-runs the entry transition and what stops a screen's local state outliving
-    // the contract it was opened for.
-    <Screen
-      key={route.path}
-      name={route.name}
-      heading={headingFor(route, t)}
-      focusHeading={focusHeading}
-      transitionMs={screenTransitionMs(reducedMotion)}
-      t={t}
-    >
-      {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
-      {bodyFor(route, t, saved.save, acceptContract, completeContract)}
-    </Screen>
+    <KeyboardScopeProvider value={scopeApi}>
+      {/* Keyed by path, so a route change unmounts one screen and mounts the next: that is
+        what re-runs the entry transition and what stops a screen's local state outliving
+        the contract it was opened for. When Settings opens over a screen the key is that
+        screen's and does not change, which is what keeps its state alive. */}
+      <Screen
+        key={framed.path}
+        name={framed.name}
+        heading={headingFor(framed, t)}
+        focusHeading={focusHeading}
+        transitionMs={screenTransitionMs(reducedMotion)}
+        t={t}
+      >
+        {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
+        {storageProblem === null ? null : (
+          <StorageNotice
+            t={t}
+            problem={storageProblem}
+            onExport={onExportSave}
+            onDismiss={onDismissStorageNotice}
+          />
+        )}
+        {route.name === 'settings' && beneath === null ? (
+          <SettingsScreen {...settingsProps} />
+        ) : (
+          bodyFor(framed, t, saved.save, onAccept, onComplete)
+        )}
+        {/*
+        §8.5.3's `?` needs a pointer route too — the keyboard-only path cannot be the only
+        path (#124). One affordance in the shell rather than one per screen, for the same
+        reason the handler is here.
+      */}
+        <button
+          type="button"
+          class="hh-help-affordance"
+          data-testid="open-help"
+          onClick={() => {
+            setHelpOpen(true);
+          }}
+        >
+          {t('help.open', {})}
+        </button>
+        {helpOpen ? (
+          <HelpOverlay
+            t={t}
+            rebinds={keybindings}
+            scope={scope}
+            onClose={() => {
+              setHelpOpen(false);
+            }}
+          />
+        ) : null}
+        {beneath === null ? null : (
+          <SettingsOverlay
+            {...settingsProps}
+            onClose={() => {
+              // Back rather than a fixed route: the browser knows where the player came
+              // from, and this makes its own Back button and this one agree.
+              window.history.back();
+            }}
+          />
+        )}
+      </Screen>
+    </KeyboardScopeProvider>
+  );
+};
+
+interface AppShellProps {
+  readonly saved: LoadOutcome;
+  /** #184: which storage state to report, or null for none and for one dismissed. */
+  readonly storageProblem: StorageProblem | null;
+  readonly onExportSave: () => void;
+  readonly onDismissStorageNotice: () => void;
+  readonly onAccept: (id: string) => void;
+  readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
+  /** #185's import: the whole save, replaced. */
+  readonly onReplaceSave: (save: SaveV1) => void;
+  /** #185's "clear all local data". */
+  readonly onClearSave: () => void;
+}
+
+export const App = (): JSX.Element => {
+  // Read once, on the first render rather than in an effect: the briefing needs the
+  // attempt count in the markup it first paints, and a save that arrived a frame later
+  // would show "attempts: 0" and then correct itself.
+  const [saved, setSaved] = useState<LoadOutcome>(() => loadSave(storage));
+
+  /**
+   * #184's notice state — which storage problem to report, and whether it was dismissed.
+   *
+   * `unavailable` is known at load and is true for the whole session. `full` is discovered
+   * at a write and is a *change*: saving used to work and has stopped, which is why it has
+   * to appear at that moment rather than at the next load.
+   *
+   * Dismissal is per problem rather than a single boolean, so dismissing the
+   * load-time notice does not also suppress a quota failure that happens an hour later —
+   * that is a different thing going wrong and the player has not been told about it.
+   * Within a problem it stays dismissed for the session: a quota notice that reappeared on
+   * every subsequent write would be a modal built out of a banner.
+   */
+  const [storageProblem, setStorageProblem] = useState<StorageProblem | null>(
+    // Derived from the load above rather than by probing again: `loadSave` is already the
+    // one place that decides a browser will not store, and asking twice invites the two
+    // answers to differ.
+    saved.status === 'unavailable' ? 'unavailable' : null,
+  );
+  const [dismissed, setDismissed] = useState<readonly StorageProblem[]>([]);
+
+  /**
+   * Every write goes through here, so a failed one cannot be dropped at a call site.
+   *
+   * Before #184 each caller called `writeSave` and discarded the outcome — safe, because
+   * it never throws, and silent, which was the bug. The write still cannot stop anything:
+   * the state update happens either way and the return value only decides whether a notice
+   * appears.
+   */
+  const persist = useCallback((next: SaveV1): void => {
+    const outcome = writeSave(storage, next);
+    if (outcome.status === 'quotaExceeded') setStorageProblem('full');
+    else if (outcome.status === 'unavailable') setStorageProblem('unavailable');
+  }, []);
+
+  const acceptContract = (id: string): void => {
+    const next = withAttempt(saved.save, id);
+    persist(next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
+
+  const completeContract = (id: string, outcome: Outcome, replay: string): void => {
+    const next = withResult(saved.save, id, outcome, replay);
+    if (next === saved.save) return;
+    persist(next);
+    setSaved({ status: 'loaded', save: next, migrated: false });
+  };
+
+  /**
+   * A settings change, persisted and applied.
+   *
+   * Stable across renders (`useCallback`), because the provider memoises its context value
+   * on this function: a fresh one every render would rebuild the context every render and
+   * re-run every consumer's effects with it, which for the palette means repainting
+   * thirteen custom properties on every keystroke in the planner.
+   */
+  const changeSettings = useCallback(
+    (stored: StoredSettings): void => {
+      setSaved((current) => {
+        const next: SaveV1 = { ...current.save, settings: stored };
+        persist(next);
+        return { status: 'loaded', save: next, migrated: false };
+      });
+    },
+    [persist],
+  );
+
+  /**
+   * #185's import. The imported document replaces the save wholesale.
+   *
+   * Applied to memory first and persisted second, and a failed write is **not** undone:
+   * FR-702's rule is that storage failing must not stop the game, and discarding progress
+   * the player just restored because the quota is full would be the most destructive
+   * possible reading of it. The session keeps it, and #184's notice says it will not
+   * survive a reload.
+   */
+  const replaceSave = useCallback(
+    (next: SaveV1): void => {
+      persist(next);
+      setSaved({ status: 'loaded', save: next, migrated: false });
+    },
+    [persist],
+  );
+
+  /** #185's "clear all local data" — the one key removed, and the game keeps running. */
+  const clearAll = useCallback((): void => {
+    clearSave(storage);
+    setSaved({ status: 'empty', save: emptySave() });
+  }, []);
+
+  /**
+   * #184's escape hatch, and #185's export, from one place.
+   *
+   * Reads `saved.save` — the in-memory document — and never storage. That is what makes it
+   * work in the state it exists to rescue: a re-read would return nothing, which is the
+   * problem being reported.
+   */
+  const exportNow = useCallback((): void => {
+    downloadSave(saved.save);
+  }, [saved.save]);
+
+  const showing =
+    storageProblem !== null && !dismissed.includes(storageProblem) ? storageProblem : null;
+
+  return (
+    <SettingsProvider stored={saved.save.settings} onChange={changeSettings}>
+      <AppShell
+        saved={saved}
+        storageProblem={showing}
+        onAccept={acceptContract}
+        onComplete={completeContract}
+        onExportSave={exportNow}
+        onDismissStorageNotice={() => {
+          if (storageProblem !== null) setDismissed((current) => [...current, storageProblem]);
+        }}
+        onReplaceSave={replaceSave}
+        onClearSave={clearAll}
+      />
+    </SettingsProvider>
   );
 };

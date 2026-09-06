@@ -105,8 +105,11 @@ describe('routing', () => {
     await mount();
     expect(el('screen')?.dataset['screen']).toBe('title');
 
-    await goTo('#/settings');
-    expect(el('screen')?.dataset['screen']).toBe('settings');
+    // `#/board` rather than `#/settings`: settings deliberately does *not* replace the
+    // screen it was opened from — see the settings block below — so it is the one route
+    // that cannot stand in for "any route" here.
+    await goTo('#/board');
+    expect(el('screen')?.dataset['screen']).toBe('board');
 
     // Back is a `hashchange` to the previous hash — the same path through the app.
     await goTo('#/');
@@ -118,6 +121,180 @@ describe('routing', () => {
     const hrefs = [...container.querySelectorAll('nav a')].map((a) => a.getAttribute('href'));
     expect(hrefs).toContain('#/board');
     expect(hrefs.every((h) => h?.startsWith('#/'))).toBe(true);
+  });
+});
+
+/**
+ * §8.3.12's screen, and the one thing about it that is not like the other routes — #122.
+ *
+ * *"Returning from settings goes back to where the player was, not to the board — a player
+ * adjusting the palette mid-plan must not lose their plan."* `Screen` is keyed by route,
+ * so routing to `#/settings` the ordinary way would unmount whatever was mounted. It
+ * therefore renders **over** the previous screen, which stays mounted underneath.
+ */
+describe('the settings route', () => {
+  it('opens over the screen it was reached from, leaving it mounted', async () => {
+    window.location.hash = '#/board';
+    await mount();
+    expect(el('screen')?.dataset['screen']).toBe('board');
+
+    await goTo('#/settings');
+    // The frame is still the board's — that is the assertion. If this ever reads
+    // `settings`, the screen underneath was unmounted and an uncommitted plan went with it.
+    expect(el('screen')?.dataset['screen']).toBe('board');
+    expect(el('settings-overlay')).not.toBeNull();
+    expect(el('settings')).not.toBeNull();
+  });
+
+  it('renders as an ordinary screen on a cold load, where there is nothing underneath', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    expect(el('screen')?.dataset['screen']).toBe('settings');
+    expect(el('settings-overlay')).toBeNull();
+    // The controls are the same ones either way.
+    expect(el('settings')).not.toBeNull();
+  });
+
+  it('closes back to the screen underneath', async () => {
+    window.location.hash = '#/board';
+    await mount();
+    await goTo('#/settings');
+    expect(el('settings-overlay')).not.toBeNull();
+
+    await goTo('#/board');
+    expect(el('settings-overlay')).toBeNull();
+    expect(el('screen')?.dataset['screen']).toBe('board');
+  });
+
+  it('shows all six of §8.3.12s groups', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    for (const group of ['display', 'accessibility', 'gameplay', 'audio', 'input', 'data']) {
+      expect(el(`settings-group-${group}`), group).not.toBeNull();
+    }
+  });
+});
+
+/**
+ * §8.5.3's `?` — the help overlay, from anywhere (#124).
+ *
+ * The handler is the shell's rather than any screen's, which is what "from every screen"
+ * means in practice: a per-screen handler is a handler a screen can forget to install.
+ */
+describe('the keyboard help overlay', () => {
+  const press = async (key: string): Promise<void> => {
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    });
+  };
+
+  it('opens on ? from a screen that has no keyboard handler of its own', async () => {
+    await mount();
+    expect(el('help-overlay')).toBeNull();
+    await press('?');
+    expect(el('help-overlay')).not.toBeNull();
+  });
+
+  it('opens on ? from every route in §8.2s table', async () => {
+    await mount();
+    for (const hash of [
+      '#/',
+      '#/board',
+      '#/daily',
+      '#/codex/phasing',
+      '#/contract/c03-cold-open',
+    ]) {
+      await goTo(hash);
+      await press('?');
+      expect(el('help-overlay'), hash).not.toBeNull();
+      await press('Escape');
+      expect(el('help-overlay'), hash).toBeNull();
+    }
+  });
+
+  it('opens from a visible affordance too — the keyboard path is not the only path', async () => {
+    await mount();
+    const open = el('open-help');
+    expect(open).not.toBeNull();
+    await act(() => {
+      open?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(el('help-overlay')).not.toBeNull();
+  });
+
+  it('closes on Esc and on its own button', async () => {
+    await mount();
+    await press('?');
+    await press('Escape');
+    expect(el('help-overlay')).toBeNull();
+
+    await press('?');
+    await act(() => {
+      el('help-close')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(el('help-overlay')).toBeNull();
+  });
+
+  it('does not fire while the player is typing', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    const field = container.querySelector('input[type="text"]');
+    expect(field).not.toBeNull();
+    await act(() => {
+      field?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    });
+    // A handle containing a `?` is a handle, not a request for help.
+    expect(el('help-overlay')).toBeNull();
+  });
+
+  it('does fire from a checkbox, which is most of the settings screen', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    const checkbox = container.querySelector('input[type="checkbox"]');
+    expect(checkbox).not.toBeNull();
+    await act(() => {
+      (checkbox as HTMLElement).focus();
+      checkbox?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    });
+    // Found by driving the built app: the planner's typing guard treats every `<input>` as
+    // typing, which would have made the overlay unreachable from the one screen a
+    // confused player is most likely to be on.
+    expect(el('help-overlay')).not.toBeNull();
+  });
+
+  it('lists the current scope first once a contract is open', async () => {
+    window.location.hash = '#/contract/c03-cold-open';
+    await mount();
+    await press('?');
+    const sections = [...container.querySelectorAll('[data-testid^="help-scope-"]')].map((s) =>
+      s.getAttribute('data-testid'),
+    );
+    // The briefing is showing, so its bindings come first.
+    expect(sections[0]).toBe('help-scope-briefing');
+  });
+
+  /**
+   * #124: *"opening it during execution neither pauses nor advances playback; opening it
+   * during planning does not mutate the plan."*
+   */
+  it('neither pauses nor advances a run, and does not touch a plan', async () => {
+    window.location.hash = '#/contract/c03-cold-open';
+    await mount();
+
+    await act(() => {
+      el('accept')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await press('n');
+    const before = text('plan-panel');
+
+    await press('?');
+    expect(el('help-overlay')).not.toBeNull();
+    // The planner is still mounted underneath and its plan is unchanged.
+    expect(el('planner')).not.toBeNull();
+    expect(text('plan-panel')).toBe(before);
+
+    await press('Escape');
+    expect(text('plan-panel')).toBe(before);
   });
 });
 
@@ -149,14 +326,14 @@ describe('focus', () => {
 
   it('moves to the new screen’s heading on a route change', async () => {
     await mount();
-    await goTo('#/settings');
+    await goTo('#/board');
     expect(document.activeElement).toBe(heading());
     expect(text('screen-heading').trim()).not.toBe('');
   });
 
   it('moves again on the next change, not only the first', async () => {
     await mount();
-    await goTo('#/settings');
+    await goTo('#/daily');
     await goTo('#/board');
     expect(document.activeElement).toBe(heading());
     expect(el('screen')?.dataset['screen']).toBe('board');

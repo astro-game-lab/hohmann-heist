@@ -805,6 +805,16 @@ export const en: Messages = {
     `${fmt.integer(found)}; this build reads ${fmt.integer(supported)}). It has been left ` +
     'untouched.',
 
+  // §8.6's wording is the model for the first of these: *"Progress can't be saved in this
+  // browser mode. The game still works."* Both name the escape hatch rather than only
+  // apologising — carrying the file is the only recovery a player in this state has.
+  'save.unavailable': () =>
+    'Progress can’t be saved in this browser mode. The game still works — export your save to keep it.',
+  'save.full': () =>
+    'This browser’s storage is full, so that didn’t save. Export your progress to keep it.',
+  'save.notice.export': () => 'Export save',
+  'save.notice.dismiss': () => 'Dismiss',
+
   // ── The application shell ──────────────────────────────────────────────────
   'app.title': () => 'Hohmann Heist',
   'app.routesLabel': () => 'Routes',
@@ -960,4 +970,174 @@ export const en: Messages = {
   'debrief.share.hint': () =>
     'A replay code, not a link: the shareable URL arrives with the replay viewer.',
   'debrief.build.label': () => 'Build',
+
+  // ── §8.5.3's key names (#124, #187) ────────────────────────────────────────
+  // The two modifiers §8.5.3 names. Words, so they are catalogue entries like the rest;
+  // `Ctrl` is abbreviated because that is what the keycap says.
+  'keys.label.ctrl': () => 'Ctrl',
+  'keys.label.shift': () => 'Shift',
+  'keys.label.space': () => 'Space',
+  'keys.label.escape': () => 'Esc',
+  'keys.label.enter': () => 'Enter',
+  'keys.label.tab': () => 'Tab',
+  'keys.label.delete': () => 'Del',
+  'keys.label.backspace': () => 'Backspace',
+  'keys.label.home': () => 'Home',
+  'keys.label.end': () => 'End',
+  // The arrows as glyphs rather than as words: §8.5.3 prints them, they are what is on
+  // the keycap, and "Up arrow" in a table of twenty-four rows is three times the width
+  // for no more meaning.
+  'keys.label.arrowUp': () => '\u2191',
+  'keys.label.arrowDown': () => '\u2193',
+  'keys.label.arrowLeft': () => '\u2190',
+  'keys.label.arrowRight': () => '\u2192',
+  'keys.label.contextMenu': () => 'Menu',
+
+  // ── §8.3.12's settings screen (#122, #186, #187, #185) ─────────────────────
+  'settings.immediate': () => 'Every change applies straight away. There is no Save button.',
+  'settings.back': () => 'Back',
+  'settings.group.display': () => 'Display',
+  'settings.group.accessibility': () => 'Accessibility',
+  'settings.group.gameplay': () => 'Gameplay',
+  'settings.group.audio': () => 'Audio',
+  'settings.group.input': () => 'Input',
+  'settings.group.data': () => 'Data',
+  'settings.reset': () => 'Reset',
+  'settings.resetAll': () => 'Reset all settings',
+  'settings.resetAll.confirm': () =>
+    'Put every setting back to its default? Your progress is not affected.',
+
+  'settings.units.label': () => 'Units',
+  'settings.units.metric': () => 'Kilometres and m/s',
+  'settings.units.si': () => 'SI only \u2014 metres and m/s',
+  'settings.angles.label': () => 'Angles',
+  'settings.angles.degrees': () => 'Degrees',
+  'settings.angles.radians': () => 'Radians',
+  'settings.timeFormat.label': () => 'Times',
+  'settings.timeFormat.met': () => 'Mission elapsed \u2014 T+HH:MM:SS',
+  // Labelled TAI and not UTC, because the simulation has no leap seconds and calling it
+  // UTC would be the one lie the rest of the codebase is careful not to tell.
+  'settings.timeFormat.tai': () => 'Absolute \u2014 TAI',
+  'settings.theme.label': () => 'Theme',
+  'settings.theme.dark': () => 'Dark',
+  'settings.theme.light': () => 'Light',
+  'settings.theme.system': () => 'Follow the system',
+  'settings.theme.note': () =>
+    'Only the dark theme is built. Your choice is saved and applies when the light palettes land.',
+  'settings.uiScale.label': () => 'Interface scale',
+  'settings.uiScale.value': ({ percent }, fmt) => `${fmt.integer(percent)}%`,
+
+  'settings.palette.label': () => 'Colour palette',
+  'settings.palette.default': () => 'Default',
+  'settings.palette.deuteranopia': () => 'Deuteranopia',
+  'settings.palette.protanopia': () => 'Protanopia',
+  'settings.palette.tritanopia': () => 'Tritanopia',
+  'settings.palette.highContrast': () => 'High contrast',
+  'settings.reduceMotion.label': () => 'Reduce motion',
+  'settings.reduceMotion.system': () => 'Follow the system',
+  'settings.reduceMotion.on': () => 'Always reduce',
+  'settings.reduceMotion.off': () => 'Never reduce',
+  'settings.backgroundAnimation.label': () => 'Background animation',
+  'settings.lineWeights.label': () => 'Heavier lines',
+  'settings.verbosity.label': () => 'Screen-reader detail',
+  'settings.verbosity.terse': () => 'Terse',
+  'settings.verbosity.verbose': () => 'Verbose',
+
+  'settings.assists.label': () => 'Assists a contract starts with',
+  'settings.assists.hint': () =>
+    'A contract can offer fewer than these; it never offers more. Two of them cap your medal.',
+  'settings.coachMarks.label': () => 'Coach marks',
+  'settings.confirmCommit.label': () => 'Ask before committing a plan',
+  'settings.autoSkipAfter.label': () => 'Skip playback after',
+  // Branching inside the message rather than picking between two keys at the call site:
+  // "never" and "after N attempts" are one sentence with two forms, and the language
+  // decides which form a count takes — `fmt.plural`, not an English `=== 1`.
+  'settings.autoSkipAfter.value': ({ count }, fmt) =>
+    count === 0
+      ? 'Never'
+      : fmt.plural(count) === 'one'
+        ? `${fmt.integer(count)} attempt`
+        : `${fmt.integer(count)} attempts`,
+
+  'settings.audio.note': () =>
+    'There is no sound yet. These are saved now so they are already yours when it arrives.',
+  'settings.audioMaster.label': () => 'Master',
+  'settings.audioEffects.label': () => 'Effects',
+  'settings.audioAmbience.label': () => 'Ambience',
+  'settings.audioMuted.label': () => 'Muted',
+  'settings.percent.value': ({ percent }, fmt) => `${fmt.integer(percent)}%`,
+
+  'settings.pointerSensitivity.label': () => 'Pointer sensitivity',
+  'settings.invertScrollZoom.label': () => 'Invert scroll to zoom',
+  'settings.bindings.label': () => 'Keyboard',
+  'settings.bindings.reserved': () =>
+    'Esc, Tab, Enter and Space cannot be bound \u2014 they are what gets you out of this control.',
+  'settings.bindings.change': ({ action }) => `Change the key for: ${action}`,
+  'settings.bindings.changeShort': () => 'Change',
+  'settings.bindings.capturing': () => 'Press a key. Esc cancels.',
+  'settings.bindings.unbound': () => 'Unbound',
+  'settings.bindings.pending': () => 'Not built yet',
+  'settings.bindings.conflict': ({ action }) => `That key already does: ${action}`,
+  'settings.bindings.swap': () => 'Swap them',
+  'settings.bindings.cancel': () => 'Cancel',
+  'settings.bindings.resetOne': ({ action }) => `Reset the key for: ${action}`,
+  'settings.bindings.resetAll': () => 'Reset every key',
+  'settings.bindings.rejected': () => 'That key is reserved. Try another.',
+  'settings.bindings.scope.briefing': () => 'Briefing',
+  'settings.bindings.scope.planner': () => 'Planner',
+  'settings.bindings.scope.execution': () => 'Execution',
+  'settings.bindings.scope.debrief': () => 'Debrief',
+  'settings.bindings.scope.everywhere': () => 'Everywhere',
+
+  'settings.handle.label': () => 'Handle',
+  'settings.handle.note': () =>
+    'For the leaderboard, which does not exist yet. Nothing is sent anywhere.',
+  'settings.export.label': () => 'Export save',
+  'settings.export.hint': () =>
+    'A JSON file you keep. There is no account and no server \u2014 this is the only backup there is.',
+  'settings.import.label': () => 'Import save',
+  'settings.clear.label': () => 'Clear all local data',
+  'settings.whatWeStore': () => 'What we store',
+  'settings.confirm.replacing': ({ contracts, bronze, silver, gold, clean }, fmt) => {
+    if (contracts === 0) return 'You have not finished a contract yet.';
+
+    // Best first, and only the ones actually held: a confirmation listing "0 Bronze" is
+    // noise in the sentence a player is meant to stop and read.
+    const held: [number, string][] = [
+      [clean, 'Clean Job'],
+      [gold, 'Gold'],
+      [silver, 'Silver'],
+      [bronze, 'Bronze'],
+    ];
+    const earned = held
+      .filter(([count]) => count > 0)
+      .map(([count, name]) => `${fmt.integer(count)} ${name}`);
+
+    const finished =
+      fmt.plural(contracts) === 'one'
+        ? `${fmt.integer(contracts)} contract finished`
+        : `${fmt.integer(contracts)} contracts finished`;
+
+    return earned.length === 0 ? `${finished}.` : `${finished}, including ${fmt.list(earned)}.`;
+  },
+  'settings.confirm.nothing': () => 'There is nothing stored to lose.',
+  'settings.confirm.importHeading': () => 'Replace your progress?',
+  'settings.confirm.clearHeading': () => 'Clear everything?',
+  'settings.confirm.exportFirst': () => 'Export first',
+  'settings.confirm.import': () => 'Replace it',
+  'settings.confirm.clear': () => 'Clear it',
+  'settings.confirm.cancel': () => 'Keep what I have',
+  'settings.import.unreadable': () =>
+    'That file is not a save this game can read. Nothing changed.',
+  'settings.import.futureVersion': ({ found, supported }, fmt) =>
+    `That save was written by a newer build \u2014 format ${fmt.integer(found)}, and this build reads ${fmt.integer(supported)}. Nothing changed.`,
+  'settings.import.fileUnreadable': () => 'That file could not be read. Nothing changed.',
+  'settings.import.done': () => 'Progress restored.',
+  'settings.cleared': () => 'Everything stored on this device has been cleared.',
+
+  // ── §8.5.3's keyboard help overlay (#124) ──────────────────────────────────
+  'help.heading': () => 'Keyboard',
+  'help.open': () => 'Keyboard help',
+  'help.close': () => 'Close',
+  'help.remap': () => 'Change these in Settings',
 };

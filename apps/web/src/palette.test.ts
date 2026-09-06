@@ -7,6 +7,8 @@
  * meet §8.8 where they are lines.
  */
 import { describe, expect, it } from 'vitest';
+
+import { resolveSettings, type StoredSettings } from './settings/schema.js';
 import {
   GRAPHIC_CONTRAST_MIN,
   PALETTE_IDS,
@@ -16,13 +18,7 @@ import {
   type PaletteId,
 } from '@hh/ui';
 
-import {
-  applyPalette,
-  cssVariableFor,
-  cssVariablesFor,
-  paletteFromHash,
-  sceneColoursFor,
-} from './palette.js';
+import { applyPalette, cssVariableFor, cssVariablesFor, sceneColoursFor } from './palette.js';
 
 /** The derived inks, and what each has to be legible against. */
 const sceneChecks = (id: PaletteId): readonly [string, string, string, string][] => {
@@ -118,13 +114,20 @@ describe('derived scene inks meet §8.8 where they are lines (NFR-018)', () => {
   });
 });
 
-describe('the temporary palette source (#122, #186 replace it)', () => {
-  it('reads a palette from the hash query, and ignores anything else', () => {
-    expect(paletteFromHash('#/board?palette=deuteranopia')).toBe('deuteranopia');
-    expect(paletteFromHash('#/board?palette=high-contrast')).toBe('high-contrast');
-    expect(paletteFromHash('#/board')).toBe('default');
-    expect(paletteFromHash('#/board?palette=sepia')).toBe('default');
-    expect(paletteFromHash('#/board?other=1')).toBe('default');
-    expect(paletteFromHash('')).toBe('default');
+describe('the palette setting (#186)', () => {
+  it('resolves from the stored setting, and falls back for a palette this build lost', () => {
+    // The hash source this replaced (`#/board?palette=deuteranopia`) is gone with #186 —
+    // `palette.ts` says why. What is worth keeping from its test is the property, which
+    // has moved down a layer: an unrecognised palette id resolves to the default rather
+    // than to nothing, so a save naming a palette a later build removed still renders.
+    expect(
+      resolveSettings({ 'accessibility.palette': 'deuteranopia' })['accessibility.palette'],
+    ).toBe('deuteranopia');
+    expect(
+      resolveSettings({ 'accessibility.palette': 'sepia' } as unknown as StoredSettings)[
+        'accessibility.palette'
+      ],
+    ).toBe('default');
+    expect(resolveSettings({})['accessibility.palette']).toBe('default');
   });
 });

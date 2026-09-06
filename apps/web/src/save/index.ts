@@ -13,7 +13,7 @@ export type {
   SaveProblem,
   SaveProblemCode,
   SaveV1,
-  SettingValue,
+  StoredSettings,
 } from './schema.js';
 export {
   CURRENT_SAVE_VERSION,

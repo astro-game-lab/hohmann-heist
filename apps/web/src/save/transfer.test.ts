@@ -25,7 +25,7 @@ const populated = (): SaveV1 => ({
     },
     streak: 6,
   },
-  settings: { theme: 'dark', reduceMotion: true, uiScale: 110 },
+  settings: { 'display.theme': 'light', 'display.uiScale': 110, keybindings: { addNode: 'k' } },
   // Already in canonical order, so the round-trip assertions below compare like with
   // like. That a save built in some *other* order normalises to this one is its own
   // test, two blocks down.
@@ -147,18 +147,26 @@ describe('export and import', () => {
 });
 
 describe('readSaveText', () => {
-  /** A document from before `settings` existed, which today's validator would reject. */
+  /**
+   * A document from before `flags` existed, which today's validator would reject.
+   *
+   * It used to be a document from before `settings` existed, and #186 took that away as a
+   * fixture: settings can no longer make a save unreadable — an absent block now means
+   * "everything default" — so a migration that forgot them would produce a *valid*
+   * document and this file would be asserting nothing. `flags` is the nearest remaining
+   * field that is genuinely required, and the property under test is unchanged.
+   */
   const ancient = JSON.stringify({
     v: 0,
     contracts: {},
     daily: { days: {}, streak: 0 },
-    flags: { coachMarksSeen: [], codexRead: [] },
+    settings: {},
   });
 
   const migrate_0_1: Migration = {
     from: 0,
     to: 1,
-    apply: (save) => ({ ...save, v: 1, settings: {} }),
+    apply: (save) => ({ ...save, v: 1, flags: { coachMarksSeen: [], codexRead: [] } }),
   };
 
   // Migrate, *then* validate. Validating first would reject every older save, which is
@@ -179,6 +187,7 @@ describe('readSaveText', () => {
 
   it('reports a document that survived migration but not validation', () => {
     const incomplete: Migration = { from: 0, to: 1, apply: (save) => ({ ...save, v: 1 }) };
+    // The step renumbers the document and provides nothing, so `flags` is still missing.
     expect(readSaveText(ancient, [incomplete])).toMatchObject({
       ok: false,
       problem: { code: 'unreadable' },

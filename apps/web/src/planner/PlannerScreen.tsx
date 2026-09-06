@@ -51,6 +51,7 @@ import { bandsFor } from './constraint-bands.js';
 import { ContractPanel, contractPanelSession } from './ContractPanel.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
+import { useKeybindings } from '../settings/context.js';
 import { actionFor, isTypingTarget } from './keys.js';
 import { HudBar } from './HudBar.js';
 import { OrbitView } from './OrbitView.js';
@@ -379,13 +380,20 @@ export const PlannerScreen = ({
    * focus was on the canvas would fail exactly when a keyboard user needed it. The
    * typing guard is what keeps `,` and `N` from firing into the node editor's fields.
    */
+  // §8.5.3's map as the player has it, not as it ships (#187). Read here rather than
+  // inside the handler so the effect re-installs when a rebind lands — a listener closed
+  // over a stale map is exactly the bug "applies immediately" is about.
+  const rebinds = useKeybindings();
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (isTypingTarget(event.target)) return;
-      const action = actionFor('planner', event.key, {
-        shift: event.shiftKey,
-        ctrl: event.ctrlKey,
-      });
+      const action = actionFor(
+        'planner',
+        event.key,
+        { shift: event.shiftKey, ctrl: event.ctrlKey },
+        rebinds,
+      );
       if (action === null) return;
 
       const at = selectedIndex({ ...state });
@@ -489,6 +497,12 @@ export const PlannerScreen = ({
           // arm exists so the switch stays exhaustive over `PlannerAction`: a new action
           // is then a compile error here rather than a key that silently does nothing.
           return;
+        case 'help':
+          // The shell's (#124). Returning *before* the `preventDefault` below is the
+          // point: opening the overlay must not consume the key on the planner's behalf,
+          // and §8.5.3's `?` is explicitly one of the two things that neither pauses nor
+          // mutates anything here.
+          return;
       }
       event.preventDefault();
     };
@@ -497,7 +511,7 @@ export const PlannerScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, anchor, menu, model, scenario, state, toggleContract]);
+  }, [actions, anchor, menu, model, rebinds, scenario, state, toggleContract]);
 
   /**
    * §8.5.1's exit to EXECUTION.

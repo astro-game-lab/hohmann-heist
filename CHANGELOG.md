@@ -12,6 +12,36 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **§8.3.12's settings screen, and everything behind it (#186, #122, #187, #185, #184, #124).**
+  FR-704 asks that every setting persist and apply immediately without a reload; before this
+  `SaveV1.settings` was `Record<string, SettingValue>` — a deliberate hole in an otherwise
+  strictly validated document — and there was no screen to reach it from, so #116's five
+  palettes and #173's motion preference were capabilities a player could not use. Settings are
+  now a **spec table**: each row carries its key, group, kind, domain, default and labels, and
+  is simultaneously what validates a stored block, what renders the controls, and what resets
+  them. The screen is a map over that table, which is what makes "every setting in §8.3.12"
+  true by construction rather than by review. Storage is **sparse** — an unset setting stores
+  nothing and assigning the default removes the key — so a changed default in a later build
+  reaches every player who never touched that setting, and an export does not pin today's
+  defaults into the file. Settings can no longer make a save unreadable: an unknown key is
+  dropped and an out-of-range value falls back, because a typo in a hand-edited settings block
+  must not cost somebody their medals. **Keybindings are fully remappable**, resolved through
+  `event.key` rather than `event.code` — §8.5.3's map is mnemonic and a mnemonic belongs to the
+  character on the keycap, where `event.code` would keep QWERTY's geometry on Dvorak — with
+  conflicts detected **per scope**, since a global check would report conflicts on §8.5.3's own
+  defaults. A conflict names what it collided with and offers swap or cancel; nothing is bound
+  silently over anything. Export, import and clear are §11.7's only "cloud save", and their
+  confirmations state what is at stake in contracts finished and medals held rather than asking
+  an abstract "are you sure", with export offered from inside the confirmation. **A browser
+  that will not store now says so** (FR-702): a non-blocking notice at load for storage that is
+  unavailable, one at the moment of a failed write for a quota that ran out, both offering the
+  export that is the only recovery either state has — read from the in-memory save, which is
+  what makes it work at all. And **`?` opens the keyboard help overlay** from anywhere, showing
+  the *current* bindings rather than the defaults, grouped by scope with the screen you are on
+  first. Two things are stored and honestly inert rather than faked: audio, which has no
+  playback until M4, and the light theme, which needs five more palettes and the §8.8 contrast
+  matrix that validates them. Settings renders **over** the screen it was opened from, so
+  adjusting the palette mid-plan does not cost you the plan.
 - **§8.5.3's keyboard map, complete and scoped by screen (#141).** The map was a `switch` over
   `event.key` covering the planner, and §8.3.12 makes every binding remappable — a switch has
   to be *rewritten* to re-key where a table only has to be re-keyed. It is now `BINDINGS`, an

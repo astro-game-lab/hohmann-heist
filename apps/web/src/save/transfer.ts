@@ -70,6 +70,28 @@ const canonicalDay = (day: DailyProgress): Record<string, unknown> => ({
 const fromEntries = <T>(entries: readonly (readonly [string, T])[]): Record<string, T> =>
   Object.fromEntries(entries);
 
+/**
+ * The settings block, sorted, with the rebind map sorted inside it.
+ *
+ * Two levels rather than one, because `keybindings` is a map whose insertion order is as
+ * accidental as the contracts': a player who rebinds `addNode` then `recentre` and a
+ * player who rebinds them the other way round have the same settings and must export the
+ * same bytes. Sorted at both levels, so they do.
+ *
+ * `keybindings` sorts among the scalar keys rather than being appended after them —
+ * `sorted` sees it as one more entry — which keeps the rule stated once: *every map in
+ * this file is sorted by key*. It lands between `audio.*` and `display.*` as a result,
+ * which reads oddly and is worth less than a second ordering rule nobody would remember.
+ */
+const canonicalSettings = (settings: SaveV1['settings']): Record<string, unknown> => {
+  const { keybindings, ...values } = settings;
+  const entries: [string, unknown][] = Object.entries(values);
+  if (keybindings !== undefined && Object.keys(keybindings).length > 0) {
+    entries.push(['keybindings', fromEntries(sorted(keybindings))]);
+  }
+  return fromEntries(entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+};
+
 /** The save as a plain object with a defined key order. What both serialisers stringify. */
 export const canonicalSave = (save: SaveV1): Record<string, unknown> => {
   const out: Record<string, unknown> = { v: save.v };
@@ -83,7 +105,7 @@ export const canonicalSave = (save: SaveV1): Record<string, unknown> => {
     days: fromEntries(sorted(save.daily.days).map(([date, day]) => [date, canonicalDay(day)])),
     streak: save.daily.streak,
   };
-  out['settings'] = fromEntries(sorted(save.settings));
+  out['settings'] = canonicalSettings(save.settings);
   out['flags'] = {
     // Sorted for the same reason the maps are: two saves holding the same dismissed
     // marks in a different order are the same save.

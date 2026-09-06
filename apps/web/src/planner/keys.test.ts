@@ -14,6 +14,7 @@ import {
   SCRUB_NUDGE_SECONDS,
   actionFor,
   bindingFor,
+  isTextEntryTarget,
   isTypingTarget,
 } from './keys.js';
 
@@ -234,14 +235,77 @@ describe('scoping (#141)', () => {
   });
 });
 
+/**
+ * The two guards, and why they are not the same one.
+ *
+ * `isTypingTarget` is the planner's and is deliberately conservative — every `<input>`
+ * counts, because the node editor is full of number fields and a stray `N` would corrupt a
+ * burn. `isTextEntryTarget` is the shell's, for `?`: most of the settings screen is
+ * checkboxes and radios, and calling those "typing" would make the help overlay
+ * unreachable from the screen a confused player is most likely to be on.
+ */
+describe('the typing guards (#124)', () => {
+  const input = (type?: string): HTMLInputElement => {
+    const element = document.createElement('input');
+    if (type !== undefined) element.setAttribute('type', type);
+    return element;
+  };
+
+  it('both stand down for a text field', () => {
+    for (const type of ['text', 'number', 'search', 'email', 'password', undefined]) {
+      expect(isTypingTarget(input(type)), String(type)).toBe(true);
+      expect(isTextEntryTarget(input(type)), String(type)).toBe(true);
+    }
+    expect(isTypingTarget(document.createElement('textarea'))).toBe(true);
+    expect(isTextEntryTarget(document.createElement('textarea'))).toBe(true);
+  });
+
+  it('only the planner’s guard stands down for a control that takes no text', () => {
+    for (const type of ['checkbox', 'radio', 'range', 'button', 'file', 'color']) {
+      expect(isTypingTarget(input(type)), `typing:${type}`).toBe(true);
+      expect(isTextEntryTarget(input(type)), `textEntry:${type}`).toBe(false);
+    }
+  });
+
+  it('treats an unknown input type as text, the way a browser does', () => {
+    expect(isTextEntryTarget(input('quantum'))).toBe(true);
+  });
+
+  it('both stand down for a contenteditable region', () => {
+    const region = document.createElement('div');
+    region.setAttribute('contenteditable', 'true');
+    expect(isTypingTarget(region)).toBe(true);
+    expect(isTextEntryTarget(region)).toBe(true);
+  });
+
+  it('neither stands down for an ordinary element', () => {
+    const div = document.createElement('div');
+    expect(isTypingTarget(div)).toBe(false);
+    expect(isTextEntryTarget(div)).toBe(false);
+    expect(isTypingTarget(null)).toBe(false);
+    expect(isTextEntryTarget(null)).toBe(false);
+  });
+});
+
 describe('bindings whose features are not built (#141)', () => {
-  it('resolves ? and C to nothing, while still listing them', () => {
-    // §8.5.3 lists both. They resolve to `null` — indistinguishable from unbound at the
-    // call site, so no screen has to know which bindings are waiting on an issue — and
-    // remain in `BINDINGS` so #124 can show them and #187 can offer them.
-    expect(actionFor('planner', '?', NONE)).toBeNull();
+  it('resolves C to nothing, while still listing it', () => {
+    // §8.5.3 lists it. It resolves to `null` — indistinguishable from unbound at the call
+    // site, so no screen has to know which bindings are waiting on an issue — and remains
+    // in `BINDINGS` so #124 can show it and #187 can offer it.
     expect(actionFor('planner', 'c', NONE)).toBeNull();
-    expect(bindingFor('planner', '?', NONE)?.pending).toBe(124);
     expect(bindingFor('planner', 'c', NONE)?.pending).toBe(161);
+  });
+
+  it('stops being pending when its feature lands, which is what the marker is for', () => {
+    // `?` was pending on #124 until the overlay existed. Its row now carries an action
+    // like any other: a pending marker is a promise with an issue number on it, not a
+    // permanent state, and this is the assertion that would fail if a row were left
+    // marked after its issue closed.
+    expect(bindingFor('planner', '?', NONE)?.pending).toBeUndefined();
+    expect(actionFor('planner', '?', NONE)).toEqual({ kind: 'help' });
+    // On every screen, because §8.5.3 scopes it everywhere.
+    for (const screen of ['briefing', 'planner', 'execution', 'debrief'] as const) {
+      expect(actionFor(screen, '?', NONE), screen).toEqual({ kind: 'help' });
+    }
   });
 });

@@ -33,14 +33,17 @@
  *
  * ## What is deliberately absent
  *
- * `?` (the help overlay, #124) and `C` (the Codex, #161) have rows here with `pending` set
- * and resolve to no action. That is not a key that does nothing by accident: #124 and #187
- * both render this table, and a binding missing from it entirely would be a binding the help
- * overlay could not show and the remapper could not offer. `pending` says "this is §8.5.3's
- * binding, its feature is not built, and here is the issue" in one place instead of in a
- * comment that nothing reads.
+ * `C` (the Codex, #161) has a row here with `pending` set and resolves to no action. That is
+ * not a key that does nothing by accident: #124 and #187 both render this table, and a
+ * binding missing from it entirely would be a binding the help overlay could not show and
+ * the remapper could not offer. `pending` says "this is §8.5.3's binding, its feature is not
+ * built, and here is the issue" in one place instead of in a comment that nothing reads.
+ *
+ * `?` was the other one until #124 landed; its row now carries an action like any other,
+ * which is what the marker is for — a pending row is a promise with an issue number on it,
+ * not a permanent state.
  */
-import { deltaVStep } from '@hh/ui';
+import { deltaVStep, type MessageKey } from '@hh/ui';
 
 /** Which screen a binding applies on. §8.5.3's scope, made explicit. */
 export type Screen = 'briefing' | 'planner' | 'execution' | 'debrief';
@@ -66,6 +69,14 @@ export type PlannerAction =
   | { readonly kind: 'nodeMenu' }
   /** §8.3.3's contract, shown beside the plan — #264. */
   | { readonly kind: 'toggleContract' }
+  /**
+   * §8.5.3's `?` — the keyboard help overlay (#124).
+   *
+   * Resolved on every screen and handled by the shell rather than by any of them: the
+   * overlay is not a planner feature, and a screen that had to know about it would be a
+   * screen that could forget. The per-screen handlers ignore it explicitly.
+   */
+  | { readonly kind: 'help' }
   // ── Execution, §8.3.8 ──────────────────────────────────────────────────────
   | { readonly kind: 'playPause' }
   | { readonly kind: 'skipToEnd' }
@@ -122,7 +133,7 @@ export interface Binding {
   readonly shift?: ModifierRule;
   readonly screens: readonly Screen[];
   /** The catalogue key describing this binding, for #124's overlay. */
-  readonly descriptionKey: string;
+  readonly descriptionKey: MessageKey;
   /**
    * §8.5.3's binding exists; its feature does not yet. The issue number that provides it.
    *
@@ -382,6 +393,12 @@ export const BINDINGS: readonly Binding[] = [
     id: 'confirm',
     keys: ['Enter'],
     ctrl: 'forbidden',
+    // Shift too, and that is a fix rather than a tightening for its own sake. §8.5.3 lists
+    // `Enter`, not `Shift+Enter`; before #187 the briefing rejected every modifier in its
+    // own handler while the planner consulted this row, so the two screens disagreed about
+    // what `Shift+Enter` meant. Stating it here makes them agree, and leaves `Shift+Enter`
+    // to whatever the browser or a future binding wants it for.
+    shift: 'forbidden',
     // §8.5.3's one "Commit / confirm" row. The briefing's ACCEPT is the same binding on a
     // different screen, and `Briefing.tsx` resolves it — which is why the row names both.
     screens: ['briefing', 'planner'],
@@ -400,9 +417,7 @@ export const BINDINGS: readonly Binding[] = [
     keys: ['?'],
     screens: EVERYWHERE,
     descriptionKey: 'keys.help',
-    // §8.5.3's binding; #124 is the overlay. Listed rather than omitted so the overlay and
-    // the remapper both see the whole table — see the module docstring.
-    pending: 124,
+    toAction: () => ({ kind: 'help' }),
   },
   {
     id: 'codex',
@@ -413,6 +428,55 @@ export const BINDINGS: readonly Binding[] = [
     pending: 161,
   },
 ];
+
+/**
+ * A player's rebinds: binding id → the one key that now triggers it (#187).
+ *
+ * **Sparse.** Only bindings that differ from the default appear, so a changed default
+ * reaches a player who never rebound that action — the same rule the rest of the settings
+ * follow, and the reason an exported save of a player who rebound one key contains one
+ * entry.
+ *
+ * One key, where a default row may name several (`Delete` and `Backspace`, `1`–`5`). A
+ * rebind replaces the row's whole key set: a player who binds "delete node" to `x` means
+ * `x`, not `x` as well as `Backspace`. Reset brings the full default set back.
+ *
+ * The type and its resolution live here rather than in `keymap.ts` because *what this
+ * table responds to* is this module's question — `keymap.ts` owns how a player changes it,
+ * and one-way imports keep the two from becoming a cycle.
+ */
+export type Rebinds = Readonly<Record<string, string>>;
+
+/**
+ * A letter in both cases, anything else as itself.
+ *
+ * `event.key` for a shifted `n` is `N`, and §8.5.3 treats them as one binding — the
+ * default rows already list `['n', 'N']` for that reason. A rebind stores one of them and
+ * has to match both, or half of every letter binding would stop working the moment Caps
+ * Lock was on.
+ */
+export const variantsOf = (key: string): readonly string[] => {
+  if (key.length !== 1) return [key];
+  const lower = key.toLowerCase();
+  const upper = key.toUpperCase();
+  return lower === upper ? [key] : [lower, upper];
+};
+
+/** Whether a binding has been rebound away from its default keys. */
+export const isRebound = (binding: Binding, rebinds: Rebinds): boolean =>
+  rebinds[binding.id] !== undefined;
+
+/**
+ * The keys a binding responds to right now.
+ *
+ * The single source both the handler and #124's overlay read, which is what makes *"the
+ * map a player is shown and the map that runs"* survive remapping. A rebind naming a
+ * binding id this build does not have is simply never asked for.
+ */
+export const keysFor = (binding: Binding, rebinds: Rebinds): readonly string[] => {
+  const rebound = rebinds[binding.id];
+  return rebound === undefined ? binding.keys : variantsOf(rebound);
+};
 
 /**
  * Whether a key press belongs to whatever the player is typing into.
@@ -436,18 +500,91 @@ export const isTypingTarget = (target: EventTarget | null): boolean => {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 };
 
+/**
+ * Whether a key press is going into text the player is **typing**.
+ *
+ * Narrower than {@link isTypingTarget}, and the two are deliberately different rather than
+ * one being a mistake.
+ *
+ * `isTypingTarget` treats every `<input>` as typing, which is right for the planner: its
+ * bindings are letters and punctuation, the node editor is full of number fields, and a
+ * binding that fired into one would be a binding that corrupted a burn. Being conservative
+ * costs nothing there, because a player editing a node is not also trying to press `N`.
+ *
+ * It is wrong for `?`, though, and the settings screen is where that shows. Most of that
+ * screen's controls are checkboxes, radios and ranges — none of which can receive typed
+ * text — so a guard that called them all "typing" would make the help overlay unreachable
+ * from exactly the screen a confused player is most likely to be on. `?` still must not
+ * open while someone types it into the handle field, which is what this distinguishes:
+ * *text entry*, not *any control*.
+ */
+const TEXT_ENTRY_TYPES = new Set([
+  'text',
+  'search',
+  'url',
+  'tel',
+  'email',
+  'password',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'time',
+  'week',
+]);
+
+export const isTextEntryTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const editable = target.getAttribute('contenteditable');
+  if (editable !== null && editable !== 'false') return true;
+  if (target.getAttribute('role') === 'textbox') return true;
+  if (target.tagName === 'TEXTAREA') return true;
+  if (target.tagName !== 'INPUT') return false;
+  // An `<input>` with no `type` is a text field; one with an unknown type is treated as a
+  // text field by every browser, and by this.
+  const type = (target.getAttribute('type') ?? 'text').toLowerCase();
+  return TEXT_ENTRY_TYPES.has(type) || !KNOWN_NON_TEXT_TYPES.has(type);
+};
+
+/** Input types that cannot receive typed characters. */
+const KNOWN_NON_TEXT_TYPES = new Set([
+  'checkbox',
+  'radio',
+  'range',
+  'button',
+  'submit',
+  'reset',
+  'image',
+  'file',
+  'color',
+  'hidden',
+]);
+
 const satisfied = (rule: ModifierRule | undefined, held: boolean): boolean => {
   if (rule === 'required') return held;
   if (rule === 'forbidden') return !held;
   return true;
 };
 
-/** The binding a key press matches on a screen, or `null`. A pending row still matches. */
-export const bindingFor = (screen: Screen, key: string, modifiers: Modifiers): Binding | null =>
+/**
+ * The binding a key press matches on a screen, or `null`. A pending row still matches.
+ *
+ * `rebinds` is the player's map (#187), defaulting to empty so a caller that has no reason
+ * to care — a test of the default table, the guardrail suite — reads exactly as before.
+ * Which keys a row answers to is `keysFor`'s question, not this one's: this module owns
+ * the scoping and the modifiers, and `keymap.ts` owns what a rebind means.
+ */
+export const bindingFor = (
+  screen: Screen,
+  key: string,
+  modifiers: Modifiers,
+  rebinds: Rebinds = {},
+): Binding | null =>
   BINDINGS.find(
     (binding) =>
       binding.screens.includes(screen) &&
-      binding.keys.includes(key) &&
+      keysFor(binding, rebinds).includes(key) &&
       satisfied(binding.ctrl, modifiers.ctrl) &&
       satisfied(binding.shift, modifiers.shift),
   ) ?? null;
@@ -468,8 +605,9 @@ export const actionFor = (
   screen: Screen,
   key: string,
   modifiers: Modifiers,
+  rebinds: Rebinds = {},
 ): PlannerAction | null => {
-  const binding = bindingFor(screen, key, modifiers);
+  const binding = bindingFor(screen, key, modifiers, rebinds);
   if (binding?.toAction === undefined) return null;
   if (binding.id === 'playbackSpeed') {
     const index = Number.parseInt(key, 10) - 1;

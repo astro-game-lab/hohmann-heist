@@ -34,6 +34,8 @@
  * needs no migration.
  */
 
+import { parseStoredSettings, type StoredSettings } from '../settings/schema.js';
+
 /** The `localStorage` key. Namespaced, because Pages serves other games from the org. */
 export const SAVE_KEY = 'hohmann-heist:save';
 
@@ -78,14 +80,22 @@ export interface DailyProgress {
 }
 
 /**
- * A settings value.
+ * §8.3.12's settings — see `settings/schema.ts`.
  *
- * §8.3.12's groups are #169's, and this is deliberately an open record until then rather
- * than an interface with every setting optional: an open record needs no migration when a
- * setting is added, and #169 is where the shape of each group gets decided by the screen
- * that renders it.
+ * This was `Record<string, SettingValue>`, a deliberate hole in an otherwise strictly
+ * validated document, and #186 is where it closed. The shape is declared beside the spec
+ * table that validates it rather than here, because that table is also what renders the
+ * controls and what resets them: three jobs, one declaration.
+ *
+ * **Sparse.** Only settings that differ from a code default are stored, so a changed
+ * default reaches a player who never touched that setting and an export does not pin
+ * today's defaults into the file. That is why the field is `Partial` all the way down and
+ * why an empty object — which is what every save written before this issue carries — is a
+ * complete, valid settings block meaning "everything default". No migration: the value's
+ * *shape* widened within `v: 1` in the one direction that is free, from a record whose
+ * keys were never written to a record whose keys are checked.
  */
-export type SettingValue = string | number | boolean;
+export type { StoredSettings } from '../settings/schema.js';
 
 export interface SaveV1 {
   readonly v: 1;
@@ -96,7 +106,7 @@ export interface SaveV1 {
     readonly days: Readonly<Record<string, DailyProgress>>;
     readonly streak: number;
   };
-  readonly settings: Readonly<Record<string, SettingValue>>;
+  readonly settings: StoredSettings;
   readonly flags: {
     /** FR-902's dismissed coach marks, by catalogue key. */
     readonly coachMarksSeen: readonly string[];
@@ -222,14 +232,11 @@ export const parseSaveV1 = (value: unknown): ParseResult => {
     readDays[date] = parsed;
   }
 
-  if (!isRecord(settings)) return unreadable('settings is not an object');
-  const readSettings: Record<string, SettingValue> = {};
-  for (const [name, raw] of Object.entries(settings)) {
-    if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') {
-      return unreadable(`settings.${name}`);
-    }
-    readSettings[name] = raw;
-  }
+  // Settings never make a save unreadable — FR-701. An unknown key is dropped and an
+  // out-of-range value falls back to its default, because a typo in a hand-edited
+  // settings block must not cost a player their medals. `settings` being absent or not an
+  // object at all is the same case: everything default.
+  const readSettings = parseStoredSettings(settings);
 
   if (!isRecord(flags)) return unreadable('flags is not an object');
   if (!isStringArray(flags['coachMarksSeen'])) return unreadable('flags.coachMarksSeen');
