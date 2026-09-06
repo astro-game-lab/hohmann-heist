@@ -630,6 +630,37 @@ export const en: Messages = {
     `Outside the ${range(maxRangeMetres, fmt)} objective tolerance`,
   'planner.approach.none': () => 'No approach within the mission horizon',
 
+  'planner.assists.elements': () => 'Element readouts',
+  'planner.assists.elementsHint': () => 'Shows the orbit’s shape as numbers beside the view.',
+  'planner.assists.closestApproach': () => 'Closest-approach markers',
+  'planner.assists.closestApproachHint': () => 'Marks where and when you come nearest the target.',
+  'planner.assists.snapping': () => 'Node snapping',
+  'planner.assists.snappingHint': () =>
+    'Places a burn on an apsis when you release within 30 s of one.',
+  'planner.assists.constraints': () => 'Constraint preview',
+  'planner.assists.constraintsHint': () =>
+    'Shades where a burn would break a rule, before you go there.',
+  'planner.assists.targetingComputer': () => 'Targeting computer',
+  'planner.assists.targetingComputerHint': () =>
+    'Solves a transfer for you and offers it as a plan.',
+  'planner.assists.porkchop': () => 'Porkchop plot',
+  'planner.assists.porkchopHint': () =>
+    'Charts departure against arrival, so you can read off a window.',
+  'planner.assists.coachMarks': () => 'Coach marks',
+  'planner.assists.coachMarksHint': () =>
+    'Points out a control the first time a contract needs it.',
+  'planner.assists.prediction': () => 'Trajectory prediction',
+  'planner.assists.predictionHint': () =>
+    'Always on. Seeing where the plan goes is the game, not a hint about it.',
+  'planner.assists.effectBlind': () => 'Turning this off earns Blind.',
+  'planner.assists.effectCaps': () => 'Using this caps the contract at Silver.',
+  'planner.assists.defaultOn': () => 'Changed — normally on.',
+  'planner.assists.defaultOff': () => 'Changed — normally off.',
+  'planner.assists.capClean': () => 'Best available: any medal, Clean Job eligible.',
+  'planner.assists.capAt': ({ medal, count }, fmt) =>
+    `Best available: ${medal} — ${fmt.integer(count)} assist${count === 1 ? '' : 's'} in use.`,
+  'planner.assists.medalSilver': () => 'Silver',
+
   'planner.history.undo': () => '\u27f2 UNDO',
   'planner.history.redo': () => '\u27f3 REDO',
   'planner.history.nothingToUndo': () => 'Nothing to undo.',
@@ -645,9 +676,6 @@ export const en: Messages = {
   'planner.plan.snappedTo': ({ kind }) => `snapped to ${kind}`,
 
   'planner.assists.heading': () => 'Assists',
-  'planner.assists.snapToApsis': () => 'Snap burns to apsis',
-  'planner.assists.snapToApsisHint': ({ windowSeconds }, fmt) =>
-    `Places a burn at the nearest apsis within ${fmt.integer(windowSeconds)} s`,
 
   'planner.tab.plan': ({ count }, fmt) => `Plan (${fmt.integer(count)})`,
   'planner.tab.readouts': () => 'Readouts',

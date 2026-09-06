@@ -12,6 +12,21 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **§8.3.4's assist tray, complete (#140).** Every assist §6.6 lists, with a name, a one-line
+  description, its state, its §6.6 default, and — FR-411's requirement — **its medal effect
+  with the right direction**. The three effects are not symmetric and the tray does not
+  pretend they are: two assists affect a medal by being *enabled* and two by being
+  *disabled*, so a uniform "affects medals" badge would be wrong about half of them and
+  would tell a player that leaving the defaults alone costs something, when §6.7's Clean Job
+  is specifically available to a player using every default. The current cap is shown as a
+  medal rather than a warning icon, and sits **outside** the disclosure so it is legible
+  while the tray is collapsed — it is the consequence of what is inside. Trajectory
+  prediction appears as a row that is not a control, with its reason, because §6.6 lists it
+  as "on, cannot be disabled" and a player who cannot find it will assume it is hidden
+  somewhere. An assist the contract does not allow is **absent**, not dimmed: §6.6's unlock
+  is progression rather than purchase. The rendered set is generated from #81's model, and
+  the test asserts it against that model rather than against a literal list, so an assist
+  added upstream cannot silently fail to appear.
 - **Undo and redo over plan edits (#138).** FR-110's fifty deep, `Ctrl+Z` / `Ctrl+Shift+Z`, and
   the `⟲ UNDO` / `⟳ REDO` controls §8.3.4's commit bar had already reserved space for. Every
   accepted mutation — add, move, delete, Δv change, snap, context-menu action — is exactly one

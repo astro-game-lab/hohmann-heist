@@ -29,9 +29,11 @@
  * would be a blank screen; a silently dropped edit would be a click that did nothing.
  */
 import { type Epoch } from '@hh/astro';
-import type { LegalityReason, LoadedScenario, PlanEdit } from '@hh/game';
+import type { AssistId, AssistState, LegalityReason, LoadedScenario, PlanEdit } from '@hh/game';
 import {
   addNode,
+  defaultAssistState,
+  restrictToAllowed,
   deleteNode,
   moveNode,
   setNodeDeltaV,
@@ -92,8 +94,16 @@ export const indexOfNodeId = (plan: Plan, id: NodeId | null): number | null => {
 export interface PlannerState {
   readonly model: PlannerModel;
   readonly evaluation: Evaluation;
-  /** DEP-07's assist. On by default: §6.6's assists start enabled and are opted out of. */
-  readonly snapToApsis: boolean;
+  /**
+   * §6.6's assist set — #81's model, #140's tray.
+   *
+   * This was a lone `snapToApsis: boolean` while DEP-07's toggle was the only control the
+   * tray carried. It is the whole set now, because #129's constraint preview is the second
+   * consumer and a second boolean beside the first is how the two would come to disagree
+   * about what "an assist" is. `restrictToAllowed` has already been applied, so an assist
+   * this contract does not offer reads `false` here and cannot be switched on.
+   */
+  readonly assists: AssistState;
   /** The last refused edit, shown until the next successful one (#133). */
   readonly lastRefusal: LegalityReason | null;
   /** Whether §8.3.5's overlay is open, and for which node id (#137). */
@@ -128,7 +138,8 @@ export interface PlannerActions {
   readonly deselect: () => void;
   readonly addNodeAt: (epoch: Epoch) => void;
   readonly deleteIndex: (index: number) => void;
-  readonly setSnapToApsis: (enabled: boolean) => void;
+  /** Toggle one of §6.6's assists. A no-op for one the contract does not allow. */
+  readonly setAssist: (id: AssistId, enabled: boolean) => void;
   /** §8.5.1's EVALUATED → COMMITTED. A no-op unless the verdict permits it. */
   readonly commit: () => void;
 
@@ -314,7 +325,7 @@ const restored = (
       scrub: current.model.scrub,
     },
     evaluation: evaluatePlan(scenario, entry.plan, current.evaluation.timeline),
-    snapToApsis: current.snapToApsis,
+    assists: current.assists,
     lastRefusal: null,
     editorFor:
       entry.editorFor !== null && indexOfNodeId(entry.plan, entry.editorFor) !== null
@@ -355,7 +366,7 @@ export const usePlanner = (
           seed.plan === undefined ? model.interaction : evaluated(IDLE, restored ? selected : null),
       },
       evaluation: evaluatePlan(scenario, initialPlan),
-      snapToApsis: true,
+      assists: restrictToAllowed(defaultAssistState(), scenario.document.assistsAllowed),
       lastRefusal: null,
       editorFor: null,
       preview: null,
@@ -394,7 +405,7 @@ export const usePlanner = (
             scrub: current.model.scrub,
           },
           evaluation: evaluatePlan(scenario, result.plan, current.evaluation.timeline),
-          snapToApsis: current.snapToApsis,
+          assists: current.assists,
           lastRefusal: null,
           preview: null,
           // One entry per accepted edit -- §6.11's rule, and it is recorded *here*
@@ -474,7 +485,9 @@ export const usePlanner = (
           // to build — the raw epoch is used, which is the answer the assist-off path
           // gives anyway and is better than refusing to place a node at all.
           const at =
-            timeline === null ? epoch : snapToApsis(timeline, epoch, current.snapToApsis).epoch;
+            timeline === null
+              ? epoch
+              : snapToApsis(timeline, epoch, current.assists.snapping).epoch;
           return addNode(current.model.plan, at);
         });
       },
@@ -487,8 +500,17 @@ export const usePlanner = (
         );
       },
 
-      setSnapToApsis: (enabled) => {
-        setState((current) => ({ ...current, snapToApsis: enabled }));
+      setAssist: (id, enabled) => {
+        setState((current) => {
+          // Re-restricted rather than assigned, so a caller cannot switch on an assist the
+          // contract does not offer. §6.6 makes `assistsAllowed` a permission rather than
+          // a default, and permissions belong at the write.
+          const next = restrictToAllowed(
+            { ...current.assists, [id]: enabled },
+            scenario.document.assistsAllowed,
+          );
+          return { ...current, assists: next };
+        });
       },
 
       // ── #137's overlay ───────────────────────────────────────────────────
@@ -520,7 +542,8 @@ export const usePlanner = (
           const { timeline } = current.evaluation;
           // The same fallback `addNodeAt` takes: with no timeline there is nothing to find
           // apsides on, and the raw epoch is the answer the assist-off path gives anyway.
-          const to = timeline === null ? at : snapToApsis(timeline, at, current.snapToApsis).epoch;
+          const to =
+            timeline === null ? at : snapToApsis(timeline, at, current.assists.snapping).epoch;
           return moveNode(current.model.plan, index, to);
         });
       },
@@ -538,7 +561,7 @@ export const usePlanner = (
           const at =
             timeline === null
               ? clamped
-              : snapNudge(timeline, node.epoch, clamped, current.snapToApsis).epoch;
+              : snapNudge(timeline, node.epoch, clamped, current.assists.snapping).epoch;
           return moveNode(current.model.plan, index, at);
         });
       },
@@ -634,7 +657,7 @@ export const usePlanner = (
           // with every pixel would make the target move as it was approached.
           const { timeline } = current.evaluation;
           const at =
-            timeline === null ? raw : snapToApsis(timeline, raw, current.snapToApsis).epoch;
+            timeline === null ? raw : snapToApsis(timeline, raw, current.assists.snapping).epoch;
           const index = indexOfNodeId(current.model.plan, dragging.nodeId);
           return {
             ...current,
@@ -726,7 +749,7 @@ export const usePlanner = (
               scrub: current.model.scrub,
             },
             evaluation: evaluatePlan(scenario, edit.plan, current.evaluation.timeline),
-            snapToApsis: current.snapToApsis,
+            assists: current.assists,
             lastRefusal: null,
             preview: null,
             // **One drag is one entry**, however many pointer events it produced. That is

@@ -444,8 +444,34 @@ export interface UiMessageParams {
 
   // ⑤ Assist tray (#133's snap toggle only; #140 brings the rest in M3)
   readonly 'planner.assists.heading': Record<string, never>;
-  readonly 'planner.assists.snapToApsis': Record<string, never>;
-  readonly 'planner.assists.snapToApsisHint': { readonly windowSeconds: number };
+
+  // §6.6's assist set, as the tray renders it (#140). One name and one description each,
+  // because the tray is where a player learns the vocabulary.
+  readonly 'planner.assists.elements': Record<string, never>;
+  readonly 'planner.assists.elementsHint': Record<string, never>;
+  readonly 'planner.assists.closestApproach': Record<string, never>;
+  readonly 'planner.assists.closestApproachHint': Record<string, never>;
+  readonly 'planner.assists.snapping': Record<string, never>;
+  readonly 'planner.assists.snappingHint': Record<string, never>;
+  readonly 'planner.assists.constraints': Record<string, never>;
+  readonly 'planner.assists.constraintsHint': Record<string, never>;
+  readonly 'planner.assists.targetingComputer': Record<string, never>;
+  readonly 'planner.assists.targetingComputerHint': Record<string, never>;
+  readonly 'planner.assists.porkchop': Record<string, never>;
+  readonly 'planner.assists.porkchopHint': Record<string, never>;
+  readonly 'planner.assists.coachMarks': Record<string, never>;
+  readonly 'planner.assists.coachMarksHint': Record<string, never>;
+  readonly 'planner.assists.prediction': Record<string, never>;
+  readonly 'planner.assists.predictionHint': Record<string, never>;
+  /** The two medal effects, phrased apart on purpose — see `AssistTray.tsx`. */
+  readonly 'planner.assists.effectBlind': Record<string, never>;
+  readonly 'planner.assists.effectCaps': Record<string, never>;
+  readonly 'planner.assists.defaultOn': Record<string, never>;
+  readonly 'planner.assists.defaultOff': Record<string, never>;
+  /** FR-411's cap, stated as a medal rather than as a warning. */
+  readonly 'planner.assists.capClean': Record<string, never>;
+  readonly 'planner.assists.capAt': { readonly medal: string; readonly count: number };
+  readonly 'planner.assists.medalSilver': Record<string, never>;
 
   // Narrow layout (#123): the tab strip the three side panels collapse into.
   readonly 'planner.tab.plan': { readonly count: number };

@@ -605,8 +605,9 @@ export const PlannerScreen = ({
             'assists',
             <AssistTray
               t={t}
-              snapToApsis={state.snapToApsis}
-              onToggleSnap={actions.setSnapToApsis}
+              assists={state.assists}
+              allowed={scenario.document.assistsAllowed ?? []}
+              onToggle={actions.setAssist}
             />,
           )}
         </div>
