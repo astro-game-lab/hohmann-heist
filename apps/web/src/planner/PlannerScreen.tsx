@@ -47,6 +47,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
 import { AssistTray } from './AssistTray.js';
 import { NodeContextMenu } from './NodeContextMenu.js';
+import { bandsFor } from './constraint-bands.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
 import { actionFor, isTypingTarget } from './keys.js';
@@ -324,6 +325,32 @@ export const PlannerScreen = ({
       (kind) => snapToNamedApsis(timeline, menuNode.epoch, kind) !== null,
     );
   })();
+
+  /**
+   * §6.5's bands — violations, and the regions a burn would be illegal in (#129).
+   *
+   * Built from the constraint *evaluations* rather than from the reason list, so a
+   * constraint that raises no `LegalityReason` — the burn-count cap is soft and raises none
+   * by design — can still be drawn. `constraint-bands.ts` carries the representation table
+   * and the reasoning.
+   *
+   * Gated on §6.6's `constraints` assist, which is the flag #129 provides and #81's model
+   * scores: disabling it earns *Blind*. It reaches here from the same `AssistState` the tray
+   * writes, so there is one answer to "is preview on" rather than a prop and a setting.
+   *
+   * A plan the engine could not evaluate has no constraints to band. That is not the same
+   * as a legal plan and the timeline shows nothing rather than pretending it is clear —
+   * the commit bar carries the reason in that case.
+   */
+  const bands = legality.evaluable
+    ? bandsFor({
+        constraints: legality.constraints,
+        startEpoch: scenario.startEpoch,
+        horizon: scenario.horizon,
+        deadlineSeconds: scenario.rules.deadlineSeconds,
+        previewEnabled: state.assists.constraints,
+      })
+    : [];
 
   // §8.3.4's closest-approach block belongs to an encounter with a second body. A
   // `reach_orbit` goal compares element sets and a `station` goal measures a longitude;
@@ -699,7 +726,7 @@ export const PlannerScreen = ({
         horizon={scenario.horizon}
         deadlineSeconds={scenario.rules.deadlineSeconds}
         scrubEpoch={model.scrub.epoch}
-        reasons={legality.evaluable ? legality.reasons : []}
+        bands={bands}
         objectiveMetEpoch={
           evaluation.objective?.met === true ? (evaluation.objective.atEpoch ?? null) : null
         }

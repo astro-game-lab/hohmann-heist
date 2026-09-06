@@ -365,6 +365,12 @@ export interface UiMessageParams {
    * arrives as a *number* — the index into a list this message owns — rather than as a
    * string fragment, so the sentence stays the message's to write. See `en.ts`.
    */
+  /** §6.5's preview: where a burn *would* be illegal (#129). */
+  readonly 'planner.timeline.bandPreview': {
+    readonly kind: number;
+    readonly startMetSeconds: number;
+    readonly endMetSeconds: number;
+  };
   readonly 'planner.timeline.band': {
     readonly kind: number;
     readonly startMetSeconds: number;

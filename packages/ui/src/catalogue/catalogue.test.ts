@@ -213,6 +213,7 @@ const samples: AllMessageParams = {
   'planner.timeline.deadline': { metSeconds: 50_400 },
   'planner.timeline.node': { index: 1, metSeconds: 252 },
   'planner.timeline.objectiveMet': { metSeconds: 43_792 },
+  'planner.timeline.bandPreview': { kind: 1, startMetSeconds: 0, endMetSeconds: 60 },
   'planner.timeline.band': { kind: 2, startMetSeconds: 1200, endMetSeconds: 1800 },
   'planner.plan.heading': {},
   'planner.plan.empty': {},

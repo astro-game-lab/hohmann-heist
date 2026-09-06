@@ -494,11 +494,24 @@ body {
   border-radius: 3px;
 }
 
+/* §8.6: a preview is shaded and a violation is solid. Two states, and the difference is
+   what tells a player whether they have already broken a rule or are being warned before
+   they do — so it is a difference in *weight* rather than in hue, which reads at a glance
+   and survives every palette. Neither is a modal and neither makes a sound. */
 .hh-timeline__band {
   position: absolute;
   top: 0;
   bottom: 0;
+}
+
+.hh-timeline__band[data-state='preview'] {
   background: repeating-linear-gradient(45deg, var(--hazard) 0 4px, transparent 4px 8px);
+  opacity: 0.55;
+}
+
+.hh-timeline__band[data-state='violated'] {
+  background: repeating-linear-gradient(45deg, var(--hazard) 0 4px, transparent 4px 8px);
+  background-color: var(--hazard);
 }
 
 .hh-timeline__deadline {

@@ -711,3 +711,63 @@ describe('the live preview during a gesture (#134, #135)', () => {
     expect(el('plan-node-0')).not.toBeNull();
   });
 });
+
+describe('§6.5’s constraint bands, end to end (#129)', () => {
+  const expandAssists = async (): Promise<void> => {
+    await act(() => {
+      el('assist-disclosure')?.click();
+    });
+  };
+
+  const bandsOf = (state?: string): readonly HTMLElement[] =>
+    [...container.querySelectorAll('[data-testid="timeline-band"]')].filter(
+      (band) => state === undefined || (band as HTMLElement).dataset['state'] === state,
+    ) as HTMLElement[];
+
+  it('shades the deadline’s region on an empty, perfectly legal plan', async () => {
+    await mount();
+    // *"A player never discovers a constraint by failing it."* C03's deadline is at
+    // T+03:00:00 and its horizon at T+06:00:00, so there are three hours a burn cannot go
+    // in — and before #129 nothing shaded them until a plan actually crossed the wall.
+    const preview = bandsOf('preview');
+    expect(preview).toHaveLength(1);
+    expect(preview[0]?.dataset['kind']).toBe('deadline');
+  });
+
+  it('says in text what the band shows, so the canvas is not the only channel', async () => {
+    await mount();
+    // §8.8's canvas-parity rule and NFR-019: a screen reader user gets the constraint's
+    // name and its interval from the DOM without seeing the shading.
+    const text = bandsOf('preview')[0]?.textContent ?? '';
+    expect(text).toContain('deadline');
+    expect(text).toContain('would break');
+  });
+
+  it('removes the preview when §6.6’s constraints assist is switched off', async () => {
+    await mount();
+    await expandAssists();
+    const toggle = el('assist-constraints');
+    if (!(toggle instanceof HTMLInputElement)) throw new Error('no constraints assist');
+    await act(() => {
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(bandsOf('preview')).toHaveLength(0);
+  });
+
+  it('leaves the plan untouched when the assist is toggled', async () => {
+    await mount();
+    await press('n');
+    const before = text('plan-panel');
+    await expandAssists();
+    const toggle = el('assist-constraints');
+    if (!(toggle instanceof HTMLInputElement)) throw new Error('no constraints assist');
+    await act(() => {
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // #129: *"with it off the bands are absent and the plan is unchanged"*. An assist is a
+    // display and scoring choice; it must never edit what the player built.
+    expect(text('plan-panel')).toBe(before);
+  });
+});

@@ -562,6 +562,16 @@ export const en: Messages = {
     return `${name} violated from ${fmt.met(startMetSeconds)} to ${fmt.met(endMetSeconds)}`;
   },
 
+  // The preview's wording is deliberately not the violation's with a word changed. §6.5's
+  // rule is that *a player never discovers a constraint by failing it*, so the sentence has
+  // to read as a warning about somewhere they have not been rather than as a report about
+  // somewhere they have.
+  'planner.timeline.bandPreview': ({ kind, startMetSeconds, endMetSeconds }, fmt) => {
+    const names = ['Δv budget', 'deadline', 'altitude floor', 'burn count'];
+    const name = names[kind] ?? 'constraint';
+    return `a burn between ${fmt.met(startMetSeconds)} and ${fmt.met(endMetSeconds)} would break the ${name}`;
+  },
+
   'planner.plan.heading': () => 'Maneuver plan',
   'planner.plan.empty': () => 'No burns yet. Click the trajectory or press N to add one.',
   'planner.plan.listLabel': ({ count }, fmt) =>

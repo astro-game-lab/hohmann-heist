@@ -12,6 +12,23 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **Constraint bands now warn before they fire (#129).** §6.5 says *"a player never discovers a
+  constraint by failing it"*, and the timeline drew bands only for intervals the current plan
+  was **already violating** — which is the second half of that sentence and not the first. The
+  deadline's region is the clearest case: every epoch past the wall is one where a burn is
+  `L3`, it is exactly computable from the contract, and nothing shaded it until a plan crossed
+  it. It is a band now, and C03 has three hours of it. Bands are built from the constraint
+  *evaluations* rather than from the legality reason list, which had tied what was drawn to
+  what was blocking — the burn-count cap is soft and raises no reason by design, so it could
+  never be banded at all. A preview band is shaded and a violation is solid (§8.6), each
+  carries its own sentence naming the constraint and its interval so the shading is never the
+  only channel (NFR-019, §8.8), and the wording differs rather than being the same sentence
+  with a word changed. §6.6's `constraints` assist turns the previews off — and deliberately
+  leaves violations reported, because turning off an assist that shows you things *early*
+  should not leave the commit bar calling a plan illegal with nothing saying where.
+  `constraint-bands.ts` carries a single table mapping every `ConstraintKind` to its timeline
+  and orbit representation, including "none, and here is why", so a constraint added to the
+  union is a compile error rather than a kind that silently has neither.
 - **§8.3.4's assist tray, complete (#140).** Every assist §6.6 lists, with a name, a one-line
   description, its state, its §6.6 default, and — FR-411's requirement — **its medal effect
   with the right direction**. The three effects are not symmetric and the tray does not
