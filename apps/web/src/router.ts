@@ -49,8 +49,17 @@ export type RouteName =
  *
  * Order matters: `/daily/:date` must be tried before `/daily`, or the more general
  * pattern would swallow the specific one.
+ *
+ * **Exported because the accessibility gate enumerates it** (#170). NFR-017 requires axe
+ * to be clean *"on every route"*, and a hand-written second copy of this list would drift
+ * the moment a route was added — silently, since a gate that never visits a route reports
+ * nothing about it. `routes.axe.test.tsx` derives its cases from this array instead, so a
+ * new route arrives in the gate already covered and a deleted one fails loudly.
+ *
+ * Exporting it does not make it a public API: nothing outside this module matches against
+ * it, and {@link parseHash} remains the only way to turn a hash into a route.
  */
-const ROUTES: readonly (readonly [pattern: string, name: RouteName])[] = [
+export const ROUTES: readonly (readonly [pattern: string, name: RouteName])[] = [
   ['', 'title'],
   ['/', 'title'],
   ['/board', 'board'],

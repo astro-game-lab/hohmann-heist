@@ -21,7 +21,7 @@
  *
  * Focus moves in on open, is trapped while open, `Esc` closes it, and focus returns to
  * whatever opened it — §8.8's rule, which #169 will test this overlay against. All four
- * come from `useDialog`, shared with the settings overlay rather than written twice.
+ * come from `useOverlay`, shared with the settings overlay rather than written twice.
  *
  * ## It never pauses or mutates anything
  *
@@ -38,7 +38,7 @@
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 
-import { useDialog } from '../a11y/dialog.js';
+import { useOverlay } from '../a11y/overlay.js';
 import { BINDINGS, keysFor, type Binding, type Rebinds, type Screen } from '../planner/keys.js';
 import { KeyLabel } from '../settings/KeybindingsGroup.js';
 
@@ -85,7 +85,7 @@ export const sectionOrder = (scope: Screen | null): readonly Section[] => {
 };
 
 export const HelpOverlay = ({ t, rebinds, scope, onClose }: HelpOverlayProps): JSX.Element => {
-  const ref = useDialog<HTMLDivElement>({ onClose });
+  const ref = useOverlay<HTMLDivElement>({ modal: true, onClose });
 
   return (
     <div class="hh-help" data-testid="help-overlay">

@@ -6,9 +6,10 @@
  *
  * ## Not a dialog, and deliberately not written like one
  *
- * `useDialog` gives an overlay the four things §8.8 asks of a *dialog*: focus moves in,
- * focus is trapped, `Esc` closes, focus returns. A coach mark must have none of the first
- * three. It appears while the player is mid-drag; moving focus would abandon the gesture,
+ * `useOverlay`'s modal arm gives an overlay the four things §8.8 asks of a *dialog*: focus
+ * moves in, focus is trapped, `Esc` closes, focus returns. A coach mark must have none of
+ * the first three, so it is the one overlay in the app that calls neither arm — the third
+ * kind `a11y/overlay.ts` names, and `coachMarks.test.tsx` holds it to that. It appears while the player is mid-drag; moving focus would abandon the gesture,
  * and trapping it would make a hint that cannot be ignored — which is a modal, which is
  * exactly what §8.6 says this is not.
  *

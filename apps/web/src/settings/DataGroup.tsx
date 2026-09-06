@@ -36,6 +36,7 @@ import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 
+import { useOverlay } from '../a11y/overlay.js';
 import { downloadSave, readFileText, summarise } from '../save/download.js';
 import { importSave } from '../save/transfer.js';
 import type { SaveV1 } from '../save/index.js';
@@ -76,6 +77,24 @@ export const DataGroup = ({
   // unreadable one is refused *before* the player is asked to destroy anything. Asking
   // "replace your progress?" and then failing to import would be the worst order.
   const [incoming, setIncoming] = useState<SaveV1 | null>(null);
+
+  /*
+   * The confirmation is an overlay too, and #169's policy covers it (`a11y/overlay.ts`).
+   *
+   * Non-modal — `aria-modal="false"` below, and deliberately: the settings screen behind
+   * stays readable while the player decides, and this is a two-button question rather than
+   * a mode. So focus moves in and is restored to the button that raised it, and nothing is
+   * trapped.
+   *
+   * Moving focus in is the part that was missing. The confirmation is rendered *after* a
+   * press on Import or Clear, so without this a keyboard user pressed a button and the
+   * question they now had to answer was somewhere below them in the tab order, unannounced.
+   *
+   * `Esc` stays on the container handler below rather than coming from the hook: it is
+   * scoped to focus-within by virtue of being a container handler, which is what #185 asks
+   * for and what a document-level listener would not be.
+   */
+  const confirmRef = useOverlay<HTMLDivElement>({ modal: false, open: pending !== null });
 
   const summary = summarise(save);
   const counts = {
@@ -203,6 +222,7 @@ export const DataGroup = ({
       {pending === null ? null : (
         <div
           class="hh-data__confirm"
+          ref={confirmRef}
           role="dialog"
           aria-modal="false"
           aria-labelledby="hh-data-confirm-heading"

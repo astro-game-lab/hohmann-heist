@@ -36,7 +36,9 @@
  */
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
+
+import { useOverlay } from '../a11y/overlay.js';
 
 /** Where the menu is anchored, in stage pixels. */
 export interface MenuPosition {
@@ -70,14 +72,27 @@ export const NodeContextMenu = ({
   onDelete,
   onClose,
 }: NodeContextMenuProps): JSX.Element => {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  // Focus the first item on open. Without this a keyboard user who pressed `Menu` would
-  // have opened something they then could not reach without tabbing through the page.
-  useEffect(() => {
-    const first = menuRef.current?.querySelector<HTMLButtonElement>(ITEM_SELECTOR);
-    first?.focus();
-  }, []);
+  /*
+   * §8.8's overlay policy, from `a11y/overlay.ts` rather than written here (#169).
+   *
+   * Focus moves to the first item on open — without that a keyboard user who pressed
+   * `Menu` would have opened something they then could not reach without tabbing through
+   * the page — and is returned to the opener on close.
+   *
+   * **Non-modal, and the markup already said so.** This is a `role="menu"` popup rather
+   * than a `role="dialog"`, it dismisses on a press anywhere outside, and `Tab` should
+   * leave it rather than cycle inside it. Trapping four items would be the keyboard trap
+   * §8.8 forbids, wearing the costume of the rule that forbids it.
+   *
+   * Restoring matters most for **Delete**, which is the case #169 calls out: the item
+   * removes the node whose row opened this menu, so the opener is detached by the time the
+   * menu closes. `restoreFocus` lands on the screen heading rather than on `<body>`.
+   *
+   * `Esc` stays below rather than coming from the hook, because it must also
+   * `stopPropagation` — `PlannerScreen`'s cascade checks the menu first, and this handler
+   * is what makes that arm unnecessary while focus is still inside the menu.
+   */
+  const menuRef = useOverlay<HTMLDivElement>({ modal: false });
 
   // A press anywhere else dismisses, which is what every other menu on the platform does.
   // `pointerdown` rather than `click`, so the menu is gone before the press it was

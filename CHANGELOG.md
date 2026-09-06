@@ -242,6 +242,36 @@ they relied on has moved.
   arrives at the same position — the one geometry Lambert's problem is degenerate at, and
   one the transfer search was answering 34% too expensively.
 
+- **One focus policy, and axe-core as a blocking gate (#169, #170).** M3 added four screens
+  and five overlays, and each one was an opportunity to strand a keyboard user. `a11y/overlay.ts`
+  is now the single statement of what an overlay owes one, and it names **three** kinds rather
+  than assuming every overlay is a dialog: modal (focus in, trapped, `Esc` closes, focus
+  returned), non-modal (focus in and returned, never trapped, and `Esc` belongs to the screen
+  that can order it against everything else it has open), and announce-only — a coach mark,
+  which takes no focus at all. The distinction is spelled in the *type*: a non-modal overlay
+  has no `onClose` to pass, so wiring `Esc` into one does not compile. Every overlay in the
+  app now uses it, and a census over the sources fails the build if a component declares an
+  overlay role without it.
+  The half that actually strands people is restoring focus when the opener has *gone* — the
+  node editor closed by deleting the node whose row opened it. That took a measurement rather
+  than an argument: at the moment the overlay is torn down the opener is **still attached**,
+  so the obvious `isConnected` check passes, focus moves to the row, and Preact removes the
+  row a few lines later in the same commit. Focus lands on `<body>` with everything having
+  reported success. `restoreFocus` therefore re-checks once the commit has settled and sends
+  focus to the screen heading if it came to rest nowhere. Phase changes within a contract
+  (`briefing → planner → execution → debrief`) now move focus like the route changes they are
+  to the player, using the scope the contract screen already reports upward.
+  **axe-core runs in CI over every route and every state**, blocking on serious and critical.
+  The route list is derived from the router's own table as a `Record<RouteName, string>`, so a
+  new route is covered by default and a deleted one is a compile error; the four phases, all
+  six overlays and the failure states are visited as states. **`color-contrast` is disabled by
+  name**, because jsdom has no layout and the rule would otherwise report zero violations for
+  a check that never executed — a gate implying coverage it does not have, which is the failure
+  `docs/PHYSICS.md` already has a rule about. Its replacement is named in the same place:
+  #116's contrast matrix, which covers all five palettes rather than the one on screen. Every
+  route is clean at merge and nothing is suppressed. The stylesheet gained a matching gate:
+  a rule may not suppress the focus ring without drawing one another way.
+
 ### Fixed
 - **Coach marks were two flags pretending to be one (#159).** §8.3.12's Gameplay group carried
   a `gameplay.coachMarks` boolean and §6.6 carried the `coach_marks` assist, and nothing tied
