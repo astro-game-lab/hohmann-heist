@@ -676,6 +676,10 @@ export const en: Messages = {
   'planner.history.nothingToUndo': () => 'Nothing to undo.',
   'planner.history.nothingToRedo': () => 'Nothing to redo.',
 
+  'planner.contract.heading': () => 'Contract',
+  'planner.contract.toggle': () => 'Contract',
+  'planner.tab.contract': () => 'Contract',
+
   'planner.nodeMenu.label': ({ index }, fmt) => `Actions for burn ${fmt.integer(index)}`,
   'planner.nodeMenu.snapPeriapsis': () => 'Snap to periapsis',
   'planner.nodeMenu.snapApoapsis': () => 'Snap to apoapsis',

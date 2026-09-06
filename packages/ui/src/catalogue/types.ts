@@ -437,6 +437,11 @@ export interface UiMessageParams {
   readonly 'planner.history.nothingToUndo': Record<string, never>;
   readonly 'planner.history.nothingToRedo': Record<string, never>;
 
+  // §8.3.3's contract, carried into the planner (#264).
+  readonly 'planner.contract.heading': Record<string, never>;
+  readonly 'planner.contract.toggle': Record<string, never>;
+  readonly 'planner.tab.contract': Record<string, never>;
+
   // §8.5.2's node context menu (#136).
   readonly 'planner.nodeMenu.label': { readonly index: number };
   readonly 'planner.nodeMenu.snapPeriapsis': Record<string, never>;

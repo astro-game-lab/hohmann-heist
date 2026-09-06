@@ -675,6 +675,67 @@ body {
   opacity: 0.8;
 }
 
+/* ── §8.3.3's contract, in the planner (#264) ────────────────────────────── *
+ *
+ * Scrolls within the panel rather than growing it: C07's objective is three numbers and a
+ * long sentence, and the timeline must stay visible at every height (§8.3.4).
+ */
+
+.hh-contract {
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.hh-contract__title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.hh-contract__brief {
+  margin: 0 0 10px;
+  font-size: 0.9em;
+  opacity: 0.9;
+}
+
+.hh-contract__numbers {
+  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.hh-contract__numbers dt {
+  opacity: 0.75;
+}
+
+.hh-contract__numbers dd {
+  margin: 0;
+}
+
+.hh-contract__constraints ul {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hh-contract__setup dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.hh-contract__setup dt {
+  opacity: 0.75;
+}
+
+.hh-contract__setup dd {
+  margin: 0;
+}
+
 /* ── The readouts (#131, #132) ───────────────────────────────────────────── */
 
 .hh-readouts__list {

@@ -12,6 +12,22 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **The contract stays readable while planning (#264).** ACCEPT is a one-way door: §8.3.3 states
+  the job in numbers and the planner then showed the Δv budget and the deadline and **nothing
+  else** — not the objective, not par, not the constraints, not the target's setup. Tolerable
+  while one contract shipped; a real problem for Acts I–II, where C07's objective is three
+  numbers none of which the planner displayed and all of which are needed to plan the burn.
+  There is now a contract panel: a fourth entry in the strip that already carries the plan, the
+  readouts and the assists, toggled from a control beside `?` and `⚙` or with `B`, and open or
+  closed for the rest of the session rather than per contract. It renders the **briefing's own
+  content, from the briefing's own code** — `objectiveLine`, `setupLine`, the constraint rows
+  and the `Quantity` component that carries display units with SI behind them all moved to a
+  shared module both screens call, and a test asserts the two render identical text for the
+  same scenario. A second rendering would have been two things to keep in step, and the first
+  to drift would be the planner's, the one a player sees least. Opening it changes nothing —
+  not the plan, the scrub head, the selection or playback — which is structural rather than
+  asserted: the component takes a scenario and a catalogue and no callback that could edit
+  anything. Found by playing the shipped Acts I–II build, not by a test.
 - **Constraint bands now warn before they fire (#129).** §6.5 says *"a player never discovers a
   constraint by failing it"*, and the timeline drew bands only for intervals the current plan
   was **already violating** — which is the second half of that sentence and not the first. The

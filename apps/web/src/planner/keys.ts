@@ -51,7 +51,9 @@ export type PlannerAction =
   | { readonly kind: 'undo' }
   | { readonly kind: 'redo' }
   /** §8.5.2's context menu on the selected node — #136, and NFR-016's keyboard route to it. */
-  | { readonly kind: 'nodeMenu' };
+  | { readonly kind: 'nodeMenu' }
+  /** §8.3.3's contract, shown beside the plan — #264. */
+  | { readonly kind: 'toggleContract' };
 
 export interface Modifiers {
   readonly shift: boolean;
@@ -162,6 +164,15 @@ export const actionFor = (key: string, modifiers: Modifiers): PlannerAction | nu
     case 'f':
     case 'F':
       return { kind: 'recentre' };
+
+    // §8.3.3's contract panel (#264). `B` for *brief*, which is what the panel shows and
+    // what the player last read before ACCEPT took it away. `C` would have been the
+    // obvious letter and is §8.5.3's Codex; taking it here would have meant re-keying the
+    // Codex before it exists, which is the kind of churn #141's audit is meant to prevent
+    // rather than cause.
+    case 'b':
+    case 'B':
+      return { kind: 'toggleContract' };
 
     // §8.5.3's undo and redo (#138). `Ctrl+Shift+Z` for redo rather than `Ctrl+Y`, which
     // is §8.5.3's own choice: `Ctrl+Y` is a Windows convention and this game runs in a

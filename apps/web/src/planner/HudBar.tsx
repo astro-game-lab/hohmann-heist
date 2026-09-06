@@ -59,6 +59,9 @@ export interface HudBarProps {
   /** Where the scrub head is. MET is read from here, never from a clock (FR-403). */
   readonly scrubEpoch: Epoch;
   readonly onOpenHelp: () => void;
+  /** Whether §8.3.3's contract panel is showing — #264. */
+  readonly contractOpen: boolean;
+  readonly onToggleContract: () => void;
 }
 
 export const HudBar = ({
@@ -70,6 +73,8 @@ export const HudBar = ({
   startEpoch,
   scrubEpoch,
   onOpenHelp,
+  contractOpen,
+  onToggleContract,
 }: HudBarProps): JSX.Element => {
   const metSeconds = metAt(startEpoch, scrubEpoch);
   // `fraction` is `Infinity` for a zero budget with any spend, which would make the bar's
@@ -139,6 +144,22 @@ export const HudBar = ({
         <span data-testid="hud-met">{t('planner.hud.met', { metSeconds })}</span>
       </div>
 
+      {/*
+        #264's discoverable control, beside `?` and `⚙` where §8.3.3's other
+        always-available affordances live. `aria-pressed` rather than a label that changes:
+        the control's name is what it shows, and its state is the button's own — a control
+        that renamed itself between "Show contract" and "Hide contract" would be announced
+        as a different control each time it was used.
+      */}
+      <button
+        type="button"
+        class="hh-hud__control"
+        aria-pressed={contractOpen}
+        data-testid="hud-contract-toggle"
+        onClick={onToggleContract}
+      >
+        {t('planner.contract.toggle', {})}
+      </button>
       <button type="button" class="hh-hud__control" onClick={onOpenHelp}>
         {t('planner.hud.help', {})}
       </button>

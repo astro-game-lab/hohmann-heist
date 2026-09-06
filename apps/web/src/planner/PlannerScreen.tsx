@@ -48,6 +48,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { AssistTray } from './AssistTray.js';
 import { NodeContextMenu } from './NodeContextMenu.js';
 import { bandsFor } from './constraint-bands.js';
+import { ContractPanel, contractPanelSession } from './ContractPanel.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
 import { actionFor, isTypingTarget } from './keys.js';
@@ -60,7 +61,7 @@ import type { Evaluation } from './evaluate.js';
 import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf, type PlannerSeed } from './store.js';
 
 /** Which side panel the narrow layout is showing. Ignored above the breakpoint. */
-type Tab = 'plan' | 'readouts' | 'assists';
+type Tab = 'plan' | 'readouts' | 'assists' | 'contract';
 
 export interface PlannerScreenProps {
   readonly t: Catalogue['resolve'];
@@ -116,6 +117,16 @@ export const PlannerScreen = ({
 }: PlannerScreenProps): JSX.Element => {
   const [state, actions] = usePlanner(scenario, seed ?? {});
   const [tab, setTab] = useState<Tab>('plan');
+  // Seeded from the session's value and written back on every change, so the preference
+  // survives the unmount a contract change causes — `contractPanelSession` says why it
+  // lives there rather than in component state or in the save (#264).
+  const [contractOpen, setContractOpen] = useState(contractPanelSession.open);
+  const toggleContract = useCallback(() => {
+    setContractOpen((was) => {
+      contractPanelSession.open = !was;
+      return !was;
+    });
+  }, []);
   // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
   // screen, or when the plan produced no trajectory to draw it on — see below.
   const [anchor, setAnchor] = useState<{ readonly x: number; readonly y: number } | null>(null);
@@ -429,6 +440,9 @@ export const PlannerScreen = ({
         case 'redo':
           actions.redo();
           break;
+        case 'toggleContract':
+          toggleContract();
+          break;
         case 'nodeMenu':
           // §8.8's canvas-parity rule: every pointer action on the orbit view has a
           // keyboard route, and this is the menu's. Anchored at the node's drawn position
@@ -471,7 +485,7 @@ export const PlannerScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, anchor, menu, model, scenario, state]);
+  }, [actions, anchor, menu, model, scenario, state, toggleContract]);
 
   /**
    * §8.5.1's exit to EXECUTION.
@@ -533,6 +547,8 @@ export const PlannerScreen = ({
         startEpoch={scenario.startEpoch}
         scrubEpoch={model.scrub.epoch}
         onOpenHelp={() => undefined}
+        contractOpen={contractOpen}
+        onToggleContract={toggleContract}
       />
 
       <div class="hh-planner__stage">
@@ -581,6 +597,7 @@ export const PlannerScreen = ({
                 ['plan', t('planner.tab.plan', { count: model.plan.nodes.length })],
                 ['readouts', t('planner.tab.readouts', {})],
                 ['assists', t('planner.tab.assists', {})],
+                ['contract', t('planner.tab.contract', {})],
               ] as const
             ).map(([name, label]) => (
               <button
@@ -628,6 +645,19 @@ export const PlannerScreen = ({
             'readouts',
             <Readouts t={t} orbit={orbit} approach={approach} startEpoch={scenario.startEpoch} />,
           )}
+          {/*
+            The wide layout's collapsible half of #264: the section is in the column with
+            the other three and `contractOpen` decides whether it is there. In the narrow
+            layout the tab strip decides instead, which is why the panel is still mounted
+            when it is merely on another tab — that is #123's guarantee and a fourth panel
+            inherits it.
+          */}
+          {contractOpen || tab === 'contract'
+            ? panel(
+                'contract',
+                <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
+              )
+            : null}
           {panel(
             'assists',
             <AssistTray
