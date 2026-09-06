@@ -199,19 +199,32 @@ export interface KeyLabel {
 }
 
 export const labelFor = (binding: Binding, rebinds: Rebinds): KeyLabel => {
-  const keys = keysFor(binding, rebinds);
-  // Letter rows list both cases and mean one key, so the label shows one. Everything
-  // else — `Delete`/`Backspace`, `1`–`5` — genuinely is several keys and shows them all.
-  const distinct = keys.filter(
-    (key, index) => keys.findIndex((other) => other.toLowerCase() === key.toLowerCase()) === index,
-  );
+  const parts: { messageKey?: MessageKey; glyph?: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const key of keysFor(binding, rebinds)) {
+    const messageKey = KEY_LABEL_KEYS[key];
+    // A single letter is displayed in upper case, which is what §8.5.3 prints and what is
+    // on the keycap. It is also what a player who just rebound the action pressed: the
+    // stored key is whatever case arrived, and `keysFor` matches both, so the case is a
+    // presentation choice rather than information.
+    const glyph = messageKey === undefined && key.length === 1 ? key.toUpperCase() : key;
+
+    // De-duplicated by what the row will *show*, not by the key string. Two spellings of
+    // one key reach here — `' '` and `'Spacebar'` both mean the space bar, the second
+    // being the legacy name older engines send — and a letter row lists both cases of one
+    // letter. Comparing the keys would render "Space Space", which is what looking at the
+    // built page turned up.
+    const identity = messageKey ?? glyph.toLowerCase();
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+
+    parts.push(messageKey === undefined ? { glyph } : { messageKey });
+  }
 
   return {
     ctrl: binding.ctrl === 'required',
     shift: binding.shift === 'required',
-    parts: distinct.map((key) => {
-      const messageKey = KEY_LABEL_KEYS[key];
-      return messageKey === undefined ? { glyph: key } : { messageKey };
-    }),
+    parts,
   };
 };

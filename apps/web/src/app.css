@@ -1700,6 +1700,26 @@ body {
 
 /* ── The remapper (#187) ─────────────────────────────────────────────────── */
 
+/* The map's own heading, since the Input group also holds the pointer settings. */
+.hh-bindings__heading {
+  margin-block: 0.5rem 0;
+}
+
+/* Reset-all's confirmation, laid out like the Data group's for the same reason: it is a
+ * question in the flow rather than something covering the screen. */
+.hh-settings__reset-all {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: flex-start;
+}
+
+.hh-settings__reset-all p {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
 .hh-bindings {
   display: flex;
   flex-direction: column;

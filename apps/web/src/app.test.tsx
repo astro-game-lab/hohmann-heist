@@ -247,6 +247,21 @@ describe('the keyboard help overlay', () => {
     expect(el('help-overlay')).toBeNull();
   });
 
+  it('does fire from a checkbox, which is most of the settings screen', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    const checkbox = container.querySelector('input[type="checkbox"]');
+    expect(checkbox).not.toBeNull();
+    await act(() => {
+      (checkbox as HTMLElement).focus();
+      checkbox?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    });
+    // Found by driving the built app: the planner's typing guard treats every `<input>` as
+    // typing, which would have made the overlay unreachable from the one screen a
+    // confused player is most likely to be on.
+    expect(el('help-overlay')).not.toBeNull();
+  });
+
   it('lists the current scope first once a contract is open', async () => {
     window.location.hash = '#/contract/c03-cold-open';
     await mount();

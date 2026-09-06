@@ -60,7 +60,7 @@ describe('the content', () => {
 
   it('shows the keys a binding actually responds to', async () => {
     await mount();
-    expect(el('help-addNode')?.textContent).toContain('n');
+    expect(el('help-addNode')?.querySelector('kbd')?.textContent).toBe('N');
     // A named key renders as its word rather than as its `event.key`.
     expect(el('help-playPause')?.textContent).toContain('Space');
     expect(el('help-scrubToStart')?.textContent).toContain('Home');
@@ -79,9 +79,14 @@ describe('the content', () => {
 
   it('shows the new key after a rebind, without a reload', async () => {
     await mount({ rebinds: { addNode: 'k' } });
-    const row = el('help-addNode')?.textContent ?? '';
-    expect(row).toContain('k');
-    expect(row).not.toMatch(/\bn\b/);
+    expect(el('help-addNode')?.querySelector('kbd')?.textContent).toBe('K');
+  });
+
+  it('shows one key where the table lists two spellings of the same one', async () => {
+    await mount();
+    // `playPause` is `[' ', 'Spacebar']` — one key. The row read "Space Space" before the
+    // label de-duplicated by what it shows rather than by the key string.
+    expect(el('help-playPause')?.querySelectorAll('kbd')).toHaveLength(1);
   });
 
   it('marks a binding whose feature is not built rather than hiding it', async () => {

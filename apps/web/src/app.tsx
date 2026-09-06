@@ -42,7 +42,7 @@ import {
   type StoredSettings,
 } from './save/index.js';
 import { HelpOverlay } from './help/HelpOverlay.js';
-import { actionFor, isTypingTarget, type Screen as KeyScope } from './planner/keys.js';
+import { actionFor, isTextEntryTarget, type Screen as KeyScope } from './planner/keys.js';
 import { KeyboardScopeProvider } from './planner/scope.js';
 import { downloadSave } from './save/download.js';
 import { SettingsOverlay } from './settings/SettingsOverlay.js';
@@ -302,7 +302,11 @@ const AppShell = ({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (isTypingTarget(event.target)) return;
+      // `isTextEntryTarget`, not `isTypingTarget`: most of the settings screen is
+      // checkboxes and radios, and treating those as typing would make the overlay
+      // unreachable from the screen a confused player is most likely to be on. Typing `?`
+      // into the handle field still does not open it.
+      if (isTextEntryTarget(event.target)) return;
       const action = actionFor(
         scope ?? 'briefing',
         event.key,

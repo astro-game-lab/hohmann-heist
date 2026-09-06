@@ -500,6 +500,67 @@ export const isTypingTarget = (target: EventTarget | null): boolean => {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 };
 
+/**
+ * Whether a key press is going into text the player is **typing**.
+ *
+ * Narrower than {@link isTypingTarget}, and the two are deliberately different rather than
+ * one being a mistake.
+ *
+ * `isTypingTarget` treats every `<input>` as typing, which is right for the planner: its
+ * bindings are letters and punctuation, the node editor is full of number fields, and a
+ * binding that fired into one would be a binding that corrupted a burn. Being conservative
+ * costs nothing there, because a player editing a node is not also trying to press `N`.
+ *
+ * It is wrong for `?`, though, and the settings screen is where that shows. Most of that
+ * screen's controls are checkboxes, radios and ranges — none of which can receive typed
+ * text — so a guard that called them all "typing" would make the help overlay unreachable
+ * from exactly the screen a confused player is most likely to be on. `?` still must not
+ * open while someone types it into the handle field, which is what this distinguishes:
+ * *text entry*, not *any control*.
+ */
+const TEXT_ENTRY_TYPES = new Set([
+  'text',
+  'search',
+  'url',
+  'tel',
+  'email',
+  'password',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'time',
+  'week',
+]);
+
+export const isTextEntryTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const editable = target.getAttribute('contenteditable');
+  if (editable !== null && editable !== 'false') return true;
+  if (target.getAttribute('role') === 'textbox') return true;
+  if (target.tagName === 'TEXTAREA') return true;
+  if (target.tagName !== 'INPUT') return false;
+  // An `<input>` with no `type` is a text field; one with an unknown type is treated as a
+  // text field by every browser, and by this.
+  const type = (target.getAttribute('type') ?? 'text').toLowerCase();
+  return TEXT_ENTRY_TYPES.has(type) || !KNOWN_NON_TEXT_TYPES.has(type);
+};
+
+/** Input types that cannot receive typed characters. */
+const KNOWN_NON_TEXT_TYPES = new Set([
+  'checkbox',
+  'radio',
+  'range',
+  'button',
+  'submit',
+  'reset',
+  'image',
+  'file',
+  'color',
+  'hidden',
+]);
+
 const satisfied = (rule: ModifierRule | undefined, held: boolean): boolean => {
   if (rule === 'required') return held;
   if (rule === 'forbidden') return !held;

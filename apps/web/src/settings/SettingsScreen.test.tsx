@@ -227,13 +227,32 @@ describe('changing a setting', () => {
     expect(el('assist-porkchop')).toHaveProperty('checked', false);
   });
 
-  it('resets everything to the code defaults', async () => {
+  it('asks before resetting everything, and does nothing if refused', async () => {
+    const onStored = vi.fn();
+    await mount({ onStored });
+    await act(() => {
+      radio('accessibility.verbosity', 'verbose')?.click();
+    });
+    expect(onStored).toHaveBeenLastCalledWith({ 'accessibility.verbosity': 'verbose' });
+
+    await click('reset-all-settings');
+    // Nothing has happened yet — a full remap is the most expensive thing on this screen
+    // and one click from the button that discards it.
+    expect(onStored).toHaveBeenLastCalledWith({ 'accessibility.verbosity': 'verbose' });
+    expect(el('reset-all-confirm')?.textContent).toContain('progress is not affected');
+
+    await click('reset-all-cancel');
+    expect(onStored).toHaveBeenLastCalledWith({ 'accessibility.verbosity': 'verbose' });
+  });
+
+  it('resets everything to the code defaults once confirmed', async () => {
     const onStored = vi.fn();
     await mount({ onStored });
     await act(() => {
       radio('accessibility.verbosity', 'verbose')?.click();
     });
     await click('reset-all-settings');
+    await click('reset-all-proceed');
     expect(onStored).toHaveBeenLastCalledWith({});
   });
 });
@@ -299,7 +318,7 @@ describe('the Input group — remapping (#187)', () => {
     await press('addNode', 'k');
 
     expect(onStored).toHaveBeenLastCalledWith({ keybindings: { addNode: 'k' } });
-    expect(el('binding-addNode')?.querySelector('kbd')?.textContent).toBe('k');
+    expect(el('binding-addNode')?.querySelector('kbd')?.textContent).toBe('K');
   });
 
   it('refuses a reserved key and says so, rather than trapping the player', async () => {

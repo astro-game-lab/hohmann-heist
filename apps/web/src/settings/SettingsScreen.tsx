@@ -32,6 +32,7 @@ import type { AssistId } from '@hh/game';
 import { ASSIST_IDS, decodeAssists, encodeAssists } from '@hh/game';
 import type { Catalogue, MessageKey } from '@hh/ui';
 import type { JSX } from 'preact';
+import { useState } from 'preact/hooks';
 
 import type { Rebinds } from '../planner/keys.js';
 import type { SaveV1 } from '../save/index.js';
@@ -136,56 +137,94 @@ export const SettingsScreen = ({
   onResetAll,
   onReplaceSave,
   onClearSave,
-}: SettingsScreenProps): JSX.Element => (
-  <div class="hh-settings" data-testid="settings">
-    <p class="hh-settings__immediate">{t('settings.immediate', {})}</p>
+}: SettingsScreenProps): JSX.Element => {
+  // Reset-all asks first. It destroys no progress — and it does discard a full remap,
+  // which for a player who reached this screen because a fixed map was unusable is the
+  // most expensive thing on it. The confirmation says which of those two is true, because
+  // "reset all settings" beside a Data group that clears saves reads more alarming than it
+  // is.
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
-    {SETTING_GROUPS.map((group) => (
-      <fieldset key={group} class="hh-settings__group" data-testid={`settings-group-${group}`}>
-        <legend>{t(GROUP_LABELS[group], {})}</legend>
+  return (
+    <div class="hh-settings" data-testid="settings">
+      <p class="hh-settings__immediate">{t('settings.immediate', {})}</p>
 
-        {group === 'audio' ? <p class="hh-setting__note">{t('settings.audio.note', {})}</p> : null}
+      {SETTING_GROUPS.map((group) => (
+        <fieldset key={group} class="hh-settings__group" data-testid={`settings-group-${group}`}>
+          <legend>{t(GROUP_LABELS[group], {})}</legend>
 
-        {genericKeys(group).map((key) => (
-          <Control
-            key={key}
-            t={t}
-            settingKey={key}
-            value={settings[key]}
-            disabled={INERT_CONTROLS.includes(key)}
-            onChange={(value) => {
-              onSet(key, value);
+          {group === 'audio' ? (
+            <p class="hh-setting__note">{t('settings.audio.note', {})}</p>
+          ) : null}
+
+          {genericKeys(group).map((key) => (
+            <Control
+              key={key}
+              t={t}
+              settingKey={key}
+              value={settings[key]}
+              disabled={INERT_CONTROLS.includes(key)}
+              onChange={(value) => {
+                onSet(key, value);
+              }}
+            />
+          ))}
+
+          {group === 'gameplay' ? (
+            <AssistSetControl
+              t={t}
+              mask={settings['gameplay.assists']}
+              onChange={(mask) => {
+                onSet('gameplay.assists', mask);
+              }}
+            />
+          ) : null}
+
+          {group === 'input' ? (
+            <KeybindingsGroup t={t} rebinds={rebinds} onChange={onSetRebinds} />
+          ) : null}
+
+          {group === 'data' ? (
+            <DataGroup t={t} save={save} onReplace={onReplaceSave} onClear={onClearSave} />
+          ) : null}
+        </fieldset>
+      ))}
+
+      {confirmingReset ? (
+        <div class="hh-settings__reset-all" role="status" data-testid="reset-all-confirm">
+          <p>{t('settings.resetAll.confirm', {})}</p>
+          <button
+            type="button"
+            data-testid="reset-all-proceed"
+            onClick={() => {
+              onResetAll();
+              setConfirmingReset(false);
             }}
-          />
-        ))}
-
-        {group === 'gameplay' ? (
-          <AssistSetControl
-            t={t}
-            mask={settings['gameplay.assists']}
-            onChange={(mask) => {
-              onSet('gameplay.assists', mask);
+          >
+            {t('settings.resetAll', {})}
+          </button>
+          <button
+            type="button"
+            data-testid="reset-all-cancel"
+            onClick={() => {
+              setConfirmingReset(false);
             }}
-          />
-        ) : null}
-
-        {group === 'input' ? (
-          <KeybindingsGroup t={t} rebinds={rebinds} onChange={onSetRebinds} />
-        ) : null}
-
-        {group === 'data' ? (
-          <DataGroup t={t} save={save} onReplace={onReplaceSave} onClear={onClearSave} />
-        ) : null}
-      </fieldset>
-    ))}
-
-    <button
-      type="button"
-      class="hh-settings__reset-all"
-      data-testid="reset-all-settings"
-      onClick={onResetAll}
-    >
-      {t('settings.resetAll', {})}
-    </button>
-  </div>
-);
+          >
+            {t('settings.confirm.cancel', {})}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          class="hh-settings__reset-all"
+          data-testid="reset-all-settings"
+          onClick={() => {
+            setConfirmingReset(true);
+          }}
+        >
+          {t('settings.resetAll', {})}
+        </button>
+      )}
+    </div>
+  );
+};

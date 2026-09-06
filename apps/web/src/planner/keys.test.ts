@@ -14,6 +14,7 @@ import {
   SCRUB_NUDGE_SECONDS,
   actionFor,
   bindingFor,
+  isTextEntryTarget,
   isTypingTarget,
 } from './keys.js';
 
@@ -231,6 +232,58 @@ describe('scoping (#141)', () => {
   it('gives R to the debrief', () => {
     expect(actionFor('debrief', 'r', NONE)).toEqual({ kind: 'retry' });
     expect(actionFor('planner', 'r', NONE)).toBeNull();
+  });
+});
+
+/**
+ * The two guards, and why they are not the same one.
+ *
+ * `isTypingTarget` is the planner's and is deliberately conservative — every `<input>`
+ * counts, because the node editor is full of number fields and a stray `N` would corrupt a
+ * burn. `isTextEntryTarget` is the shell's, for `?`: most of the settings screen is
+ * checkboxes and radios, and calling those "typing" would make the help overlay
+ * unreachable from the screen a confused player is most likely to be on.
+ */
+describe('the typing guards (#124)', () => {
+  const input = (type?: string): HTMLInputElement => {
+    const element = document.createElement('input');
+    if (type !== undefined) element.setAttribute('type', type);
+    return element;
+  };
+
+  it('both stand down for a text field', () => {
+    for (const type of ['text', 'number', 'search', 'email', 'password', undefined]) {
+      expect(isTypingTarget(input(type)), String(type)).toBe(true);
+      expect(isTextEntryTarget(input(type)), String(type)).toBe(true);
+    }
+    expect(isTypingTarget(document.createElement('textarea'))).toBe(true);
+    expect(isTextEntryTarget(document.createElement('textarea'))).toBe(true);
+  });
+
+  it('only the planner’s guard stands down for a control that takes no text', () => {
+    for (const type of ['checkbox', 'radio', 'range', 'button', 'file', 'color']) {
+      expect(isTypingTarget(input(type)), `typing:${type}`).toBe(true);
+      expect(isTextEntryTarget(input(type)), `textEntry:${type}`).toBe(false);
+    }
+  });
+
+  it('treats an unknown input type as text, the way a browser does', () => {
+    expect(isTextEntryTarget(input('quantum'))).toBe(true);
+  });
+
+  it('both stand down for a contenteditable region', () => {
+    const region = document.createElement('div');
+    region.setAttribute('contenteditable', 'true');
+    expect(isTypingTarget(region)).toBe(true);
+    expect(isTextEntryTarget(region)).toBe(true);
+  });
+
+  it('neither stands down for an ordinary element', () => {
+    const div = document.createElement('div');
+    expect(isTypingTarget(div)).toBe(false);
+    expect(isTextEntryTarget(div)).toBe(false);
+    expect(isTypingTarget(null)).toBe(false);
+    expect(isTextEntryTarget(null)).toBe(false);
   });
 });
 

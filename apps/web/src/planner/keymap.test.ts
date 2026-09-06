@@ -188,7 +188,8 @@ describe('the reserved keys', () => {
 
 describe('labels', () => {
   it('shows one key for a letter row and every key for a genuine multi-key row', () => {
-    expect(labelFor(bindingById('addNode'), {}).parts).toStrictEqual([{ glyph: 'n' }]);
+    // Upper case: what §8.5.3 prints, and what is on the keycap.
+    expect(labelFor(bindingById('addNode'), {}).parts).toStrictEqual([{ glyph: 'N' }]);
     expect(labelFor(bindingById('deleteNode'), {}).parts).toStrictEqual([
       { messageKey: 'keys.label.delete' },
       { messageKey: 'keys.label.backspace' },
@@ -204,7 +205,32 @@ describe('labels', () => {
 
   it('shows what the player pressed after a rebind, not the default', () => {
     const label = labelFor(bindingById('addNode'), withRebind({}, 'addNode', 'k'));
-    expect(label.parts).toStrictEqual([{ glyph: 'k' }]);
+    expect(label.parts).toStrictEqual([{ glyph: 'K' }]);
+  });
+
+  it('shows one key where the table lists two spellings of the same one', () => {
+    // `playPause` is `[' ', 'Spacebar']` — one key, and the second is the legacy name
+    // older engines send. Both resolve to the same label, and the row must not read
+    // "Space Space". Found by looking at the built page.
+    expect(labelFor(bindingById('playPause'), {}).parts).toStrictEqual([
+      { messageKey: 'keys.label.space' },
+    ]);
+    // A row that genuinely names several keys still shows all of them.
+    expect(labelFor(bindingById('playbackSpeed'), {}).parts).toStrictEqual([
+      { glyph: '1' },
+      { glyph: '2' },
+      { glyph: '3' },
+      { glyph: '4' },
+      { glyph: '5' },
+    ]);
+  });
+
+  it('leaves a punctuation key exactly as it is', () => {
+    expect(labelFor(bindingById('nudgeEpochBack'), {}).parts).toStrictEqual([{ glyph: ',' }]);
+    expect(labelFor(bindingById('zoomIn'), {}).parts).toStrictEqual([
+      { glyph: '+' },
+      { glyph: '=' },
+    ]);
   });
 
   it('names every key in the default map that has no printable glyph', () => {

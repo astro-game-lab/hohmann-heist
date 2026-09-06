@@ -145,6 +145,12 @@ export const KeybindingsGroup = ({ t, rebinds, onChange }: KeybindingsGroupProps
 
   return (
     <>
+      {/*
+        The Input group holds pointer sensitivity and invert-scroll-zoom as well as the
+        map, so the map gets a heading of its own rather than running on from them. `h3`
+        because the group's legend is the level above and each scope's heading is below.
+      */}
+      <h3 class="hh-bindings__heading">{t('settings.bindings.label', {})}</h3>
       <p class="hh-setting__note">{t('settings.bindings.reserved', {})}</p>
 
       {sections.map((section) => {
