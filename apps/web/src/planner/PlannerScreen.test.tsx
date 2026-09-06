@@ -45,6 +45,9 @@ const mount = async (): Promise<void> => {
         onCommit={(run) => {
           committed = run;
         }}
+        coachMarksSeen={[]}
+        onCoachMarkSeen={() => undefined}
+        onOpenCodex={() => undefined}
       />,
       container,
     );

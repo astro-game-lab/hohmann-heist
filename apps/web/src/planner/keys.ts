@@ -33,15 +33,12 @@
  *
  * ## What is deliberately absent
  *
- * `C` (the Codex, #161) has a row here with `pending` set and resolves to no action. That is
- * not a key that does nothing by accident: #124 and #187 both render this table, and a
- * binding missing from it entirely would be a binding the help overlay could not show and
- * the remapper could not offer. `pending` says "this is §8.5.3's binding, its feature is not
- * built, and here is the issue" in one place instead of in a comment that nothing reads.
- *
- * `?` was the other one until #124 landed; its row now carries an action like any other,
- * which is what the marker is for — a pending row is a promise with an issue number on it,
- * not a permanent state.
+ * **Nothing, currently.** `pending` is the marker for a row whose key §8.5.3 promises and
+ * whose feature is not built: it keeps the binding in the table so #124's help overlay can
+ * show it and #187's remapper can offer it, rather than leaving a gap that reads as an
+ * oversight. `?` carried it until #124 landed and `C` until #161 did, and both now carry an
+ * action like any other row — which is what the marker is for. A pending row is a promise
+ * with an issue number on it, not a permanent state.
  */
 import { deltaVStep, type MessageKey } from '@hh/ui';
 
@@ -77,6 +74,8 @@ export type PlannerAction =
    * screen that could forget. The per-screen handlers ignore it explicitly.
    */
   | { readonly kind: 'help' }
+  /** §8.5.3's `C` — the Codex for the current concept (#161). */
+  | { readonly kind: 'codex' }
   // ── Execution, §8.3.8 ──────────────────────────────────────────────────────
   | { readonly kind: 'playPause' }
   | { readonly kind: 'skipToEnd' }
@@ -425,7 +424,7 @@ export const BINDINGS: readonly Binding[] = [
     ctrl: 'forbidden',
     screens: EVERYWHERE,
     descriptionKey: 'keys.codex',
-    pending: 161,
+    toAction: () => ({ kind: 'codex' }),
   },
 ];
 

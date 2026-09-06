@@ -229,11 +229,17 @@ export const SETTINGS = {
     step: 1,
     default: encodeAssists(defaultAssistState()),
   },
-  'gameplay.coachMarks': {
-    kind: 'boolean',
-    group: 'gameplay',
-    default: true,
-  },
+  // `gameplay.coachMarks` was here, and it was a second flag for a switch that already
+  // existed. #159 says it plainly: coach marks are *"a setting (§8.3.12's Gameplay group)
+  // and an assist (§6.6), which are the same flag seen twice; they must not become two"* —
+  // and they had. `gameplay.assists` bit 6 is the `coach_marks` assist, it is what the
+  // planner's tray toggles, it is what the planner reads, and §8.3.12's assist-set control
+  // already renders it as one of its seven checkboxes.
+  //
+  // The bit wins rather than the boolean because §11.6 freezes the mask's order: a replay
+  // code records it, so it cannot move. Removing a key from this table costs no migration —
+  // settings are sparse and `parseStoredSettings` drops what it does not recognise — so a
+  // save written by an earlier build simply forgets a value that never had a second reader.
   'gameplay.confirmCommit': {
     kind: 'boolean',
     group: 'gameplay',

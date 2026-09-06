@@ -50,6 +50,9 @@ const mountPlanner = async (id = 'c07-slot-machine'): Promise<void> => {
         resolveDynamic={catalogue.resolveDynamic}
         scenario={contract(id)}
         onCommit={() => undefined}
+        coachMarksSeen={[]}
+        onCoachMarkSeen={() => undefined}
+        onOpenCodex={() => undefined}
       />,
       container,
     );

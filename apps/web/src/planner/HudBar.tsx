@@ -124,7 +124,7 @@ export const HudBar = ({
       </div>
 
       {burnCount.maxBurns === null ? null : (
-        <div class="hh-hud__burns">
+        <div class="hh-hud__burns" data-hh-anchor="burns">
           <span class="hh-hud__label">{t('planner.hud.burnsLabel', {})}</span>
           <span
             data-testid="hud-burns"

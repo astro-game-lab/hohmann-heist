@@ -87,13 +87,43 @@ export type OutcomeFailure =
   /** The scenario's objective was not judged, so there is nothing to report. */
   | 'notEvaluated';
 
-/** The Codex entry a rule points at (§8.3.9: "one sentence and one Codex link"). */
+/**
+ * Every Codex entry, by slug — FR-903, §6.12, §8.3.10.
+ *
+ * Here rather than in `@hh/ui` because a diagnosis rule points at one (§8.3.9: *"one
+ * sentence and one Codex link"*) and this package may not import upward. `@hh/ui` builds
+ * its entry table as a **total** record over this union, so the two directions are both
+ * compile errors: a rule cannot cite a slug with no entry, and a slug added here without
+ * an entry written for it does not build.
+ *
+ * That is what makes FR-903's *"one entry per learning outcome in §6.12"* structural. The
+ * union grows as the outcomes are written — Acts I–II here (#163), Acts III–IV with #164,
+ * the rest with #165 — and `rendezvous-versus-intercept` is ahead of its act because
+ * {@link diagnose} already links it from C08's rule and a link that dead-ends is worse
+ * than the entry arriving early.
+ */
 export type CodexSlug =
-  | 'departure-timing'
-  | 'phasing-orbits'
+  // ── Act I (§6.12's C01–C04 outcomes) ──────────────────────────────────────
   | 'burns-and-apsides'
   | 'the-hohmann-transfer'
+  | 'departure-timing'
+  | 'the-cost-of-altitude'
+  // ── Act II (C05, C07) ─────────────────────────────────────────────────────
+  | 'phasing-orbits'
+  | 'the-delta-v-time-trade'
+  // ── Act III (C08) ─────────────────────────────────────────────────────────
   | 'rendezvous-versus-intercept';
+
+/** Every slug, in reading order — act first, then the contract that teaches it. */
+export const CODEX_SLUGS: readonly CodexSlug[] = Object.freeze([
+  'burns-and-apsides',
+  'the-hohmann-transfer',
+  'departure-timing',
+  'the-cost-of-altitude',
+  'phasing-orbits',
+  'the-delta-v-time-trade',
+  'rendezvous-versus-intercept',
+]);
 
 export interface Diagnosis {
   readonly message: GameMessage;

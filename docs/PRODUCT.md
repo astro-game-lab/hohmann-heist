@@ -1327,11 +1327,14 @@ re-keys, and the map the help overlay renders. There is no second copy.
 | `?` | Keyboard help overlay | Everywhere |
 | `C` | Codex for the current concept | Everywhere |
 
-`C` is listed with its feature unbuilt (#161). It carries a `pending` marker in the table
-rather than being absent from it: a binding the help overlay cannot see is a binding the
-overlay cannot show and the remapper cannot offer, so the row exists and resolves to no
-action. `?` carried the same marker until #124 landed, which is what the marker is for — a
-promise with an issue number on it, not a permanent state.
+`C` opens §8.3.10's Codex at the concept for the current screen and contract (#161);
+`apps/web/src/codex/current.ts` is that mapping, taken from §6.12's teaching plan. Off a
+contract there is no current concept and the key opens the index instead.
+
+It carried a `pending` marker in the table until #161 landed, as `?` did until #124: a
+binding the help overlay cannot see is a binding the overlay cannot show and the remapper
+cannot offer, so a promised key gets a row that resolves to no action rather than no row.
+No binding carries the marker today.
 
 Every action in the game is reachable by keyboard alone (NFR-016). The planner is fully
 operable without a pointer, and §13.5's E4 is the automated proof: C02 is played from

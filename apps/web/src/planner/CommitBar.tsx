@@ -109,7 +109,7 @@ export const CommitBar = ({
   };
 
   return (
-    <div class="hh-commit" data-testid="commit-bar">
+    <div class="hh-commit" data-testid="commit-bar" data-hh-anchor="commit">
       <div class="hh-commit__controls" data-testid="commit-history">
         {historyButton('undo', canUndo, onUndo)}
         {historyButton('redo', canRedo, onRedo)}

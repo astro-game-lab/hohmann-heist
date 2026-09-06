@@ -16,6 +16,15 @@
 import { gameMessage } from '@hh/game';
 import { describe, expect, it } from 'vitest';
 
+import {
+  BURNS_AND_APSIDES_FIGURES,
+  COST_OF_ALTITUDE_FIGURES,
+  DEPARTURE_TIMING_FIGURES,
+  HOHMANN_FIGURES,
+  PHASING_FIGURES,
+  RENDEZVOUS_FIGURES,
+  TRADE_FIGURES,
+} from '../codex/figures.js';
 import { en } from './en.js';
 import { MissingMessageKeyError, createCatalogue, missingKeyFallback } from './resolve.js';
 import type { AllMessageParams } from './types.js';
@@ -528,7 +537,6 @@ const samples: AllMessageParams = {
   'settings.verbosity.verbose': {},
   'settings.assists.label': {},
   'settings.assists.hint': {},
-  'settings.coachMarks.label': {},
   'settings.confirmCommit.label': {},
   'settings.autoSkipAfter.label': {},
   'settings.autoSkipAfter.value': { count: 3 },
@@ -582,6 +590,76 @@ const samples: AllMessageParams = {
   'help.open': {},
   'help.close': {},
   'help.remap': {},
+
+  // ── Coach marks and the Codex (#159, #161, #163) ──────────────────────────
+  //
+  // The entries' `.numbers` rows are the computed figures themselves rather than made-up
+  // ones. A sample table exists to prove a message can be rendered at all, and rendering
+  // these against invented numbers would prove it against parameters no caller can
+  // produce — the figures are the only values these messages ever see.
+  'mark.c01.commit': {},
+  'mark.c02.apoapsis': {},
+  'mark.c03.closestApproach': {},
+  'mark.c04.burnCap': {},
+
+  'coachMark.label': {},
+  'coachMark.dismiss': {},
+  'coachMark.dismissPermanently': {},
+  'coachMark.readMore': {},
+
+  'codex.heading': {},
+  'codex.intro': {},
+  'codex.contractLabel': { index: 1, title: 'Shakedown' },
+  'codex.seenIn': { contracts: ['01 Shakedown', '02 Round Trip'] },
+  'codex.seenInNone': {},
+  'codex.read': {},
+  'codex.layer.sentence': {},
+  'codex.layer.diagram': {},
+  'codex.layer.numbers': {},
+  'codex.layer.simplifications': {},
+  'codex.diagramPending': {},
+  'codex.departure': { id: 'DEP-01', summary: 'Impulsive burns — zero duration' },
+  'codex.physicsLink': {},
+  'codex.backToIndex': {},
+  'codex.close': {},
+  'codex.unknown': { slug: 'not-a-thing' },
+  'codex.unknownHelp': {},
+
+  'codex.burns-and-apsides.title': {},
+  'codex.burns-and-apsides.subtitle': {},
+  'codex.burns-and-apsides.sentence': {},
+  'codex.burns-and-apsides.numbers': BURNS_AND_APSIDES_FIGURES,
+  'codex.burns-and-apsides.realWorld': {},
+  'codex.the-hohmann-transfer.title': {},
+  'codex.the-hohmann-transfer.subtitle': {},
+  'codex.the-hohmann-transfer.sentence': {},
+  'codex.the-hohmann-transfer.numbers': HOHMANN_FIGURES,
+  'codex.the-hohmann-transfer.realWorld': {},
+  'codex.departure-timing.title': {},
+  'codex.departure-timing.subtitle': {},
+  'codex.departure-timing.sentence': {},
+  'codex.departure-timing.numbers': DEPARTURE_TIMING_FIGURES,
+  'codex.departure-timing.realWorld': {},
+  'codex.the-cost-of-altitude.title': {},
+  'codex.the-cost-of-altitude.subtitle': {},
+  'codex.the-cost-of-altitude.sentence': {},
+  'codex.the-cost-of-altitude.numbers': COST_OF_ALTITUDE_FIGURES,
+  'codex.the-cost-of-altitude.realWorld': {},
+  'codex.phasing-orbits.title': {},
+  'codex.phasing-orbits.subtitle': {},
+  'codex.phasing-orbits.sentence': {},
+  'codex.phasing-orbits.numbers': PHASING_FIGURES,
+  'codex.phasing-orbits.realWorld': {},
+  'codex.the-delta-v-time-trade.title': {},
+  'codex.the-delta-v-time-trade.subtitle': {},
+  'codex.the-delta-v-time-trade.sentence': {},
+  'codex.the-delta-v-time-trade.numbers': TRADE_FIGURES,
+  'codex.the-delta-v-time-trade.realWorld': {},
+  'codex.rendezvous-versus-intercept.title': {},
+  'codex.rendezvous-versus-intercept.subtitle': {},
+  'codex.rendezvous-versus-intercept.sentence': {},
+  'codex.rendezvous-versus-intercept.numbers': RENDEZVOUS_FIGURES,
+  'codex.rendezvous-versus-intercept.realWorld': {},
 };
 
 const catalogue = createCatalogue();

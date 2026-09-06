@@ -165,7 +165,11 @@ export const TimelineStrip = ({
   const at = (metSeconds: number): number => positionPercent(metSeconds, windowSeconds);
 
   return (
-    <section class="hh-timeline" aria-label={t('planner.timeline.label', {})}>
+    <section
+      class="hh-timeline"
+      aria-label={t('planner.timeline.label', {})}
+      data-hh-anchor="timeline"
+    >
       <div class="hh-timeline__track" data-testid="timeline-track">
         {bands.map((band) => {
           const kind = BAND_KIND_ORDER.indexOf(band.kind);

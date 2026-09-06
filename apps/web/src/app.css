@@ -2489,3 +2489,267 @@ a.hh-card__link:focus-visible {
   padding-block: 0.3rem;
   color: var(--accent);
 }
+
+/* ── Coach marks (FR-902, §8.6, #159) ─────────────────────────────────────── *
+ *
+ * Anchored, non-modal, and never a scrim. §8.6 puts marks in the family of feedback that
+ * does not block: the planner stays usable with one open, so there is nothing to dim and
+ * nothing to click through.
+ *
+ * The container is always in the DOM — it is a `role="status"` live region and one created
+ * at the moment it has something to say is one nothing was listening to. With no mark it
+ * has no card, no border and no box, so it occupies nothing. */
+.hh-mark {
+  --hh-mark-width: min(22rem, calc(100vw - 16px));
+
+  position: fixed;
+  z-index: 20;
+  inline-size: var(--hh-mark-width);
+  pointer-events: none;
+}
+
+/* Clamped in CSS against the viewport rather than positioned in JavaScript, exactly as
+   `.hh-editor__anchor` is clamped against the stage: the clamp survives every resize and
+   every re-frame without a layout read, and without it a mark anchored to the commit bar
+   runs off the bottom of a short window. */
+.hh-mark[data-anchored='true'] {
+  inset-inline-start: clamp(8px, var(--hh-mark-x, 8px), calc(100vw - var(--hh-mark-width) - 8px));
+  inset-block-start: clamp(8px, var(--hh-mark-y, 8px), calc(100vh - 8rem));
+
+  /* And bounded by what is left below it, because the clamp above cannot know how tall the
+     card is. On a 720 px viewport with a mark anchored under the orbit view the card
+     already reached within 5 px of the fold; at §8.3.12's 150% interface scale, or at
+     §8.9's +40% string length, the row it would push off the bottom is the row carrying
+     *Got it* — a hint that cannot be dismissed. `max` keeps it from collapsing when the
+     anchor is itself near the bottom. */
+  max-block-size: max(6rem, calc(100vh - var(--hh-mark-y, 8px) - 8px));
+}
+
+/* Docked, for an anchor that is not on screen — the wrong tab, a narrow layout, a region
+   this contract does not have. Beside the thing rather than pointing at nothing. */
+.hh-mark[data-anchored='false'] {
+  inset-inline-end: 8px;
+  inset-block-start: 8px;
+  inset-inline-start: auto;
+}
+
+.hh-mark__card {
+  /* Re-enabled on the card alone: the container spans a clamped box that is mostly empty,
+     and letting that swallow clicks would make a mark a modal by accident. */
+  pointer-events: auto;
+  max-block-size: 100%;
+  overflow-y: auto;
+  /* Never `auto`. A hint that scrolls sideways is a hint whose layout has already failed,
+     and §8.8 forbids the scrollbar it would put on the page. */
+  overflow-x: hidden;
+  padding: 0.75rem;
+  border: var(--hh-line) solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--fg);
+}
+
+.hh-mark__text {
+  margin: 0 0 0.6rem;
+  line-height: 1.45;
+}
+
+/* Wraps rather than scrolls. Three controls at 150% interface scale in a 22rem card is
+   precisely the case §8.8 forbids a horizontal scrollbar for. */
+.hh-mark__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hh-mark__forever,
+.hh-mark__codex {
+  font-size: 0.9em;
+  color: var(--fg-dim);
+}
+
+/* ── The Codex (FR-903, §8.3.10, #161) ────────────────────────────────────── */
+
+.hh-codex__failure {
+  margin-block-end: 0.25rem;
+  color: var(--warn);
+}
+
+.hh-codex__back {
+  display: inline-block;
+  margin-block-start: 1rem;
+}
+
+.hh-codex-index__intro {
+  max-inline-size: 42rem;
+  color: var(--fg-dim);
+}
+
+.hh-codex-index__act h2 {
+  margin-block: 1.25rem 0.4rem;
+  font-size: 0.9em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-codex-index__act ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One row per entry: the title, its subtitle, and the read badge. Wraps to one column
+   rather than compressing the title, for the reason the help overlay's rows do. */
+.hh-codex-index__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding-block: 0.3rem;
+}
+
+.hh-codex-index__link {
+  flex: 0 1 auto;
+  min-block-size: 2rem;
+}
+
+.hh-codex-index__subtitle {
+  flex: 1 1 12rem;
+  color: var(--fg-dim);
+}
+
+.hh-codex-index__read {
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-codex-entry {
+  max-inline-size: 42rem;
+}
+
+.hh-codex-entry__header h2 {
+  margin-block-end: 0.1rem;
+}
+
+.hh-codex-entry__subtitle {
+  margin-block: 0 1rem;
+  color: var(--fg-dim);
+}
+
+/* Layer one, given the weight it is owed: for most readers this is the whole entry. */
+.hh-codex-entry__sentence {
+  margin-block: 0 1rem;
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
+/* #162's slot. Sized like the diagram that will replace it so the entry does not reflow
+   when it lands, and labelled so nobody mistakes the placeholder for the thing. */
+.hh-codex-entry__diagram {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-block-size: 8rem;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: var(--hh-line) dashed var(--grid);
+  border-radius: 6px;
+}
+
+.hh-codex-entry__diagram figcaption {
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-codex-entry__pending {
+  margin-block-end: 0;
+  color: var(--fg-dim);
+}
+
+.hh-codex-entry summary {
+  min-block-size: 2rem;
+  padding-block: 0.3rem;
+  cursor: pointer;
+}
+
+.hh-codex-entry p {
+  line-height: 1.55;
+}
+
+.hh-codex-entry__real {
+  color: var(--fg-dim);
+}
+
+.hh-codex-entry__departures {
+  margin-block: 0.5rem;
+  padding-inline-start: 1.1rem;
+  line-height: 1.5;
+}
+
+.hh-codex-entry__physics {
+  display: inline-block;
+  min-block-size: 2rem;
+}
+
+.hh-codex-entry__seen,
+.hh-codex__seen {
+  margin-block-start: 1.25rem;
+  padding-block-start: 0.5rem;
+  border-block-start: var(--hh-line) solid var(--grid);
+  color: var(--fg-dim);
+}
+
+/* The overlay host. A dialog, unlike a coach mark — see `CodexOverlay.tsx`. Built on the
+   help overlay's shape rather than a second arrangement of the same three rules. */
+.hh-codex-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* The scrim as its own layer, for the reason `.hh-help::before` is one: `app.css.test.ts`
+   reads `color-mix()` as a colour literal, correctly, and `opacity` on the container would
+   fade the panel with it. */
+.hh-codex-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.82;
+}
+
+.hh-codex-overlay__panel {
+  position: relative;
+  overflow-y: auto;
+  max-block-size: 100%;
+  inline-size: min(42rem, 100%);
+  padding: 1.25rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+
+.hh-codex-overlay__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hh-codex-overlay__header h2 {
+  margin: 0;
+}
+
+.hh-codex-overlay__index {
+  display: inline-block;
+  margin-block-start: 1rem;
+}

@@ -41,7 +41,14 @@ import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
 import type { LoadedScenario } from '@hh/game';
 import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
-import { approachReadout, canRedo, canUndo, componentsOfCounts, orbitReadout } from '@hh/ui';
+import {
+  approachReadout,
+  canRedo,
+  canUndo,
+  componentsOfCounts,
+  isCommittable,
+  orbitReadout,
+} from '@hh/ui';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
@@ -57,6 +64,9 @@ import { HudBar } from './HudBar.js';
 import { OrbitView } from './OrbitView.js';
 import { PlanPanel } from './PlanPanel.js';
 import { Readouts } from './Readouts.js';
+import { CoachMark } from '../onboarding/CoachMark.js';
+import { useCoachMarks } from '../onboarding/useCoachMarks.js';
+
 import { TimelineStrip } from './TimelineStrip.js';
 import type { Evaluation } from './evaluate.js';
 import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf, type PlannerSeed } from './store.js';
@@ -84,6 +94,11 @@ export interface PlannerScreenProps {
    * call would be the recomputation the requirement forbids.
    */
   readonly onCommit: (committed: CommittedRun) => void;
+  /** FR-902's permanently dismissed marks — `flags.coachMarksSeen` (#159). */
+  readonly coachMarksSeen: readonly string[];
+  readonly onCoachMarkSeen: (key: string) => void;
+  /** Open the Codex over this screen, from a mark's *More in the Codex* (#161). */
+  readonly onOpenCodex: (slug: string) => void;
 }
 
 /** What crossing §8.5.1's last edge carries with it. */
@@ -115,6 +130,9 @@ export const PlannerScreen = ({
   scenario,
   seed,
   onCommit,
+  coachMarksSeen,
+  onCoachMarkSeen,
+  onOpenCodex,
 }: PlannerScreenProps): JSX.Element => {
   const [state, actions] = usePlanner(scenario, seed ?? {});
   const [tab, setTab] = useState<Tab>('plan');
@@ -354,6 +372,30 @@ export const PlannerScreen = ({
    * as a legal plan and the timeline shows nothing rather than pretending it is clear —
    * the commit bar carries the reason in that case.
    */
+  /**
+   * FR-902's coach marks, for this contract — #159.
+   *
+   * The facts are four things the planner has already computed for its own regions, and
+   * `@hh/ui`'s trigger table turns them into "has this moment arrived". Nothing here knows
+   * which contract is loaded: the scenario's `coachMarks` list is the only input that
+   * varies, which is what keeps FR-902's content out of this file.
+   *
+   * `state.assists.coach_marks` is the off switch — §6.6's assist and §8.3.12's setting,
+   * which are the same flag (#186) and reach the planner as one.
+   */
+  const marks = useCoachMarks({
+    declared: scenario.document.coachMarks ?? [],
+    enabled: state.assists.coach_marks,
+    facts: {
+      nodeCount: model.plan.nodes.length,
+      committable: isCommittable(legality),
+      nodeSelected: index !== null,
+      objectiveMet: evaluation.objective?.met === true,
+    },
+    seen: coachMarksSeen,
+    onSeen: onCoachMarkSeen,
+  });
+
   const bands = legality.evaluable
     ? bandsFor({
         constraints: legality.constraints,
@@ -828,6 +870,21 @@ export const PlannerScreen = ({
           {resolveDynamic(state.lastRefusal.message.key, state.lastRefusal.message.params)}
         </p>
       )}
+
+      {/*
+        Last in the tree, and always mounted. Last because a mark is positioned against a
+        region it must therefore be able to overlap, and always because its container is a
+        live region — one created at the moment it has something to say is one the screen
+        reader was not yet watching. `CoachMark` says both at length.
+      */}
+      <CoachMark
+        t={t}
+        resolveDynamic={resolveDynamic}
+        mark={marks.mark}
+        onDismiss={marks.dismiss}
+        onDismissPermanently={marks.dismissPermanently}
+        onOpenCodex={onOpenCodex}
+      />
     </div>
   );
 };

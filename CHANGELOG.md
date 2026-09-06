@@ -12,6 +12,44 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Added
+- **The two teaching surfaces: §8.6's coach marks and §8.3.10's Codex (#159, #160, #161,
+  #163).** The game could already be played and could not yet explain itself. Both halves land
+  together because they are the same job seen twice — naming an idea at the moment a player
+  needs it — and because either alone is a shell: a framework with no content, or content with
+  nothing to render it.
+  **Coach marks** are anchored, non-modal hints on C01–C04, two per contract. The design
+  decision worth knowing about is the **trigger vocabulary**: five named moments — the plan is
+  empty, the first node exists, one burn is not going to be enough, the plan would commit, a
+  node is selected — evaluated against facts the planner already computes, and *latched*, so a
+  mark does not blink out when the player deletes the node that summoned it. A contract still
+  declares nothing but catalogue keys, so where a mark points and when it fires are properties
+  of the idea rather than of the contract, and adding one is three data edits and no component
+  change. FR-902's cap is enforced against the scenario files rather than documented: a fourth
+  mark on a contract, a mark on C05, or a declared key with no row in the table each fail
+  `tools/content`. Dismissal is two lifetimes — *Got it* for the attempt, *Don't show this one
+  again* into `flags.coachMarksSeen`, which has been in the save, validated and unread, since
+  #184. The mark is announced politely and **never takes focus**: it appears mid-drag, and a
+  hint that stole the gesture would be a modal, which §8.6 says this is not.
+  **The Codex** is §8.3.10's four progressively disclosed layers, an index grouped by act, and
+  `#/codex/:slug` working from a cold load — into a named layer, via `?layer=numbers`. An unknown
+  slug gets §8.7's treatment: what failed, in words, then the index. `C` opens it at the concept
+  for the current contract, and does so as an **overlay** rather than a navigation, because
+  `usePlanner` holds the plan in component state and routing away would lose it; the route and
+  the overlay render the same entry component, so there is no second implementation to keep in
+  step. #162's live diagram is M4, so the slot renders a placeholder that says it is one.
+  **Seven entries**, one per §6.12 Acts I–II outcome plus C08's, which is an act early because
+  #83's debrief diagnosis already linked it and a *read this* that dead-ends is worse than an
+  entry arriving before its milestone. Every number in a "the numbers" layer is **computed from
+  `@hh/astro`'s constants at module load** and checked against an independent derivation — the
+  speeds from conservation of angular momentum and energy at the apsides rather than from
+  vis-viva, and the reference orbits read off the contracts, so an entry and the contract it is
+  seen in describe the same orbit. Two of those checks are worth naming: the single-burn figure
+  agrees with **C03's par to the fourth decimal**, and that par was found by an unrelated
+  Lambert grid search through the game's own timeline; and §8.3.10's own printed example —
+  92.6 min, 91.3 min, 6 715 km, 274 km, 1.3 min, 5.0° — is **reproduced from the constants**
+  rather than copied out of it, which is §7.6's process rule applied in the direction it is
+  written.
+
 - **§8.3.1's title screen and §8.3.2's contract board, with §8.7's states behind them
   (#118, #119, #125, #126).** The two screens that turn seven contracts into a game: before
   this the campaign was a set of URLs and `#/` was a placeholder holding a temporary list of
@@ -203,6 +241,15 @@ they relied on has moved.
   a **phasing** family alongside its Lambert search, because a phasing solution departs and
   arrives at the same position — the one geometry Lambert's problem is degenerate at, and
   one the transfer search was answering 34% too expensively.
+
+### Fixed
+- **Coach marks were two flags pretending to be one (#159).** §8.3.12's Gameplay group carried
+  a `gameplay.coachMarks` boolean and §6.6 carried the `coach_marks` assist, and nothing tied
+  them together: turning marks off in Settings and turning them off in the assist tray were
+  different acts with different results, which is exactly what #159 forbids. The assist bit
+  wins, because §11.6 freezes the mask's order and a replay code records it; the boolean is
+  gone. No migration — settings are sparse and an unrecognised key was already dropped, so a
+  save written by an earlier build simply forgets a value that never had a second reader.
 
 ### Changed
 - **The contract registry reports a refused scenario instead of throwing (#125).** It used to

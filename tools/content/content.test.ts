@@ -30,7 +30,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { createCatalogue } from '@hh/ui';
+import { MAX_MARKS_PER_CONTRACT, createCatalogue, markByKey } from '@hh/ui';
 
 import type { ContractOutcome } from './evaluate.js';
 import {
@@ -57,6 +57,8 @@ const CHECKS = {
   reachability: 'reachability — a player following the progression rules can get here',
   briefKeys:
     'brief keys — every briefKey, clientKey and coachMarks entry resolves in the catalogue',
+  coachMarks:
+    'coach marks — at most three per contract, C01–C04 only, each anchored and triggered (FR-902)',
 } as const;
 
 /** §13.4's ±0.5% on both par figures. */
@@ -125,8 +127,11 @@ describe('the suite itself', () => {
     expect(files.map((file) => file.stem)).not.toEqual([]);
   });
 
-  it('applies all seven of §13.4’s checks to each of them', () => {
-    expect(Object.keys(CHECKS)).toHaveLength(7);
+  // §13.4's seven rows, and FR-902's cap. The count is asserted rather than left implicit
+  // because the table is what the per-contract block iterates: a check deleted while
+  // refactoring would take its assertions with it and the suite would still be green.
+  it('applies all seven of §13.4’s checks to each of them, plus FR-902’s cap', () => {
+    expect(Object.keys(CHECKS)).toHaveLength(8);
   });
 
   it('has one file per contract id', () => {
@@ -246,6 +251,45 @@ describe.each(files.map((file): readonly [string, ContractFile] => [file.stem, f
       for (const key of named.slice(1)) {
         expect(catalogue.resolveDynamic(key).length, key).toBeGreaterThan(0);
       }
+    });
+
+    /**
+     * FR-902's two limits, checked against the scenarios rather than trusted (#159).
+     *
+     * > *Coach marks MUST appear in C01–C04 only, at most three per contract.*
+     *
+     * Both halves are properties of the **content**, which is why they are here and not in
+     * `@hh/ui` beside the mark table: that table is keyed by mark, and a mark does not know
+     * which contract declared it or how many friends it has. A fourth mark on C02, or any
+     * mark on C05, is a content failure and this is where a content failure is found.
+     *
+     * The third assertion is #160's *"no per-contract code"* stated as a check: a declared
+     * key with no row in the mark table would resolve, render its words, and never appear,
+     * because nothing would know where to put it or when. That is the failure mode a
+     * catalogue-key check cannot see.
+     */
+    it(CHECKS.coachMarks, () => {
+      const scenario = requireContract(file);
+      const marks = scenario.document.coachMarks ?? [];
+      const { act, index } = scenario.document;
+      // C01–C04 are Act I's first four, which is the whole of Act I today and is stated as
+      // both conditions anyway: an Act I that grew a fifth contract must not silently
+      // acquire the right to mark it.
+      const isEarly = act === 1 && index <= 4;
+
+      expect(
+        marks.length,
+        'FR-902 allows at most three coach marks per contract',
+      ).toBeLessThanOrEqual(MAX_MARKS_PER_CONTRACT);
+      if (!isEarly) {
+        expect(marks, 'FR-902 allows coach marks in C01–C04 only').toEqual([]);
+      }
+
+      const unknown = marks.filter((key) => markByKey(key) === undefined);
+      expect(
+        unknown,
+        "these marks have no row in @hh/ui's mark table, so nothing knows where or when to show them",
+      ).toEqual([]);
     });
   },
 );

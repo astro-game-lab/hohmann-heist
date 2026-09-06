@@ -7,12 +7,13 @@
  *
  * ## Every route resolves, including the ones nobody has built
  *
- * §8.2's table has nine routes. M3 builds the title (#118), the board (#119), the briefing,
- * the planner, the execution phase, the debrief and settings; the daily, the leaderboard,
- * the codex and the replay *viewer* are M6–M7 and render `Placeholder` inside the real
- * frame rather than being absent from the switch, because #117's first criterion is that
- * every route in the table *resolves* — and a route that falls through to not-found cannot
- * be told apart from a typo by the person looking at it.
+ * §8.2's table has nine routes and the Codex's index makes ten. M3 builds the title
+ * (#118), the board (#119), the briefing, the planner, the execution phase, the debrief,
+ * settings and the Codex (#161); the daily, the leaderboard and the replay *viewer* are
+ * M6–M7 and render `Placeholder` inside the real frame rather than being absent from the
+ * switch, because #117's first criterion is that every route in the table *resolves* — and
+ * a route that falls through to not-found cannot be told apart from a typo by the person
+ * looking at it.
  *
  * ## Everything below is wrapped in an error boundary
  *
@@ -28,7 +29,7 @@
  * themselves, so the locale is decided in exactly one place and a component can be
  * rendered against a different message set in a test without touching a global.
  */
-import { createCatalogue, type Catalogue } from '@hh/ui';
+import { createCatalogue, entryBySlug, type Catalogue } from '@hh/ui';
 import type { PaletteId } from '@hh/ui';
 import { progression, type LockReason, type ProgressionContract } from '@hh/game';
 import type { Outcome } from '@hh/game';
@@ -37,7 +38,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 
 import { contractById, contracts } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
-import { onRouteChange, parseHash, type Route } from './router.js';
+import { navigate, onRouteChange, parseHash, type Route } from './router.js';
 import {
   browserStorage,
   clearSave,
@@ -65,6 +66,9 @@ import { ErrorBoundary } from './screens/ErrorBoundary.js';
 import { LockedContract } from './screens/LockedContract.js';
 import { NotFound } from './screens/NotFound.js';
 import { Placeholder } from './screens/Placeholder.js';
+import { CodexOverlay } from './codex/CodexOverlay.js';
+import { CodexScreen } from './codex/CodexScreen.js';
+import { conceptFor } from './codex/current.js';
 import { ReplayProblem } from './screens/ReplayProblem.js';
 import { TitleScreen } from './title/TitleScreen.js';
 import { diagnoseReplay } from './replay/diagnose.js';
@@ -92,6 +96,17 @@ const t = catalogue.resolve;
 
 /** A captured route parameter. Absent is empty rather than `undefined` — it is text. */
 const param = (route: Route, name: string): string => route.params[name] ?? '';
+
+/**
+ * The contract a route is inside, or `null`.
+ *
+ * One route covers all four contract screens — §8.2 puts the briefing, the planner, the
+ * execution phase and the debrief under `/contract/:id`, with §8.5.1's phase deciding
+ * which is drawn. So "which contract is the player in" is a question about the route and
+ * not about the screen, which is what lets `C` answer it from the shell.
+ */
+const contractIdOf = (route: Route | null): string | null =>
+  route !== null && route.name === 'contract' ? param(route, 'id') : null;
 
 /**
  * §6.8's progression, computed once from the contracts the registry actually ships.
@@ -153,8 +168,18 @@ const headingFor = (route: Route, resolve: Catalogue['resolve'], save: SaveV1): 
       return resolve('screen.dailyDate.heading', { date: param(route, 'date') });
     case 'leaderboard':
       return resolve('screen.leaderboard.heading', { date: param(route, 'date') });
-    case 'codex':
-      return resolve('screen.codex.heading', { slug: param(route, 'slug') });
+    case 'codexIndex':
+      return resolve('codex.heading', {});
+    case 'codex': {
+      // The entry's own title once the slug names one, and the slug itself when it does
+      // not. Same rule as the contract heading above, and for the same reason: a heading
+      // that said "Codex" over §8.7's named failure would hide the thing that failed.
+      const slug = param(route, 'slug');
+      const entry = entryBySlug(slug);
+      return entry === undefined
+        ? resolve('screen.codex.heading', { slug })
+        : resolve(entry.titleKey, {});
+    }
     case 'replay':
       return resolve('screen.replay.heading', {});
     case 'settings':
@@ -184,6 +209,12 @@ interface BodyContext {
   readonly onCanvasUnavailable: () => void;
   readonly onAccept: (id: string) => void;
   readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
+  /** `flags.codexRead`, and the way to add to it — #161. */
+  readonly onCodexRead: (slug: string) => void;
+  /** `flags.coachMarksSeen`'s writer — FR-902's permanent dismissal (#159). */
+  readonly onCoachMarkSeen: (key: string) => void;
+  /** Open the Codex over the planner, without unmounting it. See `CodexOverlay`. */
+  readonly onOpenCodex: (slug: string) => void;
 }
 
 /** §8.7's replay rows, for `/#/replay?s=…&r=…`. */
@@ -262,6 +293,17 @@ const bodyFor = (route: Route, context: BodyContext): JSX.Element => {
       );
     case 'replay':
       return replayBody(route, resolve);
+    case 'codexIndex':
+    case 'codex':
+      return (
+        <CodexScreen
+          t={resolve}
+          slug={route.name === 'codex' ? param(route, 'slug') : null}
+          search={route.search}
+          read={save.flags.codexRead}
+          onRead={context.onCodexRead}
+        />
+      );
     case 'contract': {
       const id = param(route, 'id');
       const scenario = contractById(id);
@@ -285,6 +327,9 @@ const bodyFor = (route: Route, context: BodyContext): JSX.Element => {
           onComplete={(outcome, replay) => {
             context.onComplete(id, outcome, replay);
           }}
+          coachMarksSeen={save.flags.coachMarksSeen}
+          onCoachMarkSeen={context.onCoachMarkSeen}
+          onOpenCodex={context.onOpenCodex}
         />
       );
     }
@@ -378,6 +423,8 @@ const AppShell = ({
   storageProblem,
   onAccept,
   onComplete,
+  onCodexRead,
+  onCoachMarkSeen,
   onExportSave,
   onDismissStorageNotice,
   onReplaceSave,
@@ -430,8 +477,28 @@ const AppShell = ({
    * `?` resolves on every scope, so it is only the overlay's section order that depends on
    * it; `'briefing'` is a safe stand-in for resolution when there is no contract open.
    */
+  // The current route, for the document-level key handler below. That listener is
+  // reinstalled only when the bindings or the scope change, so it must not close over a
+  // route — this ref is how it reads the live one. Written during render rather than in an
+  // effect because the handler can fire before effects have run after a hash change.
+  const routeRef = useRef<Route>(route);
+  routeRef.current = route;
+
   const [scope, setScope] = useState<KeyScope | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  /**
+   * §8.5.3's `C` — the Codex for the current concept (#161).
+   *
+   * Held here for the same reason `?` is: the binding is scoped to *everywhere*, so no
+   * screen owns it and a screen that installed it could forget to. What it opens is an
+   * **overlay** rather than a navigation — `CodexOverlay` says why at length, and the short
+   * version is that routing away from the planner would unmount the plan.
+   *
+   * Off a contract there is no current concept, so `C` navigates to the index instead:
+   * `conceptFor` returns null and there is nothing to put in an overlay.
+   */
+  const [codexSlug, setCodexSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -446,9 +513,23 @@ const AppShell = ({
         { shift: event.shiftKey, ctrl: event.ctrlKey },
         keybindings,
       );
-      if (action?.kind !== 'help') return;
+      if (action?.kind === 'help') {
+        event.preventDefault();
+        setHelpOpen((open) => !open);
+        return;
+      }
+
+      if (action?.kind !== 'codex') return;
       event.preventDefault();
-      setHelpOpen((open) => !open);
+      setCodexSlug((current) => {
+        if (current !== null) return null;
+        // `routeRef` rather than `route`: this effect is keyed on the bindings and the
+        // scope, not on the route, so closing over the route would open the concept for
+        // whichever screen was showing when the listener was last installed.
+        const concept = conceptFor(contractIdOf(routeRef.current));
+        if (concept === null) navigate('/codex');
+        return concept;
+      });
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -579,6 +660,9 @@ const AppShell = ({
               onCanvasUnavailable: reportCanvasUnavailable,
               onAccept,
               onComplete,
+              onCodexRead,
+              onCoachMarkSeen,
+              onOpenCodex: setCodexSlug,
             })
           )}
         </ErrorBoundary>
@@ -607,6 +691,16 @@ const AppShell = ({
             }}
           />
         ) : null}
+        {codexSlug === null ? null : (
+          <CodexOverlay
+            t={t}
+            slug={codexSlug}
+            onRead={onCodexRead}
+            onClose={() => {
+              setCodexSlug(null);
+            }}
+          />
+        )}
         {beneath === null ? null : (
           <SettingsOverlay
             {...settingsProps}
@@ -630,6 +724,10 @@ interface AppShellProps {
   readonly onDismissStorageNotice: () => void;
   readonly onAccept: (id: string) => void;
   readonly onComplete: (id: string, outcome: Outcome, replay: string) => void;
+  /** #161's `flags.codexRead`. */
+  readonly onCodexRead: (slug: string) => void;
+  /** FR-902's permanent dismissal — `flags.coachMarksSeen` (#159). */
+  readonly onCoachMarkSeen: (key: string) => void;
   /** #185's import: the whole save, replaced. */
   readonly onReplaceSave: (save: SaveV1) => void;
   /** #185's "clear all local data". */
@@ -689,6 +787,51 @@ export const App = (): JSX.Element => {
     persist(next);
     setSaved({ status: 'loaded', save: next, migrated: false });
   };
+
+  /**
+   * FR-902's permanent dismissal, and #161's read marker.
+   *
+   * One function, because they are the same operation on two sibling arrays: append a
+   * string to a set that is stored as a list, and do nothing if it is already there. Two
+   * copies of "read, check, append, persist, set state" would be two chances to forget the
+   * idempotence, and the idempotence is what stops a save growing a duplicate every time a
+   * player reopens an entry.
+   *
+   * Sorted on the way in. The arrays are sets and their order carries no meaning, so
+   * leaving it as insertion order would make two saves with identical progress differ
+   * byte-for-byte on export — which `transfer.ts`'s canonical form exists to prevent.
+   */
+  const addFlag = useCallback(
+    (field: 'coachMarksSeen' | 'codexRead', value: string): void => {
+      setSaved((current) => {
+        if (current.save.flags[field].includes(value)) return current;
+        const next: SaveV1 = {
+          ...current.save,
+          flags: {
+            ...current.save.flags,
+            [field]: [...current.save.flags[field], value].sort(),
+          },
+        };
+        persist(next);
+        return { status: 'loaded', save: next, migrated: false };
+      });
+    },
+    [persist],
+  );
+
+  const markCodexRead = useCallback(
+    (slug: string): void => {
+      addFlag('codexRead', slug);
+    },
+    [addFlag],
+  );
+
+  const markCoachMarkSeen = useCallback(
+    (key: string): void => {
+      addFlag('coachMarksSeen', key);
+    },
+    [addFlag],
+  );
 
   /**
    * A settings change, persisted and applied.
@@ -753,6 +896,8 @@ export const App = (): JSX.Element => {
         storageProblem={showing}
         onAccept={acceptContract}
         onComplete={completeContract}
+        onCodexRead={markCodexRead}
+        onCoachMarkSeen={markCoachMarkSeen}
         onExportSave={exportNow}
         onDismissStorageNotice={() => {
           if (storageProblem !== null) setDismissed((current) => [...current, storageProblem]);

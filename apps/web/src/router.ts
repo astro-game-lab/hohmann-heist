@@ -7,7 +7,7 @@
  * reload, a bookmark, and a shared link.
  *
  * Hand-rolled rather than taken from a package: the whole router is below, the
- * route table is nine entries, and the initial bundle has a 400 kB budget to
+ * route table is ten entries, and the initial bundle has a 400 kB budget to
  * defend (NFR-020).
  *
  * Route table follows `docs/PRODUCT.md` §8.2.
@@ -37,6 +37,7 @@ export type RouteName =
   | 'daily'
   | 'dailyDate'
   | 'leaderboard'
+  | 'codexIndex'
   | 'codex'
   | 'replay'
   | 'settings'
@@ -57,7 +58,12 @@ const ROUTES: readonly (readonly [pattern: string, name: RouteName])[] = [
   ['/daily/:date', 'dailyDate'],
   ['/daily', 'daily'],
   ['/leaderboard/:date', 'leaderboard'],
+  // Both, and the specific one first for the same reason `/daily/:date` precedes `/daily`.
+  // The index is a real route rather than a redirect: §8.3.10's *"deep-linkable"* is about
+  // an entry, but a Codex whose front page could only be reached by removing a path
+  // segment would be a Codex nothing could link to.
   ['/codex/:slug', 'codex'],
+  ['/codex', 'codexIndex'],
   ['/replay', 'replay'],
   ['/settings', 'settings'],
   // The orbit-scene harness (M2 PR 3). Also throwaway: it exists so §9.3 can be looked

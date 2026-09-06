@@ -53,5 +53,5 @@
   },
   "unlocks": [],
   "assistsAllowed": ["closest_approach", "coach_marks", "constraints", "elements", "snapping"],
-  "coachMarks": ["mark.c01.oppositeSide"]
+  "coachMarks": ["mark.c01.oppositeSide", "mark.c01.commit"]
 }

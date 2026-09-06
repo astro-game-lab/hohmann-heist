@@ -379,6 +379,9 @@ export const en: Messages = {
   'mark.c01.oppositeSide': () =>
     'A prograde burn raises the far side of the orbit, not the side you are on. Half a ' +
     'lap later you will be at the top.',
+  'mark.c01.commit': () =>
+    'The plan is legal, which is not the same as good. Commit flies it — nothing is ' +
+    'spent until you do.',
 
   'brief.c02': () =>
     'Same climb, but this time you stay. An orbit that touches eight hundred kilometres ' +
@@ -387,6 +390,9 @@ export const en: Messages = {
   'mark.c02.secondBurn': () =>
     'You arrive at the top going too slowly for a circle. The second burn is there, half ' +
     'a period after the first.',
+  'mark.c02.apoapsis': () =>
+    'Apoapsis is a place on the orbit, not a time on the clock. You pass through it once ' +
+    'a lap.',
 
   'brief.c03': () =>
     'KESTREL-2 runs a courier loop four hundred kilometres above you, and its cargo does ' +
@@ -395,6 +401,9 @@ export const en: Messages = {
   'mark.c03.departureWindow': () =>
     'The target keeps moving while you climb. When you leave decides where it will be ' +
     'when you get there.',
+  'mark.c03.closestApproach': () =>
+    'This is how near you get, and when. It is answering the question while you drag, ' +
+    'not after you commit.',
 
   'brief.c04': () =>
     'Orbital Mutual keeps its ledgers in the geostationary belt, thirty-five thousand ' +
@@ -404,6 +413,9 @@ export const en: Messages = {
   'mark.c04.scale': () =>
     'The belt is six times further out than you are. The view will not do it justice; ' +
     'the Δv bar will.',
+  'mark.c04.burnCap': () =>
+    'Orbital Mutual is paying for two burns. This counter is the budget you are more ' +
+    'likely to run out of.',
 
   // ── Act II — phasing, and the trade ────────────────────────────────────────
   'brief.c05': () =>
@@ -1162,7 +1174,6 @@ export const en: Messages = {
   'settings.assists.label': () => 'Assists a contract starts with',
   'settings.assists.hint': () =>
     'A contract can offer fewer than these; it never offers more. Two of them cap your medal.',
-  'settings.coachMarks.label': () => 'Coach marks',
   'settings.confirmCommit.label': () => 'Ask before committing a plan',
   'settings.autoSkipAfter.label': () => 'Skip playback after',
   // Branching inside the message rather than picking between two keys at the call site:
@@ -1256,4 +1267,207 @@ export const en: Messages = {
   'help.open': () => 'Keyboard help',
   'help.close': () => 'Close',
   'help.remap': () => 'Change these in Settings',
+
+  // ── Coach marks (FR-902, §8.6, #159) ───────────────────────────────────────
+  'coachMark.label': () => 'Hint',
+  'coachMark.dismiss': () => 'Got it',
+  // Singular, and it matters: this hides *this* hint for good. Turning the feature off is
+  // the coach-marks assist, in the tray and in Settings, and a label that said "these"
+  // would be offering that from a place that cannot do it.
+  'coachMark.dismissPermanently': () => "Don't show this one again",
+  'coachMark.readMore': () => 'More in the Codex',
+
+  // ── The Codex frame (FR-903, FR-904, §8.3.10, #161) ────────────────────────
+  'codex.heading': () => 'Codex',
+  'codex.intro': () =>
+    'The ideas the contracts are built on, shortest answer first. Nothing here is ' +
+    'required to finish a job.',
+  'codex.contractLabel': ({ index, title }, fmt) =>
+    `${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })} ${title}`,
+  'codex.seenIn': ({ contracts }, fmt) => `Seen in: ${fmt.list(contracts)}`,
+  'codex.seenInNone': () => 'Not yet used by a contract.',
+  'codex.read': () => 'Read',
+
+  'codex.layer.sentence': () => 'The short answer',
+  'codex.layer.diagram': () => 'The picture',
+  'codex.layer.numbers': () => 'The numbers',
+  'codex.layer.simplifications': () => 'What we simplify',
+
+  // Says what it is. §8.3.10 asks for a live simulation and #162 builds one at M4; a
+  // static drawing in that space would be claiming something the game cannot yet do.
+  'codex.diagramPending': () =>
+    'The live diagram for this entry has not been built yet. The numbers below are real.',
+
+  'codex.departure': ({ id, summary }) => `${id} — ${summary}`,
+  'codex.physicsLink': () => 'All departures, in docs/PHYSICS.md',
+
+  'codex.backToIndex': () => 'All entries',
+  'codex.close': () => 'Close',
+
+  // §8.7: name what failed, then offer the way on. Never a bare 404, and never blank.
+  'codex.unknown': ({ slug }) => `There is no Codex entry called “${slug}”.`,
+  'codex.unknownHelp': () => 'It may not be written yet. Everything that is, is below.',
+
+  // ── The entries (FR-903, §6.12, §8.3.10, #163) ─────────────────────────────
+  //
+  // Layer one is one sentence and answers the outcome on its own. Layer three's numbers
+  // are all parameters: they are computed in `../codex/figures.ts` from `@hh/astro`'s
+  // constants and checked there against independent derivations, so nothing below can
+  // disagree with the simulation.
+
+  // C01 — "Predict which side of the orbit a prograde burn raises."
+  'codex.burns-and-apsides.title': () => 'Burns and apsides',
+  'codex.burns-and-apsides.subtitle': () => 'Why the other side rises',
+  'codex.burns-and-apsides.sentence': () =>
+    'A burn changes the orbit on the far side from where you made it: speed up here, and ' +
+    'half a lap away is where you go higher.',
+  'codex.burns-and-apsides.numbers': (
+    { startAltitudeKm, raisedAltitudeKm, deltaVMps, coastMinutes },
+    fmt,
+  ) =>
+    `Vis-viva gives the speed anywhere on an orbit: v = √(μ(2/r − 1/a)). From a circular ` +
+    `orbit at ${fmt.integer(startAltitudeKm)} km, ${fmt.decimal(deltaVMps, 1)} m/s of ` +
+    `prograde Δv lifts the far side to ${fmt.integer(raisedAltitudeKm)} km — and you get ` +
+    `there ${fmt.decimal(coastMinutes, 1)} minutes later, half a lap after the burn. The ` +
+    `point you burned at does not move at all; it is now the low point.`,
+  'codex.burns-and-apsides.realWorld': () =>
+    'Every orbital manoeuvre works this way, which is why an operator plans a burn by ' +
+    'where its effect lands rather than by where the thruster fires.',
+
+  // C02 — "Describe a Hohmann transfer as two burns half a period apart."
+  'codex.the-hohmann-transfer.title': () => 'The Hohmann transfer',
+  'codex.the-hohmann-transfer.subtitle': () => 'Two burns, half a period apart',
+  'codex.the-hohmann-transfer.sentence': () =>
+    'Moving between two circular orbits takes two burns: one to leave, and one half a lap ' +
+    'later to stay.',
+  'codex.the-hohmann-transfer.numbers': (
+    { startAltitudeKm, endAltitudeKm, firstBurnMps, secondBurnMps, totalMps, transferMinutes },
+    fmt,
+  ) =>
+    `${fmt.integer(startAltitudeKm)} km to ${fmt.integer(endAltitudeKm)} km costs ` +
+    `${fmt.decimal(firstBurnMps, 1)} m/s to leave and ${fmt.decimal(secondBurnMps, 1)} m/s ` +
+    `to circularise: ${fmt.decimal(totalMps, 1)} m/s over a ` +
+    `${fmt.decimal(transferMinutes, 1)} minute coast. Without the second burn you have an ` +
+    `ellipse that touches the target orbit once a lap and falls back out of it.`,
+  'codex.the-hohmann-transfer.realWorld': () =>
+    'It is the cheapest two-impulse transfer between circular orbits until the radius ' +
+    'ratio passes about 11.94, above which a bi-elliptic transfer wins. Walter Hohmann ' +
+    'published it in 1925, before anything had flown.',
+
+  // C03 — "Explain why *when* you leave decides where the target will be."
+  'codex.departure-timing.title': () => 'Departure timing',
+  'codex.departure-timing.subtitle': () => 'Why the window is a window',
+  'codex.departure-timing.sentence': () =>
+    'The transfer takes as long as it takes, so the only thing you choose is when to ' +
+    'start — and that decides where the target has got to when you arrive.',
+  'codex.departure-timing.numbers': (
+    { transferMinutes, targetPeriodMinutes, targetSweepDeg, leadAngleDeg },
+    fmt,
+  ) =>
+    `The transfer takes ${fmt.decimal(transferMinutes, 1)} minutes and the target's orbit ` +
+    `has a period of ${fmt.decimal(targetPeriodMinutes, 1)} minutes, so it sweeps ` +
+    `${fmt.decimal(targetSweepDeg, 1)}° while you are climbing. You arrive 180° from ` +
+    `where you left. So the target has to be ${fmt.decimal(leadAngleDeg, 1)}° short of ` +
+    `your arrival point at the moment you light the engine — earlier or later and you ` +
+    `arrive at an empty piece of sky.`,
+  'codex.departure-timing.realWorld': () =>
+    'This is what a launch window is, and why one exists. The same arithmetic sets the ' +
+    'Earth–Mars windows, on a scale of months rather than minutes.',
+
+  // C04 — "State roughly what LEO→GEO costs, and why."
+  'codex.the-cost-of-altitude.title': () => 'The cost of altitude',
+  'codex.the-cost-of-altitude.subtitle': () => 'Why high is expensive',
+  'codex.the-cost-of-altitude.sentence': () =>
+    'Going higher costs Δv, and most of the bill is for leaving where you are rather than ' +
+    'for arriving where you are going.',
+  'codex.the-cost-of-altitude.numbers': (
+    { startAltitudeKm, geoAltitudeKm, firstBurnMps, secondBurnMps, totalMps, transferHours },
+    fmt,
+  ) =>
+    `${fmt.integer(startAltitudeKm)} km to the geostationary belt at ` +
+    `${fmt.integer(geoAltitudeKm)} km costs ${fmt.decimal(firstBurnMps, 0)} m/s to depart ` +
+    `and ${fmt.decimal(secondBurnMps, 0)} m/s to circularise: ` +
+    `${fmt.decimal(totalMps, 0)} m/s over ${fmt.decimal(transferHours, 1)} hours. Nearly ` +
+    `two thirds of it goes on the first burn, even though the second one is the half that ` +
+    `puts you where the contract wants you.`,
+  'codex.the-cost-of-altitude.realWorld': () =>
+    'A commercial geostationary satellite spends most of its launch mass on this transfer, ' +
+    'which is why it carries a dedicated apogee engine for the second burn.',
+
+  // C05 — "Explain why you burn retrograde to catch something ahead."
+  'codex.phasing-orbits.title': () => 'Phasing orbits',
+  'codex.phasing-orbits.subtitle': () => 'Why slower is faster',
+  'codex.phasing-orbits.sentence': () =>
+    'To catch something ahead of you in the same orbit, you burn retrograde — you slow ' + 'down.',
+  'codex.phasing-orbits.numbers': (
+    {
+      altitudeKm,
+      basePeriodMinutes,
+      phasingPeriodMinutes,
+      phasingPeriapsisKm,
+      phasingSemiMajorKm,
+      gainPerRevMinutes,
+      gainPerRevDeg,
+      deltaVMps,
+    },
+    fmt,
+  ) =>
+    `T = 2π√(a³/μ). At ${fmt.integer(altitudeKm)} km, T = ` +
+    `${fmt.decimal(basePeriodMinutes, 1)} min. Slow down enough to drop the low point to ` +
+    `${fmt.integer(phasingPeriapsisKm)} km and a falls to ` +
+    `${fmt.integer(phasingSemiMajorKm)} km, giving T = ` +
+    `${fmt.decimal(phasingPeriodMinutes, 1)} min. That is ` +
+    `${fmt.decimal(gainPerRevMinutes, 1)} min per revolution, or ` +
+    `${fmt.decimal(gainPerRevDeg, 1)}° of angle. Costing ${fmt.decimal(deltaVMps, 0)} m/s ` +
+    `for the round trip: one burn down, one back up.`,
+  'codex.phasing-orbits.realWorld': () =>
+    'Every ISS visiting vehicle does exactly this, over hours or days, long before it is ' +
+    'near enough to think about docking.',
+
+  // C07 — "Articulate the delta-v/time trade without prompting."
+  'codex.the-delta-v-time-trade.title': () => 'The Δv/time trade',
+  'codex.the-delta-v-time-trade.subtitle': () => 'Fuel or patience, pick one',
+  'codex.the-delta-v-time-trade.sentence': () =>
+    'Almost every orbital problem has a cheap slow answer and a dear fast one, and they ' +
+    'are the same manoeuvre with a different deadline.',
+  'codex.the-delta-v-time-trade.numbers': (
+    {
+      gainDeg,
+      fastRevolutions,
+      fastDeltaVMps,
+      fastHours,
+      slowRevolutions,
+      slowDeltaVMps,
+      slowHours,
+    },
+    fmt,
+  ) =>
+    `Closing ${fmt.integer(gainDeg)}° of phase: over ${fmt.integer(slowRevolutions)} ` +
+    `revolutions it costs ${fmt.decimal(slowDeltaVMps, 0)} m/s and takes ` +
+    `${fmt.decimal(slowHours, 1)} hours; over ${fmt.integer(fastRevolutions)} it costs ` +
+    `${fmt.decimal(fastDeltaVMps, 0)} m/s and takes ${fmt.decimal(fastHours, 1)} hours. Half the ` +
+    `time for twice the Δv — and it does not keep halving, because each step down puts the ` +
+    `low point nearer the atmosphere, and eventually below it.`,
+  'codex.the-delta-v-time-trade.realWorld': () =>
+    'Mission planners draw this trade as a porkchop plot, one contour per departure date, ' +
+    'and choose a point on it against the fuel actually aboard.',
+
+  // C08 — "Distinguish intercept from rendezvous, and say why the second burn exists."
+  'codex.rendezvous-versus-intercept.title': () => 'Rendezvous and intercept',
+  'codex.rendezvous-versus-intercept.subtitle': () => 'Arriving near, and arriving with',
+  'codex.rendezvous-versus-intercept.sentence': () =>
+    'An intercept puts you in the same place; a rendezvous puts you there at the same ' +
+    'speed, and the difference between them is one more burn.',
+  'codex.rendezvous-versus-intercept.numbers': (
+    { interceptRangeM, rendezvousRangeM, rendezvousSpeedMps, closingSpeedMps },
+    fmt,
+  ) =>
+    `An intercept is judged at ${fmt.integer(interceptRangeM)} m, whatever your relative ` +
+    `speed. A rendezvous needs ${fmt.integer(rendezvousRangeM)} m and no more than ` +
+    `${fmt.decimal(rendezvousSpeedMps, 1)} m/s between you. Arriving on a transfer ` +
+    `ellipse you cross the target's orbit ${fmt.decimal(closingSpeedMps, 0)} m/s slower ` +
+    `than it is travelling: that gap is the second burn, and it is the whole difference.`,
+  'codex.rendezvous-versus-intercept.realWorld': () =>
+    'A capsule that reaches the station without closing that gap is a collision. The last ' +
+    'few metres are flown at centimetres per second.',
 };
