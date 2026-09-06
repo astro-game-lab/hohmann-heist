@@ -175,6 +175,114 @@ describe('the settings route', () => {
   });
 });
 
+/**
+ * §8.5.3's `?` — the help overlay, from anywhere (#124).
+ *
+ * The handler is the shell's rather than any screen's, which is what "from every screen"
+ * means in practice: a per-screen handler is a handler a screen can forget to install.
+ */
+describe('the keyboard help overlay', () => {
+  const press = async (key: string): Promise<void> => {
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    });
+  };
+
+  it('opens on ? from a screen that has no keyboard handler of its own', async () => {
+    await mount();
+    expect(el('help-overlay')).toBeNull();
+    await press('?');
+    expect(el('help-overlay')).not.toBeNull();
+  });
+
+  it('opens on ? from every route in §8.2s table', async () => {
+    await mount();
+    for (const hash of [
+      '#/',
+      '#/board',
+      '#/daily',
+      '#/codex/phasing',
+      '#/contract/c03-cold-open',
+    ]) {
+      await goTo(hash);
+      await press('?');
+      expect(el('help-overlay'), hash).not.toBeNull();
+      await press('Escape');
+      expect(el('help-overlay'), hash).toBeNull();
+    }
+  });
+
+  it('opens from a visible affordance too — the keyboard path is not the only path', async () => {
+    await mount();
+    const open = el('open-help');
+    expect(open).not.toBeNull();
+    await act(() => {
+      open?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(el('help-overlay')).not.toBeNull();
+  });
+
+  it('closes on Esc and on its own button', async () => {
+    await mount();
+    await press('?');
+    await press('Escape');
+    expect(el('help-overlay')).toBeNull();
+
+    await press('?');
+    await act(() => {
+      el('help-close')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(el('help-overlay')).toBeNull();
+  });
+
+  it('does not fire while the player is typing', async () => {
+    window.location.hash = '#/settings';
+    await mount();
+    const field = container.querySelector('input[type="text"]');
+    expect(field).not.toBeNull();
+    await act(() => {
+      field?.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    });
+    // A handle containing a `?` is a handle, not a request for help.
+    expect(el('help-overlay')).toBeNull();
+  });
+
+  it('lists the current scope first once a contract is open', async () => {
+    window.location.hash = '#/contract/c03-cold-open';
+    await mount();
+    await press('?');
+    const sections = [...container.querySelectorAll('[data-testid^="help-scope-"]')].map((s) =>
+      s.getAttribute('data-testid'),
+    );
+    // The briefing is showing, so its bindings come first.
+    expect(sections[0]).toBe('help-scope-briefing');
+  });
+
+  /**
+   * #124: *"opening it during execution neither pauses nor advances playback; opening it
+   * during planning does not mutate the plan."*
+   */
+  it('neither pauses nor advances a run, and does not touch a plan', async () => {
+    window.location.hash = '#/contract/c03-cold-open';
+    await mount();
+
+    await act(() => {
+      el('accept')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await press('n');
+    const before = text('plan-panel');
+
+    await press('?');
+    expect(el('help-overlay')).not.toBeNull();
+    // The planner is still mounted underneath and its plan is unchanged.
+    expect(el('planner')).not.toBeNull();
+    expect(text('plan-panel')).toBe(before);
+
+    await press('Escape');
+    expect(text('plan-panel')).toBe(before);
+  });
+});
+
 describe('an unknown route', () => {
   it('renders a not-found screen rather than a blank one', async () => {
     window.location.hash = '#/nope';

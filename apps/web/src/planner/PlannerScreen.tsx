@@ -497,6 +497,12 @@ export const PlannerScreen = ({
           // arm exists so the switch stays exhaustive over `PlannerAction`: a new action
           // is then a compile error here rather than a key that silently does nothing.
           return;
+        case 'help':
+          // The shell's (#124). Returning *before* the `preventDefault` below is the
+          // point: opening the overlay must not consume the key on the planner's behalf,
+          // and §8.5.3's `?` is explicitly one of the two things that neither pauses nor
+          // mutates anything here.
+          return;
       }
       event.preventDefault();
     };

@@ -1327,10 +1327,11 @@ re-keys, and the map the help overlay renders. There is no second copy.
 | `?` | Keyboard help overlay | Everywhere |
 | `C` | Codex for the current concept | Everywhere |
 
-`?` and `C` are listed with their features unbuilt (#124 and #161). They carry a `pending`
-marker in the table rather than being absent from it: a binding the help overlay cannot see
-is a binding the overlay cannot show and the remapper cannot offer, so the row exists and
-resolves to no action.
+`C` is listed with its feature unbuilt (#161). It carries a `pending` marker in the table
+rather than being absent from it: a binding the help overlay cannot see is a binding the
+overlay cannot show and the remapper cannot offer, so the row exists and resolves to no
+action. `?` carried the same marker until #124 landed, which is what the marker is for — a
+promise with an issue number on it, not a permanent state.
 
 Every action in the game is reachable by keyboard alone (NFR-016). The planner is fully
 operable without a pointer, and §13.5's E4 is the automated proof: C02 is played from

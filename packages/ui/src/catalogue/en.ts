@@ -1134,4 +1134,10 @@ export const en: Messages = {
   'settings.import.fileUnreadable': () => 'That file could not be read. Nothing changed.',
   'settings.import.done': () => 'Progress restored.',
   'settings.cleared': () => 'Everything stored on this device has been cleared.',
+
+  // ── §8.5.3's keyboard help overlay (#124) ──────────────────────────────────
+  'help.heading': () => 'Keyboard',
+  'help.open': () => 'Keyboard help',
+  'help.close': () => 'Close',
+  'help.remap': () => 'Change these in Settings',
 };

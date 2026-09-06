@@ -33,12 +33,15 @@
  *
  * ## What is deliberately absent
  *
- * `?` (the help overlay, #124) and `C` (the Codex, #161) have rows here with `pending` set
- * and resolve to no action. That is not a key that does nothing by accident: #124 and #187
- * both render this table, and a binding missing from it entirely would be a binding the help
- * overlay could not show and the remapper could not offer. `pending` says "this is §8.5.3's
- * binding, its feature is not built, and here is the issue" in one place instead of in a
- * comment that nothing reads.
+ * `C` (the Codex, #161) has a row here with `pending` set and resolves to no action. That is
+ * not a key that does nothing by accident: #124 and #187 both render this table, and a
+ * binding missing from it entirely would be a binding the help overlay could not show and
+ * the remapper could not offer. `pending` says "this is §8.5.3's binding, its feature is not
+ * built, and here is the issue" in one place instead of in a comment that nothing reads.
+ *
+ * `?` was the other one until #124 landed; its row now carries an action like any other,
+ * which is what the marker is for — a pending row is a promise with an issue number on it,
+ * not a permanent state.
  */
 import { deltaVStep, type MessageKey } from '@hh/ui';
 
@@ -66,6 +69,14 @@ export type PlannerAction =
   | { readonly kind: 'nodeMenu' }
   /** §8.3.3's contract, shown beside the plan — #264. */
   | { readonly kind: 'toggleContract' }
+  /**
+   * §8.5.3's `?` — the keyboard help overlay (#124).
+   *
+   * Resolved on every screen and handled by the shell rather than by any of them: the
+   * overlay is not a planner feature, and a screen that had to know about it would be a
+   * screen that could forget. The per-screen handlers ignore it explicitly.
+   */
+  | { readonly kind: 'help' }
   // ── Execution, §8.3.8 ──────────────────────────────────────────────────────
   | { readonly kind: 'playPause' }
   | { readonly kind: 'skipToEnd' }
@@ -406,9 +417,7 @@ export const BINDINGS: readonly Binding[] = [
     keys: ['?'],
     screens: EVERYWHERE,
     descriptionKey: 'keys.help',
-    // §8.5.3's binding; #124 is the overlay. Listed rather than omitted so the overlay and
-    // the remapper both see the whole table — see the module docstring.
-    pending: 124,
+    toAction: () => ({ kind: 'help' }),
   },
   {
     id: 'codex',

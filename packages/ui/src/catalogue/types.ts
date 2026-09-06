@@ -862,6 +862,13 @@ export interface UiMessageParams {
   readonly 'settings.import.fileUnreadable': Record<string, never>;
   readonly 'settings.import.done': Record<string, never>;
   readonly 'settings.cleared': Record<string, never>;
+
+  // ── §8.5.3's keyboard help overlay (#124) ──────────────────────────────────
+  readonly 'help.heading': Record<string, never>;
+  readonly 'help.open': Record<string, never>;
+  readonly 'help.close': Record<string, never>;
+  /** The link out to §8.3.12's remapper — two places to rebind is one too many. */
+  readonly 'help.remap': Record<string, never>;
 }
 
 /** Every key in the catalogue: the rules' and the UI's. */

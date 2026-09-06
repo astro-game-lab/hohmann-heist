@@ -1834,3 +1834,107 @@ body {
     padding: 1rem;
   }
 }
+
+/* ── §8.5.3's keyboard help overlay (#124) ───────────────────────────────────
+ *
+ * §8.3.4's HUD shows a `?` affordance and §8.8 requires that the keyboard-only path not be
+ * the only path, so the shell carries one button that opens the overlay from anywhere.
+ * Fixed to the corner rather than placed in each screen's chrome: there are nine routes
+ * and only two of them have chrome to put it in.
+ */
+
+.hh-help-affordance {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  z-index: 10;
+}
+
+.hh-help {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* The scrim, as its own layer — `app.css.test.ts` reads `color-mix()` as a colour literal,
+ * correctly, and `opacity` on the container would fade the panel with it. */
+.hh-help::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.82;
+}
+
+.hh-help__panel {
+  position: relative;
+  overflow-y: auto;
+  max-height: 100%;
+  width: min(42rem, 100%);
+  padding: 1.25rem;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+
+.hh-help__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hh-help__header h2 {
+  margin: 0;
+}
+
+.hh-help__scope h3 {
+  margin-block: 1rem 0.4rem;
+  font-size: 0.9em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.hh-help__list {
+  margin: 0;
+}
+
+/*
+ * Two columns that collapse to one rather than scrolling. §8.8 forbids horizontal scroll,
+ * and twenty-four action/key pairs at 150% interface scale on a narrow screen is precisely
+ * the case that would produce it.
+ */
+.hh-help__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding-block: 0.15rem;
+}
+
+.hh-help__row dt {
+  flex: 1 1 16rem;
+}
+
+.hh-help__row dd {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.hh-help__pending {
+  font-size: 0.85em;
+  color: var(--warn);
+}
+
+.hh-help__remap {
+  display: inline-block;
+  margin-block-start: 1rem;
+}

@@ -25,7 +25,7 @@
 import { createCatalogue, type Catalogue } from '@hh/ui';
 import type { Outcome } from '@hh/game';
 import type { JSX } from 'preact';
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { contractById } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
@@ -41,6 +41,9 @@ import {
   type SaveV1,
   type StoredSettings,
 } from './save/index.js';
+import { HelpOverlay } from './help/HelpOverlay.js';
+import { actionFor, isTypingTarget, type Screen as KeyScope } from './planner/keys.js';
+import { KeyboardScopeProvider } from './planner/scope.js';
 import { downloadSave } from './save/download.js';
 import { SettingsOverlay } from './settings/SettingsOverlay.js';
 import { SettingsScreen } from './settings/SettingsScreen.js';
@@ -280,6 +283,45 @@ const AppShell = ({
   const { settings, keybindings, set, resetAll, setKeybindings } = useSettings();
   const reducedMotion = useReducedMotion(settings['accessibility.reduceMotion']);
 
+  /**
+   * §8.5.3's `?` — the help overlay (#124).
+   *
+   * The handler lives here rather than on any screen, for the reason `?` is scoped to
+   * *everywhere*: the overlay is not a planner feature, and a screen that had to install
+   * it would be a screen that could forget. The two screens that do handle keys return on
+   * the `help` action before their own `preventDefault`, so opening the overlay during a
+   * run neither pauses playback nor advances it and opening it while planning does not
+   * touch the plan.
+   *
+   * The scope is reported upward by whichever screen is showing — see `planner/scope.ts`.
+   * `?` resolves on every scope, so it is only the overlay's section order that depends on
+   * it; `'briefing'` is a safe stand-in for resolution when there is no contract open.
+   */
+  const [scope, setScope] = useState<KeyScope | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (isTypingTarget(event.target)) return;
+      const action = actionFor(
+        scope ?? 'briefing',
+        event.key,
+        { shift: event.shiftKey, ctrl: event.ctrlKey },
+        keybindings,
+      );
+      if (action?.kind !== 'help') return;
+      event.preventDefault();
+      setHelpOpen((open) => !open);
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [keybindings, scope]);
+
+  const scopeApi = useMemo(() => ({ scope, setScope }), [scope]);
+
   // §9.2's palette and the other three document-level settings, published onto the root
   // element so every rule and every canvas below resolves against the same values
   // (#116, #186). An effect rather than a render-time write because it touches the
@@ -344,43 +386,70 @@ const AppShell = ({
   const framed = beneath ?? route;
 
   return (
-    // Keyed by path, so a route change unmounts one screen and mounts the next: that is
-    // what re-runs the entry transition and what stops a screen's local state outliving
-    // the contract it was opened for. When Settings opens over a screen the key is that
-    // screen's and does not change, which is what keeps its state alive.
-    <Screen
-      key={framed.path}
-      name={framed.name}
-      heading={headingFor(framed, t)}
-      focusHeading={focusHeading}
-      transitionMs={screenTransitionMs(reducedMotion)}
-      t={t}
-    >
-      {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
-      {storageProblem === null ? null : (
-        <StorageNotice
-          t={t}
-          problem={storageProblem}
-          onExport={onExportSave}
-          onDismiss={onDismissStorageNotice}
-        />
-      )}
-      {route.name === 'settings' && beneath === null ? (
-        <SettingsScreen {...settingsProps} />
-      ) : (
-        bodyFor(framed, t, saved.save, onAccept, onComplete)
-      )}
-      {beneath === null ? null : (
-        <SettingsOverlay
-          {...settingsProps}
-          onClose={() => {
-            // Back rather than a fixed route: the browser knows where the player came
-            // from, and this makes its own Back button and this one agree.
-            window.history.back();
+    <KeyboardScopeProvider value={scopeApi}>
+      {/* Keyed by path, so a route change unmounts one screen and mounts the next: that is
+        what re-runs the entry transition and what stops a screen's local state outliving
+        the contract it was opened for. When Settings opens over a screen the key is that
+        screen's and does not change, which is what keeps its state alive. */}
+      <Screen
+        key={framed.path}
+        name={framed.name}
+        heading={headingFor(framed, t)}
+        focusHeading={focusHeading}
+        transitionMs={screenTransitionMs(reducedMotion)}
+        t={t}
+      >
+        {saved.status === 'problem' ? <SaveNotice t={t} problem={saved.problem} /> : null}
+        {storageProblem === null ? null : (
+          <StorageNotice
+            t={t}
+            problem={storageProblem}
+            onExport={onExportSave}
+            onDismiss={onDismissStorageNotice}
+          />
+        )}
+        {route.name === 'settings' && beneath === null ? (
+          <SettingsScreen {...settingsProps} />
+        ) : (
+          bodyFor(framed, t, saved.save, onAccept, onComplete)
+        )}
+        {/*
+        §8.5.3's `?` needs a pointer route too — the keyboard-only path cannot be the only
+        path (#124). One affordance in the shell rather than one per screen, for the same
+        reason the handler is here.
+      */}
+        <button
+          type="button"
+          class="hh-help-affordance"
+          data-testid="open-help"
+          onClick={() => {
+            setHelpOpen(true);
           }}
-        />
-      )}
-    </Screen>
+        >
+          {t('help.open', {})}
+        </button>
+        {helpOpen ? (
+          <HelpOverlay
+            t={t}
+            rebinds={keybindings}
+            scope={scope}
+            onClose={() => {
+              setHelpOpen(false);
+            }}
+          />
+        ) : null}
+        {beneath === null ? null : (
+          <SettingsOverlay
+            {...settingsProps}
+            onClose={() => {
+              // Back rather than a fixed route: the browser knows where the player came
+              // from, and this makes its own Back button and this one agree.
+              window.history.back();
+            }}
+          />
+        )}
+      </Screen>
+    </KeyboardScopeProvider>
   );
 };
 

@@ -58,6 +58,7 @@ import { DebriefScreen } from '../debrief/DebriefScreen.js';
 import { copyReplay } from '../debrief/share.js';
 import { ExecutionScreen } from '../execution/ExecutionScreen.js';
 import { PlannerScreen, type CommittedRun } from '../planner/PlannerScreen.js';
+import { useReportKeyboardScope } from '../planner/scope.js';
 import { navigate } from '../router.js';
 import type { ContractProgress } from '../save/index.js';
 import { Briefing } from './Briefing.js';
@@ -148,6 +149,11 @@ export const ContractScreen = ({
   onComplete,
 }: ContractScreenProps): JSX.Element => {
   const [phase, setPhase] = useState<Phase>('briefing');
+
+  // Tell the shell which of §8.5.3's scopes is showing, so #124's overlay can list the
+  // bindings the player can actually use first. §8.2 puts all four phases behind one
+  // route, so the router cannot work this out for itself.
+  useReportKeyboardScope(phase);
   const [run, setRun] = useState<CommittedRun | null>(null);
   const [shareResult, setShareResult] = useState<'copied' | 'failed' | null>(null);
 

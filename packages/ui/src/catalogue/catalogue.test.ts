@@ -529,6 +529,10 @@ const samples: AllMessageParams = {
   'settings.import.fileUnreadable': {},
   'settings.import.done': {},
   'settings.cleared': {},
+  'help.heading': {},
+  'help.open': {},
+  'help.close': {},
+  'help.remap': {},
 };
 
 const catalogue = createCatalogue();

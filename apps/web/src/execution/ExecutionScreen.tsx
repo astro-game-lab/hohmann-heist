@@ -165,6 +165,11 @@ export const ExecutionScreen = ({
           actions.setSpeed(speed);
           break;
         }
+        case 'help':
+          // The shell's (#124), and returning before the `preventDefault` below is what
+          // makes §8.5.3's promise true: opening the overlay during a run neither pauses
+          // playback nor advances it, because this handler does not act on the key at all.
+          return;
         default:
           // Every other action belongs to another screen. The table scopes them out, so
           // this is unreachable rather than defensive.
