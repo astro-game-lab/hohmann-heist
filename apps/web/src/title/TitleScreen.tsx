@@ -4,8 +4,9 @@
  * > *Purpose: identify the game, get the player into it in one click, and communicate
  * > "real physics" without saying so.*
  *
- * The wordmark is the `<h1>` that `Screen` already renders, so this is everything under it:
- * the tagline, §8.2's five entries, the footer, and the live background.
+ * The wordmark is the `<h1>` that `Screen` already renders, and the footer is the shell's
+ * too, so this is what sits between them: the tagline, §8.2's five entries, and the live
+ * background.
  *
  * ## Two clicks, and they are counted
  *
@@ -23,12 +24,15 @@
  * and an entry that led nowhere would be worse than no entry. Both of those are the
  * progression module's answers, not this screen's.
  *
- * ## Daily and Codex route to their placeholders on purpose
+ * ## Daily routes to its placeholder on purpose
  *
- * Both are M7. §8.2's table is the information architecture, and a route that *resolves* is
+ * Daily is M7. §8.2's table is the information architecture, and a route that *resolves* is
  * checkable now — #117's first criterion — whereas an entry that was hidden until its
  * screen existed would make the architecture unobservable until the last milestone that
- * touches it. They go where they go and say what they are.
+ * touches it. It goes where it goes and says what it is.
+ *
+ * Codex is no longer among them: #260 shipped the real thing, so that entry opens the
+ * index rather than a placeholder.
  *
  * ## Focus
  *
@@ -44,7 +48,6 @@ import type { JSX } from 'preact';
 
 import { contracts } from '../contracts/registry.js';
 import { hrefFor } from '../router.js';
-import { Footer } from '../screens/Footer.js';
 import { Icon } from '../icons/index.js';
 
 import { TitleBackground } from './TitleBackground.js';
@@ -107,7 +110,11 @@ export const TitleScreen = ({
           },
         ]),
     { id: 'daily', href: hrefFor('/daily'), label: t('title.daily', {}) },
-    { id: 'codex', href: hrefFor('/codex/phasing'), label: t('title.codex', {}) },
+    // The index, not an entry. This pointed at `/codex/phasing`, which is not a slug —
+    // the nearest real one is `phasing-orbits` — so the front door's Codex entry landed on
+    // §8.7's "no such entry" screen. `router.ts` keeps the index as a real route precisely
+    // so it can be linked to; a menu item has no business picking one entry out of seven.
+    { id: 'codex', href: hrefFor('/codex'), label: t('title.codex', {}) },
     { id: 'settings', href: hrefFor('/settings'), label: t('title.settings', {}) },
   ];
 
@@ -147,8 +154,6 @@ export const TitleScreen = ({
           </ul>
         </nav>
       </div>
-
-      <Footer t={t} />
     </div>
   );
 };

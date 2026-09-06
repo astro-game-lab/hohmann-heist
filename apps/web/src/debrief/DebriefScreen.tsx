@@ -54,8 +54,16 @@ export interface DebriefScreenProps {
   readonly best?: PersonalBest;
   /** §6.11: *Retry* restores the plan. */
   readonly onRetry: () => void;
-  /** The next contract, or `null` when this build ships no later one. */
+  /** Goes to the next contract, or `null` when there is no unlocked one after this. */
   readonly onNext: (() => void) | null;
+  /**
+   * The contract {@link onNext} goes to, for §8.3.9's `▷ NEXT: 06 OVERTAKE`.
+   *
+   * Separate from `onNext` so the button can name its destination without this screen
+   * having to know how progression is computed — the caller passes both from one
+   * `progression()` result. `null` whenever `onNext` is.
+   */
+  readonly next?: { readonly index: number; readonly title: string } | null;
   /** Copies §11.6's replay code. Resolves to whether the clipboard accepted it. */
   readonly onShare: () => void;
   /** Whether the last share attempt succeeded, or `null` before one was made. */
@@ -125,6 +133,7 @@ export const DebriefScreen = ({
   best,
   onRetry,
   onNext,
+  next = null,
   onShare,
   shareResult,
   onBoard,
@@ -266,7 +275,11 @@ export const DebriefScreen = ({
         {/*
           NEXT is present and unavailable rather than absent, and says why. A control that
           vanished would leave the player wondering whether they had missed something;
-          this states the boundary is the build's, not their progress.
+          this states the boundary is the campaign's, not their progress.
+
+          Named when there is somewhere to go, per §8.3.9's `▷ NEXT: 06 OVERTAKE` — the
+          destination is the useful half, and "Next contract" over a board of seven says
+          less than the contract's own number and title.
         */}
         <button
           type="button"
@@ -275,7 +288,9 @@ export const DebriefScreen = ({
           {...(onNext === null ? { 'aria-describedby': 'hh-debrief-next-note' } : {})}
           onClick={() => onNext?.()}
         >
-          {t('debrief.action.next', {})}
+          {next === null
+            ? t('debrief.action.next', {})
+            : t('debrief.action.nextNamed', { index: next.index, title: next.title })}
         </button>
         <button type="button" data-testid="debrief-share" onClick={onShare}>
           <Icon name="share" />

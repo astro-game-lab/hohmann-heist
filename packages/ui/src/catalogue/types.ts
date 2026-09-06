@@ -825,10 +825,13 @@ export interface UiMessageParams {
   readonly 'debrief.beatPar.report': Record<string, never>;
 
   readonly 'debrief.action.retry': Record<string, never>;
+  /** NEXT with nowhere to go — the disabled button, beside {@link 'debrief.next.none'}. */
   readonly 'debrief.action.next': Record<string, never>;
+  /** §8.3.9's `▷ NEXT: 06 OVERTAKE`. The contract it goes to, named on the button. */
+  readonly 'debrief.action.nextNamed': { readonly index: number; readonly title: string };
   readonly 'debrief.action.share': Record<string, never>;
   readonly 'debrief.action.board': Record<string, never>;
-  /** Why NEXT is unavailable: this build ships one contract. */
+  /** Why NEXT is unavailable: there is no unlocked contract after this one. */
   readonly 'debrief.next.none': Record<string, never>;
   /** §11.6's code, copied. Not a URL until the share-URL generator lands (M6). */
   readonly 'debrief.share.copied': Record<string, never>;

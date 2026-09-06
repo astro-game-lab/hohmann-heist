@@ -214,3 +214,49 @@ describe('the skip link is off-screen until it is focused', () => {
     );
   });
 });
+
+/**
+ * Every button gets the game's chrome, not the browser's — #267.
+ *
+ * There was no bare `button` rule at all: the stylesheet named buttons only inside four
+ * containers, and most of those set padding and `font: inherit` without ever clearing the
+ * user-agent defaults. Everything else rendered as Chrome's dark-mode button —
+ * `rgb(107 107 107)` on a `2px outset white` bevel — including **Accept**, **Commit
+ * plan**, and 36 of Settings' 37 controls.
+ *
+ * The check is on the stylesheet rather than on a rendered page because jsdom has no user
+ * agent stylesheet to fall back to: a component test would report the same computed styles
+ * whether or not this rule existed, which is exactly why nothing caught it. What can be
+ * checked here is that the reset is present and resets the three properties that carry the
+ * UA's look — and that it does so at the bare element, so a new button inherits it without
+ * its author having to know.
+ */
+describe('buttons do not fall back to the user agent', () => {
+  const bodyOf = (selector: string): string => {
+    for (const [, found = '', body = ''] of stripComments(source).matchAll(RULE_BLOCK)) {
+      if (found.trim() === selector) return body;
+    }
+    return '';
+  };
+
+  it('resets the user-agent chrome on the bare `button` element', () => {
+    const body = bodyOf('button');
+    expect(body, 'no bare `button` rule in app.css').not.toBe('');
+
+    const declared = new Map(declarationsOf(body));
+    // The three the UA supplies and that a padding-only rule leaves behind.
+    for (const property of ['background', 'border', 'color']) {
+      expect(declared.get(property), `button does not set ${property}`).toBeDefined();
+    }
+    // `outset` is the UA's bevel and the tell the browser check used. Nothing may restore
+    // it, here or anywhere.
+    expect(stripComments(source)).not.toMatch(/border[^;{}]*:\s*[^;{}]*\boutset\b/);
+  });
+
+  it('draws its edge from the palette, so all five reach it', () => {
+    // Not a colour literal — that is the neighbouring test — but specifically a token, so
+    // §8.3.12's palette setting changes buttons along with the panels around them. The
+    // default chrome was the same grey in all five, High contrast included.
+    expect(bodyOf('button')).toMatch(/var\(--/);
+  });
+});

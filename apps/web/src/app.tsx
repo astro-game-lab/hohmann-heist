@@ -312,8 +312,15 @@ const bodyFor = (route: Route, context: BodyContext): JSX.Element => {
 
       // §8.3.3: *"locked (unreachable by UI; direct-URL access shows the unlock rule)"*.
       // The same `progression` result the board renders from, so the two cannot disagree.
-      const lock: LockReason | undefined = progressionFor(save).locks[id];
+      const progressionState = progressionFor(save);
+      const lock: LockReason | undefined = progressionState.locks[id];
       if (lock !== undefined) return <LockedContract t={resolve} lock={lock} />;
+
+      // The debrief's NEXT (#273), from the *same* result as the lock above. `next` is the
+      // first contract still to be Bronzed, so once this run is recorded it has already
+      // moved on from `id` — which is why the debrief can read it without a second rule.
+      const nextId = progressionState.next;
+      const nextScenario = nextId === null || nextId === id ? undefined : contractById(nextId);
 
       const progress = save.contracts[id];
       return (
@@ -331,6 +338,15 @@ const bodyFor = (route: Route, context: BodyContext): JSX.Element => {
           coachMarksSeen={save.flags.coachMarksSeen}
           onCoachMarkSeen={context.onCoachMarkSeen}
           onOpenCodex={context.onOpenCodex}
+          {...(nextScenario === undefined
+            ? {}
+            : {
+                next: {
+                  id: nextScenario.id,
+                  index: nextScenario.document.index,
+                  title: nextScenario.document.title,
+                },
+              })}
         />
       );
     }

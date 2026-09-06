@@ -301,22 +301,22 @@ export const PlannerScreen = ({
             : componentsOfCounts(model.plan.nodes[draggingIndex]?.deltaVCounts ?? [0, 0, 0])),
         };
 
-  // Which apsis the overlay's burn is sitting on, for §8.3.5's radios. Compared against
-  // the epoch the *command* would produce, so the reading agrees with what pressing the
-  // radio would do — a separate tolerance here could say "free" for a burn that snapping
-  // would not move.
-  const editorSnappedTo = ((): 'periapsis' | 'apoapsis' | null => {
-    // Narrowed once, in a block, rather than asserted at each use. `evaluation.timeline`
-    // is nullable and the closure below reads it twice; hoisting is what lets both reads
-    // be checked instead of cast away.
-    const { timeline } = evaluation;
-    if (editorNode === undefined || timeline === null) return null;
-    return (
-      (['periapsis', 'apoapsis'] as const).find(
-        (kind) => snapToNamedApsis(timeline, editorNode.epoch, kind) === editorNode.epoch,
-      ) ?? null
-    );
-  })();
+  /**
+   * Which apsis the overlay's burn is sitting on, for §8.3.5's radios.
+   *
+   * `apsisAt`, which is the same question `snappedKinds` below asks, so the editor's radios
+   * and the plan panel's caret cannot disagree about one node — they did, and this is why.
+   *
+   * This used to compare `snapToNamedApsis(...) === node.epoch` exactly, on the reasoning
+   * that the reading should agree with what pressing the radio would do. It does not: the
+   * command's epoch is quantised at node construction (FR-105) and the finder's is not, so
+   * the two are never bit-equal and every snapped node read "free". `apsisAt`'s docstring
+   * names that exact trap and carries the one-tick window that avoids it.
+   */
+  const editorSnappedTo =
+    editorNode === undefined || evaluation.timeline === null
+      ? null
+      : apsisAt(evaluation.timeline, editorNode.epoch);
 
   /**
    * Which apsis each node is sitting on — DEP-07 made visible (#136).

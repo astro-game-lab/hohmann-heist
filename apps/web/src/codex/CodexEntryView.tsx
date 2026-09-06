@@ -44,6 +44,18 @@ export interface CodexEntryViewProps {
   readonly entry: CodexEntry;
   /** A layer to open beyond the defaults — the `?layer=` deep link. */
   readonly openLayer?: CodexLayer | undefined;
+  /**
+   * Whether something above already carries the entry's title.
+   *
+   * `CodexScreen` sits under the shell's `<h1>`, which `app.tsx` resolves to
+   * `entry.titleKey` — so the view's own `<h2>` printed the same string a second time, on
+   * every entry. `CodexOverlay` has no heading above it and still needs one, which is why
+   * this is a prop rather than a deletion.
+   *
+   * The subtitle travels with the title: it reads as a subheading and belongs wherever the
+   * heading is, not stranded under a heading that is somewhere else.
+   */
+  readonly titled?: boolean;
 }
 
 const LAYER_HEADINGS = {
@@ -79,16 +91,28 @@ const SeenIn = ({ t, entry }: { t: Catalogue['resolve']; entry: CodexEntry }): J
   );
 };
 
-export const CodexEntryView = ({ t, entry, openLayer }: CodexEntryViewProps): JSX.Element => {
+export const CodexEntryView = ({
+  t,
+  entry,
+  openLayer,
+  titled = true,
+}: CodexEntryViewProps): JSX.Element => {
   const isOpen = (layer: CodexLayer): boolean =>
     OPEN_BY_DEFAULT.includes(layer) || openLayer === layer;
 
   return (
     <article class="hh-codex-entry" data-testid={`codex-entry-${entry.slug}`}>
-      <header class="hh-codex-entry__header">
-        <h2>{t(entry.titleKey, {})}</h2>
-        <p class="hh-codex-entry__subtitle">{t(entry.subtitleKey, {})}</p>
-      </header>
+      {titled ? (
+        <header class="hh-codex-entry__header">
+          <h2>{t(entry.titleKey, {})}</h2>
+          <p class="hh-codex-entry__subtitle">{t(entry.subtitleKey, {})}</p>
+        </header>
+      ) : (
+        // The heading is the screen's `<h1>`; only the subtitle is still this view's.
+        <p class="hh-codex-entry__subtitle" data-testid="codex-entry-subtitle">
+          {t(entry.subtitleKey, {})}
+        </p>
+      )}
 
       {/* Layer one. Not a `<details>`: it is the entry, for most readers. */}
       <p class="hh-codex-entry__sentence" data-testid="codex-layer-sentence">

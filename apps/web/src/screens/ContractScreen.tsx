@@ -85,6 +85,18 @@ export interface ContractScreenProps {
   readonly coachMarksSeen: readonly string[];
   readonly onCoachMarkSeen: (key: string) => void;
   readonly onOpenCodex: (slug: string) => void;
+  /**
+   * The contract the debrief's NEXT goes to — §8.3.9, #273.
+   *
+   * Resolved by the shell from `progressionFor(save)`, which is the one call the board's
+   * locks and `NEXT`, the title's *Continue*, and the direct-URL guard all read. Passed in
+   * rather than computed here so this screen cannot become a fifth rule about what is
+   * open; `undefined` when there is no unlocked contract after this one.
+   *
+   * It is read at debrief time from the *current* save, so the run just completed is
+   * already counted — the shell re-renders with the updated save before the debrief asks.
+   */
+  readonly next?: { readonly id: string; readonly index: number; readonly title: string };
 }
 
 /**
@@ -160,6 +172,7 @@ export const ContractScreen = ({
   coachMarksSeen,
   onCoachMarkSeen,
   onOpenCodex,
+  next,
 }: ContractScreenProps): JSX.Element => {
   const [phase, setPhase] = useState<Phase>('briefing');
 
@@ -310,9 +323,18 @@ export const ContractScreen = ({
         setShareResult(null);
         setPhase('planner');
       }}
-      // One contract ships in this build, so there is nowhere to go next. The button says
-      // so rather than vanishing — see `DebriefScreen`.
-      onNext={null}
+      // §6.8's progression, resolved by the shell from the *same* `progression()` call the
+      // board's `NEXT` and the title's *Continue* read — see `app.tsx`. This was hardcoded
+      // `null` from M2, when one contract shipped; M3 shipped seven and the button stayed
+      // disabled, telling every player C01 was the last contract in the build.
+      onNext={
+        next === undefined
+          ? null
+          : () => {
+              navigate(`/contract/${next.id}`);
+            }
+      }
+      next={next === undefined ? null : { index: next.index, title: next.title }}
       onShare={() => {
         // Both ways this can fail — no clipboard at all, and a write that rejects —
         // come back as a value rather than an exception. See `share.ts`.

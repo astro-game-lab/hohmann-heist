@@ -70,7 +70,8 @@ describe('the contract board', () => {
     expect(el('daily-strip')).not.toBeNull();
     expect(el('board-credits')).not.toBeNull();
     expect(el('board-settings')).not.toBeNull();
-    expect(el('footer')).not.toBeNull();
+    // The footer is the shell's — see `TitleScreen.test.tsx` and `app.test.tsx`.
+    expect(el('footer')).toBeNull();
   });
 
   /** §8.7's "no saved progress" row: Act I unlocked, everything else locked, NEXT on C01. */

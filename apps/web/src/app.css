@@ -120,6 +120,41 @@ body {
   color: var(--fg);
 }
 
+/*
+ * The frame every screen is measured against.
+ *
+ * Two jobs, and the first is subtle enough to be worth stating. `#app` and `main` used to
+ * be plain blocks with no padding, border or formatting context, so the screen heading's
+ * `margin-block-start` **collapsed straight out through both of them** and applied outside
+ * the body's `100vh` box. The document came out 21 px taller than the viewport on every
+ * route, including ones whose content fitted easily — a scrollbar on the title screen with
+ * nothing under the fold but the margin that put it there. A flex container establishes a
+ * formatting context, which is what stops the collapse; `display: flex` here is load
+ * bearing, not layout preference.
+ *
+ * The second job is to give screens a definite height to be a fraction of. Without one, a
+ * `1fr` grid row or a `flex: 1` column resolves against content instead of the window, and
+ * anything sized from it overshoots — which is how the title screen's canvas came to size
+ * the row that was supposed to be sizing it, and how the planner's commit bar ended up
+ * below the fold at 720p with the orbit view stretched past the space available.
+ *
+ * `100dvh` rather than `100vh`: on mobile Safari and Chrome Android `vh` is the *large*
+ * viewport, so a `100vh` column overflows by the height of the address bar until it
+ * retracts. `body` keeps `100vh` as the paint floor, which is the one place the larger
+ * value is the right one.
+ */
+#app {
+  display: flex;
+  flex-direction: column;
+  /* The viewport exactly, not merely at least it. `min-block-size` alone leaves the height
+     free to grow with content, so a `flex: 1` child still resolves against content and
+     nothing is ever asked to shrink — which is how the planner kept overflowing even once
+     its column was set up to give room back. The screen below scrolls internally when its
+     content genuinely does not fit; this is what makes "does not fit" a real question
+     rather than one the layout can always answer by growing. */
+  block-size: 100dvh;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --hh-screen-in-duration: 0ms;
@@ -171,12 +206,71 @@ body {
 .hh-screen {
   animation: hh-screen-in var(--hh-screen-in-duration) ease-out;
   padding-inline: 1.5rem;
+
+  /* Fills the frame above, so a screen that wants the viewport can have it. `min-block-size:
+     0` because a flex item's default `auto` minimum refuses to shrink below its content —
+     which is exactly what kept the planner from giving the commit bar its pixels back.
+
+     `overflow-y: auto` is the other half: the frame is now the viewport's height, so a
+     screen with more content than that — Settings, with six groups and twenty-two
+     keybindings — scrolls *inside* the frame rather than making the document taller. The
+     scrollbar moves from the window to the screen; nothing becomes unreachable.
+
+     Never `overflow-x`. A screen that scrolls sideways is a screen whose layout has already
+     failed, and §8.8 forbids the scrollbar it would put on the page — the same rule
+     `.hh-mark__card` and `.hh-editor__anchor` are both written against. */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 @keyframes hh-screen-in {
   from {
     opacity: 0;
   }
+}
+
+/*
+ * Every button, once.
+ *
+ * The stylesheet used to name buttons only inside four containers — the planner's tabs,
+ * the HUD, the execution speeds and the debrief's actions — and most of those set padding
+ * and `font: inherit` without ever clearing the user-agent chrome. Everything else got
+ * Chrome's default dark-mode button: `rgb(107 107 107)` on a `2px outset white` bevel, in
+ * the UA's own font. That was 36 of Settings' 37 controls, both **Accept** and **Commit
+ * plan** — the two most important buttons in the game — and the help affordance on all
+ * twelve routes.
+ *
+ * It is stated here rather than per component for the reason `.hh-screen`'s gutter is: a
+ * button added tomorrow should look like the game without its author having to know that
+ * it must be told to.
+ *
+ * `background: none` rather than a panel fill, because the two rules that *had* got this
+ * right — `.hh-commit__history` and the tab strip — are transparent with a `--grid` edge,
+ * and matching them is what makes UNDO and *Commit plan* finally look like siblings. A
+ * component that wants a filled button still says so; this is the floor, not the ceiling.
+ *
+ * The palette reaches buttons through `currentColor` and `--grid`, which is the point:
+ * the default chrome was the same grey in all five palettes, so a third of the interactive
+ * surface did not respond to §8.3.12's colour setting at all — on High contrast that is a
+ * legibility problem rather than a cosmetic one.
+ */
+button {
+  padding: 4px 10px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: var(--hh-line) solid var(--grid);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 /*
@@ -378,11 +472,21 @@ body {
  * where the wide arrangement stops fitting.
  */
 
+/*
+ * Fills the screen exactly rather than being at least `80vh` tall.
+ *
+ * `min-height: 80vh` was a floor with no ceiling, so the column grew to whatever its
+ * contents wanted and pushed the commit bar off the bottom — at 1280×720 the *Commit plan*
+ * button sat entirely below the fold, on a screen that otherwise looked complete. Filling
+ * the frame means the orbit view gives room back instead, which is the one region on this
+ * screen that can afford to.
+ */
 .hh-planner {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 80vh;
+  flex: 1 1 auto;
+  min-block-size: 0;
 }
 
 .hh-planner__stage {
@@ -452,9 +556,14 @@ body {
 
 .hh-orbit {
   position: relative;
-  flex: 1 1 auto;
+  /* `45vh` as the *preferred* size rather than a hard floor. As `min-height` it could not
+     shrink, so on a 720p window the column overflowed and the commit bar went under the
+     fold; as a basis the view gives up its share first, which is the right one to lose.
+     The `8rem` floor stops it collapsing to nothing on a very short window, and moves with
+     §8.3.12's interface scale because it is in `rem`. */
+  flex: 1 1 45vh;
   min-width: 0;
-  min-height: 45vh;
+  min-block-size: 8rem;
   background: var(--bg);
   border-radius: 6px;
   overflow: hidden;
@@ -1087,6 +1196,19 @@ body {
 .hh-editor__anchor[data-anchored='true'] {
   left: clamp(8px, var(--hh-anchor-x, 8px), calc(100% - var(--hh-anchor-width) - 8px));
   top: clamp(8px, var(--hh-anchor-y, 8px), calc(100% - 48px));
+
+  /* And bounded by what is left *below the offset*, which the `max-height` above cannot
+     know about: it is a fraction of the stage, while `top` can already be within 48 px of
+     the stage's bottom. A panel anchored low therefore ran past the end of the stage, and
+     with the planner itself overflowing the window that put **Delete** and **Done** off
+     the bottom of the screen entirely — 52 px past the fold at 1280×720, with no way to
+     scroll to them, because scrolling the page moves the orbit view out from under the
+     node the panel is anchored to.
+
+     Same form as `.hh-mark`'s bound, and for the same reason. `max` keeps the panel from
+     collapsing when the anchor is itself near the bottom; `overflow-y: auto` above then
+     scrolls the panel's own content, so its footer is always reachable. */
+  max-block-size: max(9rem, calc(100% - var(--hh-anchor-y, 8px) - 8px));
 }
 
 .hh-editor__anchor[data-anchored='false'] {
@@ -2029,9 +2151,19 @@ body {
  * still scrolls only vertically, because nothing here has a fixed width.
  */
 .hh-title {
+  /* One row now: the footer moved to the shell, so the `auto` row it occupied is gone. */
   display: grid;
-  grid-template-rows: 1fr auto;
-  min-block-size: 60vh;
+  grid-template-rows: 1fr;
+
+  /* Fills the screen instead of merely being at least `60vh`, so the `1fr` row above has a
+     definite height to be a fraction of. While it did not, the row was content-sized, the
+     canvas's `block-size: 100%` resolved against an indefinite height and fell back to its
+     intrinsic size — its `width`/`height` attributes — and the backing store the renderer
+     had just sized from the container became the thing sizing the container. It settled
+     rather than ran away, but it settled past the fold: the footer, and with it the build
+     version, was off-screen at 1280×720. */
+  flex: 1 1 auto;
+  min-block-size: 0;
 }
 
 .hh-title__background,
@@ -2052,10 +2184,24 @@ body {
   pointer-events: none;
   position: relative;
   min-block-size: 18rem;
+  /* Belt to the canvas's braces below, and the same guard `.hh-orbit` has always carried:
+     whatever the canvas's intrinsic size turns out to be, it cannot push this open. */
+  overflow: hidden;
 }
 
+/*
+ * Taken out of flow, so the backing store can never size the layout that sizes it.
+ *
+ * `inline-size: 100%; block-size: 100%` is only a promise when the parent's height is
+ * definite; absolute positioning against a `position: relative` parent is one whatever the
+ * parent's height came from. The renderer sets `width`/`height` — device pixels — on this
+ * element, and those attributes are also its intrinsic CSS size, so in flow they are a
+ * layout input. Out of flow they are not, which is the whole fix.
+ */
 .hh-title__canvas {
   display: block;
+  position: absolute;
+  inset: 0;
   inline-size: 100%;
   block-size: 100%;
 }

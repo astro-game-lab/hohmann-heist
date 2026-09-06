@@ -47,7 +47,7 @@
 import type { CodexSlug } from '@hh/game';
 import type { Catalogue, MarkSpec } from '@hh/ui';
 import type { JSX } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
 export interface CoachMarkProps {
   readonly t: Catalogue['resolve'];
@@ -65,21 +65,74 @@ interface Position {
   readonly y: number;
 }
 
+/** The gap between a card and the thing it points at. */
+const GAP_PX = 8;
+
+/**
+ * Regions a card may never cover, whatever its anchor says.
+ *
+ * The commit bar is the planner's primary action, and the timeline strip is how a burn is
+ * placed. A hint is transient and dismissible; the controls under it are not, so when the
+ * two want the same pixels the hint moves.
+ *
+ * This is not belt-and-braces — it is the bug. The first mark a new player sees is
+ * anchored to `orbit`, the orbit view reaches to within 8 px of the timeline, and "under
+ * the anchor" put the card exactly on top of the commit bar: `elementFromPoint` at the
+ * centre of **Commit plan** returned the card's *More in the Codex* button, and a click on
+ * *Commit plan* could not land at all. A first-time player with a legal plan could not fly
+ * it — and coach marks are shown to precisely the players who would not know why.
+ */
+const RESERVED_ANCHORS = ['commit', 'timeline'] as const;
+
+/** The top of the highest reserved region below `from`, or the viewport's bottom. */
+const floorBelow = (from: number): number => {
+  let floor = window.innerHeight;
+  for (const name of RESERVED_ANCHORS) {
+    const el = document.querySelector<HTMLElement>(`[data-hh-anchor="${name}"]`);
+    if (el === null) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue;
+    // Only regions that actually start below the card's top can constrain it.
+    if (rect.top >= from && rect.top < floor) floor = rect.top;
+  }
+  return floor;
+};
+
 /**
  * Where to put the card: under its anchor, aligned to the anchor's start edge.
  *
  * Under rather than over, because the anchors are things the player is looking at or
  * pointing at, and a card above one covers the thing it is about on a short viewport.
  * Returns `null` when the anchor is not in the document, which is what docks the card.
+ *
+ * ## Flip, then dock
+ *
+ * Under the anchor is the preference, not the rule. `cardHeight` is measured from the
+ * rendered card, so this knows whether the card actually fits in the space under the
+ * anchor before the reserved regions begin — and if it does not, it tries above the
+ * anchor, and docks if that fails too. Docking already exists for an anchor that is not on
+ * screen; a screen with no room for the card is the same situation from the card's point
+ * of view.
+ *
+ * A card anchored *to* a reserved region is placed under it as usual: `floorBelow` only
+ * considers regions starting below the card, so the commit bar does not block a mark that
+ * is about the commit bar.
  */
-const measure = (anchor: string): Position | null => {
+const measure = (anchor: string, cardHeight: number): Position | null => {
   const target = document.querySelector<HTMLElement>(`[data-hh-anchor="${anchor}"]`);
   if (target === null) return null;
   const rect = target.getBoundingClientRect();
   // A region that is present but collapsed — a panel on another tab — is not somewhere to
   // point at either, and it measures as a zero box rather than as absent.
   if (rect.width === 0 && rect.height === 0) return null;
-  return { x: rect.left, y: rect.bottom + 8 };
+
+  const below = rect.bottom + GAP_PX;
+  if (below + cardHeight <= floorBelow(below)) return { x: rect.left, y: below };
+
+  const above = rect.top - GAP_PX - cardHeight;
+  if (above >= 0) return { x: rect.left, y: above };
+
+  return null;
 };
 
 /**
@@ -121,21 +174,33 @@ export const CoachMark = ({
 }: CoachMarkProps): JSX.Element => {
   const [at, setAt] = useState<Position | null>(null);
   const anchor = mark?.anchor ?? null;
+  /**
+   * The card, so its height can be measured.
+   *
+   * Placement needs it: whether there is room under the anchor is a question about the
+   * card, and answering it with a constant would be a guess that §8.3.12's interface scale
+   * and §8.9's +40% string length both falsify. Read in a layout effect, before paint, so
+   * the card is never seen in the wrong place first.
+   */
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (anchor === null) {
       setAt(null);
       return undefined;
     }
     const remeasure = (): void => {
-      setAt(measure(anchor));
+      // Zero before the first paint, which resolves to "under the anchor" — the same
+      // answer as before — and is corrected on the pass that follows.
+      setAt(measure(anchor, cardRef.current?.getBoundingClientRect().height ?? 0));
     };
     remeasure();
     window.addEventListener('resize', remeasure);
     return () => {
       window.removeEventListener('resize', remeasure);
     };
-  }, [anchor]);
+    // `mark.key` too: a different hint on the same anchor is a different height.
+  }, [anchor, mark?.key]);
 
   return (
     <div
@@ -158,7 +223,7 @@ export const CoachMark = ({
       }}
     >
       {mark === null ? null : (
-        <div class="hh-mark__card" data-testid={`coach-mark-${mark.key}`}>
+        <div class="hh-mark__card" ref={cardRef} data-testid={`coach-mark-${mark.key}`}>
           <p class="hh-mark__text">{resolveDynamic(mark.key)}</p>
           <div class="hh-mark__actions">
             <button type="button" data-testid="coach-mark-dismiss" onClick={onDismiss}>

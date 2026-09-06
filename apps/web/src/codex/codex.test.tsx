@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { contractById, contracts } from '../contracts/registry.js';
 
+import { CodexEntryView } from './CodexEntryView.js';
 import { CodexScreen, layerFrom } from './CodexScreen.js';
 import { CONCEPTS, conceptFor } from './current.js';
 
@@ -90,6 +91,34 @@ describe('an entry', () => {
     expect(el('codex-layer-diagram')).not.toBeNull();
     expect(el('codex-layer-numbers')).not.toBeNull();
     expect(el('codex-layer-simplifications')).not.toBeNull();
+  });
+
+  /**
+   * The title once, not twice — #276.
+   *
+   * `app.tsx` resolves the shell's `<h1>` to the entry's own `titleKey`, and this view
+   * rendered the same key again as an `<h2>` directly under it, so every entry printed its
+   * name twice on consecutive lines. The `<h2>` is still needed by `CodexOverlay`, which
+   * has no heading above it — hence `titled`, and hence the pair of assertions: deleting
+   * the heading outright would fix the screen by breaking the overlay.
+   */
+  it('leaves the heading to the screen, keeping the subtitle', async () => {
+    await mount({ slug: 'phasing-orbits' });
+    const entry = el('codex-entry-phasing-orbits');
+    expect(entry?.querySelector('h2')).toBeNull();
+    expect(el('codex-entry-subtitle')?.textContent).not.toBe('');
+  });
+
+  it('still carries its own heading where nothing above it does', async () => {
+    // The overlay's arrangement: the default, so a new mount point gets a heading unless
+    // it says it already has one.
+    await act(() => {
+      render(
+        <CodexEntryView t={catalogue.resolve} entry={CODEX_ENTRIES['phasing-orbits']} />,
+        container,
+      );
+    });
+    expect(container.querySelector('h2')?.textContent).not.toBe('');
   });
 
   /**

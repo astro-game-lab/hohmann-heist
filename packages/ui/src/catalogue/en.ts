@@ -1090,6 +1090,8 @@ export const en: Messages = {
 
   'debrief.action.retry': () => 'Retry',
   'debrief.action.next': () => 'Next contract',
+  'debrief.action.nextNamed': ({ index, title }, fmt) =>
+    `Next: ${fmt.number(index, { minimumIntegerDigits: 2, useGrouping: false })} ${title}`,
   'debrief.action.share': () => 'Share',
   'debrief.action.board': () => 'Contract board',
   'debrief.next.none': () => 'This is the last contract in this build.',

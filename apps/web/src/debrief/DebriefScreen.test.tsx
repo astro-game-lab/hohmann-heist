@@ -272,6 +272,21 @@ describe('the actions', () => {
     expect(el('debrief-next')?.getAttribute('aria-describedby')).toBe('hh-debrief-next-note');
   });
 
+  // §8.3.9's `▷ NEXT: 06 OVERTAKE` — the destination is the useful half of the label.
+  it('names the contract NEXT goes to', async () => {
+    await mount(outcomeOf(), {
+      onNext: () => undefined,
+      next: { index: 2, title: 'Round Trip' },
+    });
+    expect(text('debrief-next')).toContain('02');
+    expect(text('debrief-next')).toContain('Round Trip');
+  });
+
+  it('falls back to the plain label when there is nowhere to go', async () => {
+    await mount(outcomeOf());
+    expect(text('debrief-next')).toBe('Next contract');
+  });
+
   it('reports a successful copy', async () => {
     await mount(outcomeOf(), { shareResult: 'copied' });
     expect(text('debrief-share-result')).toContain('copied');

@@ -170,7 +170,23 @@ export const NodeEditor = ({
    */
   const ref = useOverlay({ modal: false, initialFocus: headingRef });
 
-  /** Commit the four fields, or restore them. §8.3.5's rejection rule. */
+  /**
+   * Commit the four fields, or restore them. §8.3.5's rejection rule.
+   *
+   * Two ways to be invalid, and both restore rather than clamp — *"rejected on blur with
+   * the previous value restored, never silently clamped"*:
+   *
+   * - unparseable parts, which `metFromParts` reports as `null`;
+   * - a well-formed time **outside the mission window**, which is the one this screen used
+   *   to let through. It reached `moveNode`, the plan was re-evaluated, and
+   *   `requireNodesWithinHorizon` threw a `RangeError` out of a Preact state update — the
+   *   node stayed put only because the update aborted, and the field kept the rejected
+   *   value, so every later edit threw again on the stale hours.
+   *
+   * `horizonSeconds` is already a prop here, for the slider's `max`. The slider therefore
+   * could never produce an out-of-window epoch, and the steppers clamp in the store; typed
+   * entry was the only way in.
+   */
   const commitEpoch = (): void => {
     const seconds = metFromParts({
       hours: partValue(draft.hours),
@@ -178,7 +194,7 @@ export const NodeEditor = ({
       seconds: partValue(draft.seconds),
       milliseconds: partValue(draft.milliseconds),
     });
-    if (seconds === null) {
+    if (seconds === null || seconds < 0 || seconds > horizonSeconds) {
       setDraft(draftOf(metSeconds));
       return;
     }
