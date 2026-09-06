@@ -30,7 +30,7 @@
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 
-import { useDialog } from '../a11y/dialog.js';
+import { useOverlay } from '../a11y/overlay.js';
 import { SettingsScreen, type SettingsScreenProps } from './SettingsScreen.js';
 
 export interface SettingsOverlayProps extends SettingsScreenProps {
@@ -39,7 +39,7 @@ export interface SettingsOverlayProps extends SettingsScreenProps {
 }
 
 export const SettingsOverlay = ({ onClose, ...props }: SettingsOverlayProps): JSX.Element => {
-  const ref = useDialog<HTMLDivElement>({ onClose });
+  const ref = useOverlay<HTMLDivElement>({ modal: true, onClose });
 
   return (
     <div class="hh-settings-overlay" data-testid="settings-overlay">

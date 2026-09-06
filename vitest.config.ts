@@ -160,6 +160,30 @@ export default defineConfig({
           // depend on a browser. Only the app gets jsdom.
           environment: 'jsdom',
           include: ['apps/web/src/**/*.test.{ts,tsx}'],
+          // `*.axe.test.tsx` belongs to the `a11y` project below. Excluded by name for the
+          // same reason `packages` excludes `*.dom.test.ts`: the file sits beside the code
+          // it covers, and moving it between projects has to be a rename rather than a
+          // quiet relocation.
+          exclude: ['apps/web/src/**/*.axe.test.tsx'],
+        },
+      },
+      {
+        // NFR-017's blocking accessibility gate (#170): axe-core over every route in
+        // §8.2's table and over the states that are screens without being routes.
+        //
+        // Its own project rather than part of `web` for two reasons. It is the slowest
+        // thing in the app suite — it mounts every screen and runs a rule engine over each
+        // one — and the inner-loop `pnpm test:web` should not pay for that on every save.
+        // And it is a *gate* rather than a unit test: naming it separately means CI, the
+        // step summary and a contributor can all talk about "the a11y gate" as one thing.
+        //
+        // It still joins `pnpm test:all` (`--project !pars`) and therefore CI, with no
+        // workflow change — that is what §14.1's "axe clean" exit criterion needs, and a
+        // gate that has to be remembered is not a gate.
+        test: {
+          name: 'a11y',
+          environment: 'jsdom',
+          include: ['apps/web/src/**/*.axe.test.tsx'],
         },
       },
     ],

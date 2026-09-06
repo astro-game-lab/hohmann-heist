@@ -49,6 +49,8 @@ import type { JSX } from 'preact';
 import { Icon } from '../icons/index.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
+import { useOverlay } from '../a11y/overlay.js';
+
 /** Which axis a stepper drives. The index the catalogue's `step` message reads. */
 const AXIS = { prograde: 0, radial: 1 } as const;
 
@@ -147,12 +149,26 @@ export const NodeEditor = ({
   }, [metSeconds]);
 
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  useEffect(() => {
-    // Focus the heading on open. Appropriate to a *non-modal* overlay: it moves focus in
-    // so a keyboard user is where the new controls are, and does nothing to stop them
-    // tabbing straight back out to the rest of the planner, which is what a modal would.
-    headingRef.current?.focus();
-  }, []);
+
+  /*
+   * §8.8's non-modal policy, from `a11y/overlay.ts` rather than written here (#169).
+   *
+   * Focus moves in — to the heading, so what a screen reader announces is the thing that
+   * just opened rather than whichever stepper is first in the markup — and does nothing to
+   * stop the player tabbing straight back out to the rest of the planner, which is what a
+   * modal would and what "never modal" above rules out.
+   *
+   * **Restoring on close is what this screen was missing**, and it is the half that
+   * strands people. The editor is opened from a node's row in the plan panel, and deleting
+   * that node closes the editor and removes the row in the same commit — so the element to
+   * return focus to is gone at exactly the moment it is needed. `restoreFocus` falls back
+   * to the screen heading rather than letting the browser drop focus on `<body>`.
+   *
+   * `Esc` is deliberately not wired here: `PlannerScreen` runs the cascade — menu, then
+   * editor, then the selection — and a listener added here could not know it was second in
+   * line. `OverlayOptions` is a union for that reason, so this is not merely omitted.
+   */
+  const ref = useOverlay({ modal: false, initialFocus: headingRef });
 
   /** Commit the four fields, or restore them. §8.3.5's rejection rule. */
   const commitEpoch = (): void => {
@@ -199,6 +215,7 @@ export const NodeEditor = ({
   return (
     <section
       class="hh-editor"
+      ref={ref}
       // A `dialog` role would announce it as modal and invite a focus trap. It is a
       // labelled region, which is what §8.3.5's "never modal" actually describes.
       role="group"

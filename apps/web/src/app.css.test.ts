@@ -98,3 +98,119 @@ describe('app.css carries the default palette and nothing else', () => {
     expect(stripComments('.x {\n  color: var(--accent);\n}').match(COLOUR)).toBeNull();
   });
 });
+
+/**
+ * §8.8's *"visible focus ring, never suppressed"* — #169, NFR-016.
+ *
+ * The rule is easy to state and easy to break by accident: `outline: none` is the first
+ * thing anybody reaches for when a focus ring looks wrong on one control, and it removes
+ * the only cue a keyboard user has for where they are. Nothing about the page looks broken
+ * afterwards, which is why this is a test and not a review item — ESLint cannot see CSS,
+ * so it goes here beside the colour check for the same reason.
+ *
+ * **Suppression is allowed only with a replacement.** A control that draws its own focus
+ * indicator — a `box-shadow` ring, an inset outline — is doing the right thing in a
+ * different way, and forbidding it outright would push the next person into `!important`
+ * or an inline style, where nothing checks anything. So the test asks the question that
+ * actually matters: is there still something to see?
+ */
+const RULE_BLOCK = /([^{}]+)\{([^{}]*)\}/g;
+
+/**
+ * A block's declarations, as `[property, value]`.
+ *
+ * Declaration by declaration rather than by scanning the whole body with one regex, which
+ * is how the first version of this check got it wrong: `outline\\s*:\\s*(?!none)` looks like
+ * it rejects `outline: none`, and does not — `\\s*` backtracks to match zero spaces, which
+ * puts the lookahead in front of the space rather than in front of `none`, and the negative
+ * lookahead then succeeds. Splitting first removes the class of bug rather than the instance.
+ */
+const declarationsOf = (body: string): [property: string, value: string][] =>
+  body
+    .split(';')
+    .map((declaration) => declaration.split(':'))
+    .filter((parts): parts is [string, string] => parts.length === 2)
+    .map(([property, value]) => [property.trim().toLowerCase(), value.trim().toLowerCase()]);
+
+/** `outline: none`, `outline: 0`, and the longhands that say the same thing. */
+const suppressesRing = (body: string): boolean =>
+  declarationsOf(body).some(
+    ([property, value]) =>
+      ['outline', 'outline-style', 'outline-width'].includes(property) &&
+      (value === 'none' || value === '0' || value.startsWith('0 ')),
+  );
+
+/** Something a focused element would still show: a ring drawn another way. */
+const drawsItsOwnRing = (body: string): boolean =>
+  declarationsOf(body).some(
+    ([property, value]) =>
+      (property === 'box-shadow' && value !== 'none') ||
+      (property === 'outline' && value !== 'none' && value !== '0'),
+  );
+
+/** The blocks that take the ring away and put nothing back. */
+const unreplacedSuppressions = (css: string): string[] =>
+  [...css.matchAll(RULE_BLOCK)]
+    .filter(([, , body = '']) => suppressesRing(body) && !drawsItsOwnRing(body))
+    .map(([, selector = '']) => selector.trim());
+
+describe('the focus ring is never suppressed without a replacement', () => {
+  it('has no rule that removes the outline and puts nothing back', () => {
+    const offenders = unreplacedSuppressions(stripComments(source));
+
+    expect(
+      offenders,
+      `${String(offenders.length)} rule(s) suppress the focus ring with no replacement. ` +
+        '§8.8: "visible focus ring, never suppressed". Draw one another way (box-shadow, ' +
+        'an inset outline) or leave the browser default alone.',
+    ).toEqual([]);
+  });
+
+  it('would catch a suppression, and allows one that draws its own ring', () => {
+    // The check, tested through the same function the scan uses. A matcher that quietly
+    // stopped matching would report a clean stylesheet forever, which is the failure this
+    // file's neighbours are also written against — and is not hypothetical here: the first
+    // version of this check passed everything, for the reason `declarationsOf` records.
+    expect(unreplacedSuppressions('.x {\n  outline: none;\n}')).toEqual(['.x']);
+    expect(unreplacedSuppressions('.x {\n  outline: 0;\n}')).toEqual(['.x']);
+    expect(unreplacedSuppressions('.x {\n  outline-style: none;\n}')).toEqual(['.x']);
+    expect(
+      unreplacedSuppressions('.x {\n  outline: none;\n  box-shadow: 0 0 0 2px var(--accent);\n}'),
+    ).toEqual([]);
+    // And an ordinary focus rule is not swept up by it.
+    expect(
+      unreplacedSuppressions('.x:focus {\n  outline: var(--hh-line) solid var(--accent);\n}'),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * §8.8's skip link is *visible on focus* — #169, #141.
+ *
+ * `keyboard-walkthrough.test.tsx` proves the link exists, is first, and points at the
+ * heading a route change focuses. What it cannot see is whether a player can *read* it:
+ * the link is parked off-screen and is brought back by `:focus`, and that second rule is
+ * the whole feature. Without it the link is reachable and invisible, which is worse than
+ * absent — the player tabs onto nothing.
+ */
+describe('the skip link is off-screen until it is focused', () => {
+  it('parks it off-screen and brings it back on focus', () => {
+    const css = stripComments(source);
+    const blocks = new Map<string, string>();
+    for (const [, selector = '', body = ''] of css.matchAll(RULE_BLOCK)) {
+      blocks.set(selector.trim(), body);
+    }
+
+    const parked = blocks.get('.hh-skip-link') ?? '';
+    const focused = blocks.get('.hh-skip-link:focus') ?? '';
+
+    expect(parked, '.hh-skip-link is not in the stylesheet').not.toBe('');
+    // Moved out of view rather than hidden: `display: none` would take it out of the tab
+    // order too, which is the one thing it must stay in.
+    expect(parked).toMatch(/left\s*:\s*-\d/);
+    expect(parked).not.toMatch(/display\s*:\s*none/);
+    expect(focused, '.hh-skip-link:focus does not bring it back on screen').toMatch(
+      /left\s*:\s*\d/,
+    );
+  });
+});

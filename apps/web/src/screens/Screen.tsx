@@ -39,14 +39,20 @@ import type { Catalogue } from '@hh/ui';
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
+import { CONTENT_HEADING_ID } from '../a11y/focus.js';
+
 /**
- * The heading's id, shared by the skip link and by every screen.
+ * The heading's id, shared by the skip link, by every screen, and by `restoreFocus`.
  *
  * One id rather than one per screen because only one `Screen` is mounted at a time — the
  * router keys this component by route — so it cannot collide with itself, and a stable
  * fragment means `#content` works the same way on every screen.
+ *
+ * Imported rather than declared here because `a11y/focus.ts` needs it too: a heading that
+ * is the route change's focus target is also the right place to put focus when an
+ * overlay's opener has been removed, and there should be exactly one spelling of it.
  */
-const HEADING_ID = 'hh-content';
+const HEADING_ID = CONTENT_HEADING_ID;
 
 export interface ScreenProps {
   /** Machine name of the screen, for styling hooks and tests. Never rendered. */

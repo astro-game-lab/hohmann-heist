@@ -36,6 +36,7 @@ import type { Outcome } from '@hh/game';
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
+import { CONTENT_HEADING_ID } from './a11y/focus.js';
 import { contractById, contracts } from './contracts/registry.js';
 import { screenTransitionMs, useReducedMotion } from './motion.js';
 import { navigate, onRouteChange, parseHash, type Route } from './router.js';
@@ -578,6 +579,34 @@ const AppShell = ({
   useEffect(() => {
     rendered.current = true;
   });
+
+  /*
+   * The same treatment for a **phase** change — §8.2's four contract screens (#169).
+   *
+   * `briefing → planner → execution → debrief` is not a route change: §8.2 puts all four
+   * behind `/contract/:id` because they are one job seen from four positions, so `Screen`
+   * is never unmounted and its mount effect never re-runs. To the player they are screen
+   * changes all the same — the whole body is replaced — and a keyboard user who accepted a
+   * briefing was left with focus on the ACCEPT button that no longer exists, which is the
+   * `<body>` case again by a different route.
+   *
+   * The phase arrives through `scope`, which `ContractScreen` already reports upward for
+   * #124's overlay (see `planner/scope.ts`). One channel rather than a second one: the
+   * question "which of the four is showing" has a single answer and a single publisher.
+   *
+   * **Only between two non-null scopes.** Entering a contract is `null → briefing` and is
+   * already a route change, which `Screen` has just handled; leaving one is
+   * `briefing → null` on the way to a route change that will handle it. Focusing on either
+   * would be the two mechanisms fighting over the same commit, which is the bug
+   * `shellMovesFocus` exists to settle for the board.
+   */
+  const lastScope = useRef<KeyScope | null>(null);
+  useEffect(() => {
+    const previous = lastScope.current;
+    lastScope.current = scope;
+    if (previous === null || scope === null || previous === scope) return;
+    document.getElementById(CONTENT_HEADING_ID)?.focus();
+  }, [scope]);
 
   // The orbit-scene harness, the one throwaway development instrument left. It does not
   // render inside the screen frame, because it is not a screen. The M1 spike that sat

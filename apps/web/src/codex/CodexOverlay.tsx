@@ -15,7 +15,7 @@
  * component, two ways in, and no second implementation to keep in step.
  *
  * "Returns the player where they were on close" then costs nothing — they never left —
- * and focus returns to whatever opened it, which is `useDialog`'s job and the same
+ * and focus returns to whatever opened it, which is `useOverlay`'s job and the same
  * contract the settings and help overlays already meet.
  *
  * ## This one *is* a dialog, unlike a coach mark
@@ -23,14 +23,14 @@
  * A coach mark appears unbidden beside what the player is doing, so it must not take
  * focus. This is opened deliberately, is the thing the player is now reading, and covers
  * the screen — so it takes focus, traps it while open, closes on `Esc`, and gives focus
- * back. §8.8's four rules, from `useDialog` rather than written a fourth time.
+ * back. §8.8's four rules, from `useOverlay` rather than written a fourth time.
  */
 import { entryBySlug } from '@hh/ui';
 import type { Catalogue, CodexLayer } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
 
-import { useDialog } from '../a11y/dialog.js';
+import { useOverlay } from '../a11y/overlay.js';
 
 import { CodexEntryView } from './CodexEntryView.js';
 import { codexIndexHref } from './CodexIndex.js';
@@ -51,7 +51,7 @@ export const CodexOverlay = ({
   onRead,
   onClose,
 }: CodexOverlayProps): JSX.Element => {
-  const ref = useDialog<HTMLDivElement>({ onClose });
+  const ref = useOverlay<HTMLDivElement>({ modal: true, onClose });
   const entry = entryBySlug(slug);
   const readSlug = entry?.slug ?? null;
 
