@@ -912,6 +912,8 @@ This is the game. It gets the most specification.
 
 The panel column is a column of the screen rather than of the orbit view: it runs from under the HUD to the bottom of the commit bar and scrolls within itself. The timeline and the commit bar therefore end at its edge rather than passing under it, and a panel taller than the window scrolls against its own column rather than against the page — the orbit view, the timeline and the commit bar stay where they are while a long contract is read.
 
+It carries a fourth panel below the three the diagram names: §8.3.3's contract, in full and unconditionally. It arrived collapsible, with a control in the HUD and a key to summon it, and was made permanent for the reason the collapse existed to measure — the objective, the Δv budget, the deadline and the par are checked against on every burn rather than read once.
+
 **Regions:**
 
 | # | Region | Contents | Rules |
@@ -1319,7 +1321,6 @@ re-keys, and the map the help overlay renders. There is no second copy.
 | `[` / `]` | Scrub ∓1 min (`Shift` ×0.1, `Ctrl` ×60) | Planner |
 | `+` / `-` | Zoom | Planner |
 | `F` | Recentre camera | Planner |
-| `B` | Show / hide the contract | Planner |
 | `ContextMenu` / `Shift+F10` | Node actions — delete, snap, zero Δv | Planner |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo | Planner |
 | `Space` | Play / pause | Execution |

@@ -589,7 +589,6 @@ export interface UiMessageParams {
   readonly 'keys.scrubToDeadline': Record<string, never>;
   readonly 'keys.zoom': Record<string, never>;
   readonly 'keys.recentre': Record<string, never>;
-  readonly 'keys.toggleContract': Record<string, never>;
   readonly 'keys.nodeMenu': Record<string, never>;
   readonly 'keys.undo': Record<string, never>;
   readonly 'keys.redo': Record<string, never>;
@@ -604,7 +603,6 @@ export interface UiMessageParams {
 
   // §8.3.3's contract, carried into the planner (#264).
   readonly 'planner.contract.heading': Record<string, never>;
-  readonly 'planner.contract.toggle': Record<string, never>;
   readonly 'planner.tab.contract': Record<string, never>;
 
   // §8.5.2's node context menu (#136).

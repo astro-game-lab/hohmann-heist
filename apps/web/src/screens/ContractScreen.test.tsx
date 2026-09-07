@@ -47,6 +47,7 @@ const mount = async (): Promise<void> => {
         coachMarksSeen={[]}
         onCoachMarkSeen={() => undefined}
         onOpenCodex={() => undefined}
+        onOpenHelp={() => undefined}
       />,
       container,
     );

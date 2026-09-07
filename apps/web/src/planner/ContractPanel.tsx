@@ -28,7 +28,17 @@
  * `hidden`. A fourth therefore loses nothing on a layout switch, for the same structural
  * reason the other three do not.
  *
- * ## Opening it changes nothing
+ * ## Always there, where it used to be summoned
+ *
+ * #264 shipped this collapsible: a control in the HUD, `B` to toggle it, and a session
+ * preference so a player who wanted it up did not re-open it on every contract. All three
+ * are gone, and the reason is what that preference was recording — everyone who opened it
+ * left it open. The objective, the budget, the deadline and the par are checked against on
+ * every burn, not read once, so a panel that had to be summoned to answer "how close is
+ * close enough" was summoned every time. It is now the fourth panel unconditionally, and
+ * the column it sits in scrolls, so what it costs is a scroll rather than a hidden region.
+ *
+ * ## It changes nothing
  *
  * Not the plan, not the scrub head, not the selection, not playback. That is the rule §8.8
  * already applies to the help overlay, and it is why this component takes a scenario and a
@@ -44,25 +54,6 @@ import {
   ContractNumbers,
   ContractSetup,
 } from '../screens/contract-content.js';
-
-/**
- * Whether the panel is open, for the length of the session — #264's last scope bullet.
- *
- * *"Open or closed persists for the session, so a player who wants it up does not re-open
- * it on every contract. Not saved to storage: this is a view preference, and
- * `apps/web/src/save/` is for progress."*
- *
- * A contract change unmounts `PlannerScreen`, so component state cannot survive one, and
- * the save is the wrong home for a preference that should not follow a player to another
- * device. A module-level value is exactly "for the session": it lives as long as the tab
- * does and is written nowhere.
- *
- * Exported as a mutable object rather than kept private, because a module-scope `let` is
- * unreachable and therefore untestable — and "persists across a contract change" is the
- * behaviour most worth a test. This is the seam that makes it one, not a back door: the
- * planner reads and writes exactly this, and so does the test that resets it.
- */
-export const contractPanelSession = { open: false };
 
 export interface ContractPanelProps {
   readonly t: Catalogue['resolve'];

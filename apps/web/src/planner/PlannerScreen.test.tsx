@@ -61,6 +61,7 @@ const mount = async (scenario = c03()): Promise<void> => {
         coachMarksSeen={[]}
         onCoachMarkSeen={() => undefined}
         onOpenCodex={() => undefined}
+        onOpenHelp={() => undefined}
       />,
       container,
     );
@@ -104,7 +105,8 @@ describe('the five regions of §8.3.4 (#123)', () => {
     await mount();
     const timeline = el('timeline-track');
     const panels = container.querySelectorAll('.hh-planner__panel');
-    expect(panels.length).toBe(3);
+    // Plan, readouts, contract and assists — the contract is no longer conditional.
+    expect(panels.length).toBe(4);
     // §8.3.4: "the timeline stays visible at all times ... must never be behind a tab."
     // Structural rather than visual: no tab panel contains it at any width.
     for (const panel of panels) {

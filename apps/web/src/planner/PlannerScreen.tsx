@@ -72,7 +72,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { AssistTray } from './AssistTray.js';
 import { NodeContextMenu } from './NodeContextMenu.js';
 import { bandsFor } from './constraint-bands.js';
-import { ContractPanel, contractPanelSession } from './ContractPanel.js';
+import { ContractPanel } from './ContractPanel.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
 import { useKeybindings } from '../settings/context.js';
@@ -116,6 +116,16 @@ export interface PlannerScreenProps {
   readonly onCoachMarkSeen: (key: string) => void;
   /** Open the Codex over this screen, from a mark's *More in the Codex* (#161). */
   readonly onOpenCodex: (slug: string) => void;
+  /**
+   * Open §8.5.3's keyboard help — the shell's overlay, from the HUD's own control.
+   *
+   * The HUD has had that control since #127 and it did nothing: the overlay's state lives
+   * in `app.tsx`, because `?` is bound on every screen, and nothing carried the opener
+   * down here. The shell also painted a second, working copy of the same button into the
+   * corner of every route, so the planner had two — one dead, one floating over the panel
+   * column. This prop is the wire that lets there be one.
+   */
+  readonly onOpenHelp: () => void;
 }
 
 /** What crossing §8.5.1's last edge carries with it. */
@@ -150,19 +160,10 @@ export const PlannerScreen = ({
   coachMarksSeen,
   onCoachMarkSeen,
   onOpenCodex,
+  onOpenHelp,
 }: PlannerScreenProps): JSX.Element => {
   const [state, actions] = usePlanner(scenario, seed ?? {});
   const [tab, setTab] = useState<Tab>('plan');
-  // Seeded from the session's value and written back on every change, so the preference
-  // survives the unmount a contract change causes — `contractPanelSession` says why it
-  // lives there rather than in component state or in the save (#264).
-  const [contractOpen, setContractOpen] = useState(contractPanelSession.open);
-  const toggleContract = useCallback(() => {
-    setContractOpen((was) => {
-      contractPanelSession.open = !was;
-      return !was;
-    });
-  }, []);
   /**
    * Where the open editor's node is drawn, reported by the orbit view, or `null` when it
    * is off screen or the plan produced no trajectory to draw it on.
@@ -481,9 +482,6 @@ export const PlannerScreen = ({
         case 'redo':
           actions.redo();
           break;
-        case 'toggleContract':
-          toggleContract();
-          break;
         case 'nodeMenu':
           // §8.8's canvas-parity rule: every pointer action on the orbit view has a
           // keyboard route, and this is the menu's. Anchored at the node's drawn position
@@ -541,7 +539,7 @@ export const PlannerScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, menu, model, rebinds, scenario, state, toggleContract]);
+  }, [actions, menu, model, rebinds, scenario, state]);
 
   /**
    * §8.5.1's exit to EXECUTION.
@@ -602,9 +600,7 @@ export const PlannerScreen = ({
         burnCount={burnCount}
         startEpoch={scenario.startEpoch}
         scrubEpoch={model.scrub.epoch}
-        onOpenHelp={() => undefined}
-        contractOpen={contractOpen}
-        onToggleContract={toggleContract}
+        onOpenHelp={onOpenHelp}
       />
 
       <div class="hh-planner__stage">
@@ -780,18 +776,17 @@ export const PlannerScreen = ({
           <Readouts t={t} orbit={orbit} approach={approach} startEpoch={scenario.startEpoch} />,
         )}
         {/*
-          The wide layout's collapsible half of #264: the section is in the column with
-          the other three and `contractOpen` decides whether it is there. In the narrow
-          layout the tab strip decides instead, which is why the panel is still mounted
-          when it is merely on another tab — that is #123's guarantee and a fourth panel
-          inherits it.
+          #264's fourth panel, and no longer optional. It was collapsible, with a control in
+          the HUD and `B` to toggle it, on the theory that the brief is read once and then in
+          the way; in use it is the opposite — the objective, the Δv budget, the deadline and
+          the par are what a player checks against on every burn, and a panel that has to be
+          summoned to answer "how close is close enough" is one that gets summoned every
+          time. The column scrolls, so its cost is a scroll rather than a hidden region.
         */}
-        {contractOpen || tab === 'contract'
-          ? panel(
-              'contract',
-              <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
-            )
-          : null}
+        {panel(
+          'contract',
+          <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
+        )}
         {panel(
           'assists',
           <AssistTray

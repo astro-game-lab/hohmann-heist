@@ -110,6 +110,7 @@ const mount = async (): Promise<void> => {
         coachMarksSeen={[]}
         onCoachMarkSeen={() => undefined}
         onOpenCodex={() => undefined}
+        onOpenHelp={() => undefined}
       />,
       container,
     );
@@ -155,11 +156,11 @@ describe('E4 — C02 from cold load to debrief, keyboard only (§13.5, NFR-016)'
       await press('.');
       await press('z', { ctrlKey: true });
 
-      // The contract panel and the node menu, both added in this PR, both keyboard-only
-      // routes to things that were pointer-only before it.
-      await press('b');
+      // The contract panel is on screen for the whole walkthrough now — `B` toggled it
+      // when it could be hidden, and there is nothing left for that key to do.
       expect(el('contract-panel')).not.toBeNull();
-      await press('b');
+
+      // The node menu: a keyboard-only route to something that was pointer-only.
       await press('F10', { shiftKey: true });
       expect(el('node-menu')).not.toBeNull();
       await press('Escape');

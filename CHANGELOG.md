@@ -26,6 +26,26 @@ they relied on has moved.
   does.
 
 ### Changed
+- **The contract panel is always there, and the control that summoned it is gone.** #264
+  shipped it collapsible — a toggle in the HUD, `B` to flip it, and a session preference so
+  a player who wanted it up did not re-open it on every contract. What that preference was
+  recording is that everyone who opened it left it open: the objective, the Δv budget, the
+  deadline and the par are checked against on every burn, not read once, so a panel that had
+  to be summoned to answer "how close is close enough" was summoned every time. It is now the
+  fourth panel unconditionally; the column scrolls, so what it costs is a scroll rather than
+  a hidden region. `B` is unbound and out of §8.5.3's table rather than left as a key that
+  does nothing.
+- **One *Keyboard help* on the planner instead of two.** The shell paints a help affordance
+  into the corner of every route, because there are twelve routes and only two have chrome
+  to put a control in — and the planner is one of the two, so it had the shell's floating
+  copy *and* its own in the HUD. Worse, the HUD's had never been wired: the overlay's state
+  lives in the shell, and nothing carried the opener down to the screen. The HUD's control
+  now opens it, and the shell's is unmounted while the planner is showing — unmounted rather
+  than hidden, because a button that is only invisible is still in the tab order. Every other
+  route keeps the floating one.
+- **The planner's *Settings* is a button rather than a link**, so the three controls at that
+  end of the HUD read as one row of the same thing. It is still the `#/settings` route, which
+  renders as an overlay over whatever screen is showing, so the plan survives it.
 - **The commit bar is one row: undo, redo, *Commit plan*, and §6.4's reasons.** It was three
   stacked blocks, the middle one a full-width list holding a single sentence above a button
   130 px wide — two rows of a screen where the orbit view is already shrinking to keep this

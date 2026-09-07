@@ -731,7 +731,6 @@ export const en: Messages = {
   'keys.scrubToDeadline': () => 'Scrub to the deadline',
   'keys.zoom': () => 'Zoom the orbit view',
   'keys.recentre': () => 'Recentre the camera',
-  'keys.toggleContract': () => 'Show or hide the contract',
   'keys.nodeMenu': () => 'Open the burn’s actions',
   'keys.undo': () => 'Undo',
   'keys.redo': () => 'Redo',
@@ -745,7 +744,6 @@ export const en: Messages = {
   'keys.codex': () => 'Codex for the current concept',
 
   'planner.contract.heading': () => 'Contract',
-  'planner.contract.toggle': () => 'Contract',
   'planner.tab.contract': () => 'Contract',
 
   'planner.nodeMenu.label': ({ index }, fmt) => `Actions for burn ${fmt.integer(index)}`,

@@ -65,7 +65,6 @@ export type PlannerAction =
   /** §8.5.2's context menu on the selected node — #136, and NFR-016's keyboard route to it. */
   | { readonly kind: 'nodeMenu' }
   /** §8.3.3's contract, shown beside the plan — #264. */
-  | { readonly kind: 'toggleContract' }
   /**
    * §8.5.3's `?` — the keyboard help overlay (#124).
    *
@@ -318,14 +317,6 @@ export const BINDINGS: readonly Binding[] = [
     screens: PLANNER,
     descriptionKey: 'keys.recentre',
     toAction: () => ({ kind: 'recentre' }),
-  },
-  {
-    id: 'toggleContract',
-    keys: ['b', 'B'],
-    ctrl: 'forbidden',
-    screens: PLANNER,
-    descriptionKey: 'keys.toggleContract',
-    toAction: () => ({ kind: 'toggleContract' }),
   },
   // §8.5.2's context menu, by keyboard. `ContextMenu` is the dedicated key where a keyboard
   // has one; `Shift+F10` is the binding every desktop platform also accepts and is the one a

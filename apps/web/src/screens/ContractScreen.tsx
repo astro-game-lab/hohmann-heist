@@ -85,6 +85,8 @@ export interface ContractScreenProps {
   readonly coachMarksSeen: readonly string[];
   readonly onCoachMarkSeen: (key: string) => void;
   readonly onOpenCodex: (slug: string) => void;
+  /** §8.5.3's overlay, opened from the planner's HUD. The shell owns the state. */
+  readonly onOpenHelp: () => void;
   /**
    * The contract the debrief's NEXT goes to — §8.3.9, #273.
    *
@@ -172,6 +174,7 @@ export const ContractScreen = ({
   coachMarksSeen,
   onCoachMarkSeen,
   onOpenCodex,
+  onOpenHelp,
   next,
 }: ContractScreenProps): JSX.Element => {
   const [phase, setPhase] = useState<Phase>('briefing');
@@ -270,6 +273,7 @@ export const ContractScreen = ({
         coachMarksSeen={coachMarksSeen}
         onCoachMarkSeen={onCoachMarkSeen}
         onOpenCodex={onOpenCodex}
+        onOpenHelp={onOpenHelp}
         // The plan comes back on an abort or a retry, with the place the player was
         // working in it (FR-603, #145, §6.11). Absent on a first entry.
         {...(run === null
