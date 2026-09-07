@@ -248,7 +248,7 @@ describe('colours come from the caller', () => {
 });
 
 describe('an orbit that cannot be sampled', () => {
-  it('reports it rather than placing a marker at NaN', () => {
+  it('places a marker on an open orbit, which is one it can', () => {
     const open: MarkerSpec = {
       id: 'ship',
       kind: 'ship',
@@ -256,10 +256,26 @@ describe('an orbit that cannot be sampled', () => {
       mu: MU_EARTH,
       offsetSeconds: 100,
     };
-    // §6.4's L4 makes this illegal anyway, so the planner has a bigger problem — but a
-    // marker at a NaN position would draw as a missing ship, which looks like a renderer
-    // bug rather than an illegal plan.
-    expect(() => markerCentre(cameraFor(), open)).toThrow(RangeError);
+    // This used to assert a `RangeError`, on the reasoning that §6.4's `L4` makes an escape
+    // illegal anyway and that a marker at a `NaN` position would read as a renderer bug
+    // rather than as an illegal plan. Both halves of that are still true and the conclusion
+    // was still wrong: the third option is to place the marker where the ship is. Throwing
+    // took the planner to §8.7's error screen, which is a renderer bug that also loses the
+    // plan — see `trajectory.ts`.
+    expect(markerCentre(cameraFor(), open)).toBeDefined();
+  });
+
+  it('reports an orbit that is not a conic rather than placing a marker at NaN', () => {
+    const notAConic: MarkerSpec = {
+      id: 'ship',
+      kind: 'ship',
+      elements: orbit(7_000_000, -0.5),
+      mu: MU_EARTH,
+      offsetSeconds: 100,
+    };
+    // A negative eccentricity is not an orbit at all, and no branch of the sampler can
+    // answer for it. That is the case the throw was always for.
+    expect(() => markerCentre(cameraFor(), notAConic)).toThrow(RangeError);
   });
 
   it('places a marker on a valid orbit', () => {
@@ -274,5 +290,50 @@ describe('an orbit that cannot be sampled', () => {
     // radius sits between periapsis and apoapsis.
     expect(r / camera.scale).toBeGreaterThan((a as number) * 0.9);
     expect(r / camera.scale).toBeLessThan((a as number) * 1.1);
+  });
+});
+
+describe('a ship that is escaping', () => {
+  /**
+   * The crash this covers, at the layer it happened.
+   *
+   * A prograde burn of about 3.2 km/s from a 400 km LEO leaves `e = 1.009`, and every
+   * placement in this module goes through `keplerianSampler`, which used to throw for any
+   * open conic. The throw came out of the render loop rather than out of a return value,
+   * so the planner went to §8.7's error screen with the plan in it — for a trajectory
+   * §6.4's `L4` exists specifically to *show* the player.
+   */
+  const escaping = (offsetSeconds = 600): MarkerSpec => ({
+    id: 'ship',
+    kind: 'ship',
+    elements: orbit(7_000_000, 1.009),
+    mu: MU_EARTH,
+    offsetSeconds,
+  });
+
+  it('places the marker instead of throwing', () => {
+    const at = markerCentre(cameraFor(), escaping());
+    expect(at).toBeDefined();
+    expect(Number.isFinite(at?.x ?? Number.NaN)).toBe(true);
+    expect(Number.isFinite(at?.y ?? Number.NaN)).toBe(true);
+  });
+
+  it('draws the trail behind it, still clipped at the arc’s start', () => {
+    expect(trailPoints(escaping()).length).toBeGreaterThan(1);
+    expect(trailPrimitives(cameraFor(), escaping(), COLOURS).length).toBeGreaterThan(0);
+    // The clip is the arc, not the conic: a marker 30 s into its arc has 30 s of trail,
+    // because anything longer would extrapolate back through an impulse it made.
+    expect(trailPoints(escaping(0))).toHaveLength(0);
+  });
+
+  it('samples the trail along the same conic the marker sits on', () => {
+    const spec = escaping();
+    const points = trailPoints(spec);
+    const head = points[points.length - 1];
+    const direct = keplerianSampler(spec.elements, spec.mu)(spec.offsetSeconds);
+    // The trail ends where the marker is — the property that made the two share a sampler
+    // in the first place, and the one an added branch could quietly break.
+    expect(head?.x).toBeCloseTo(direct?.x ?? Number.NaN, 3);
+    expect(head?.y).toBeCloseTo(direct?.y ?? Number.NaN, 3);
   });
 });

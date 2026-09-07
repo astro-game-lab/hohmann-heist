@@ -12,6 +12,23 @@ they relied on has moved.
 ## [Unreleased]
 
 ### Fixed
+- **A burn big enough to escape Earth took the planner down.** Typing a large prograde Δv —
+  about 3.2 km/s from a 400 km LEO, which leaves `e = 1.009` — threw
+  `RangeError: a Keplerian sampler needs an elliptic orbit` out of the render loop and put
+  §8.7's error screen over the plan. §6.4's `L4` exists to *tell* a player their trajectory
+  escapes, and it cannot do that from an error screen.
+  The renderer's sampler was elliptic-only, on the reasoning that an open trajectory is
+  illegal to commit anyway. That holds for the equal-time dots — "dots per revolution" is
+  not a quantity an open arc has, and the scene already drew those arcs as a dashed path —
+  and it was wrong for the sampler, because the **ship marker and its trail** are placed
+  through it too, and the ship is on whichever conic the last burn left it on. It now
+  handles all three: mean → eccentric anomaly below `e = 1`, mean → hyperbolic above it,
+  and Barker's equation at exactly 1, each the closed form for its own conic and the same
+  parameterisations `tessellate.ts` already draws those curves with. Checked against
+  `@hh/sim`'s own universal-variable propagation along an escape arc — two independent
+  formulations agreeing to **3.8e-15 relative** over ten thousand seconds — so the drawn
+  ship is where the simulated ship is, which is the property that matters and the one
+  nothing else in the repository would have noticed breaking.
 - **The planner's panel column painted over the timeline and the commit bar.** The wide
   layout was a row *inside* the stage — orbit view beside the panels — with the timeline and
   the commit bar stacked under the whole width. That arrangement can express no height for

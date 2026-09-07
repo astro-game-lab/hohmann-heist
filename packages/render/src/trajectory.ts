@@ -49,6 +49,15 @@
  * evenly along the arc. Here the uneven distribution **is** the output. The two modules
  * want opposite things from the same conic, and both are right.
  *
+ * ## Two exports with different domains, and that is not an oversight
+ *
+ * `keplerianSampler` handles every conic, because it places the **ship marker and its
+ * trail** and the ship is on whichever conic the last burn left it on — including the
+ * hyperbola an over-enthusiastic prograde burn produces. `equalTimeDots` stays elliptic:
+ * its whole unit is dots *per revolution*, which an open arc does not have. The scene
+ * draws that arc as a dashed path instead, and §6.4's `L4` tells the player why they
+ * cannot commit it.
+ *
  * ## What this module does not do
  *
  * It does not style anything — `style.ts` holds the slots and the caller holds the
@@ -58,11 +67,15 @@
 import type { OrbitShape } from '@hh/astro';
 import {
   meanFromEccentric,
+  meanFromHyperbolic,
   eccentricFromTrue,
+  hyperbolicFromTrue,
   perifocalToInertialMatrix,
   pqw,
   pqwToEci,
+  solveBarker,
   solveKeplerElliptic,
+  solveKeplerHyperbolic,
 } from '@hh/astro';
 import type { EciVector } from '@hh/astro';
 import type { Metres } from '@hh/math';
@@ -103,16 +116,50 @@ export const MAX_DOTS = 256;
 export type KeplerianSampler = (offsetSeconds: number) => EciVector<Metres> | undefined;
 
 /**
- * Build a sampler for an elliptical arc.
+ * Build a sampler for one arc, of any conic.
  *
- * @throws RangeError when the orbit is not elliptic or `mu` is not finite and positive.
+ * ## Every conic, because the ship is on whichever one it is on
+ *
+ * This was elliptic-only and threw a `RangeError` for anything else, on the reasoning that
+ * §6.4's `L4` makes an open trajectory illegal to commit. That reasoning holds for the
+ * *dots* — `equalTimeDots` still refuses, because "dots per revolution" is not a quantity
+ * an open arc has — and it is wrong here, because this is also how the **ship marker and
+ * its trail** are placed. A player who burns hard enough to escape has an illegal plan and
+ * is entitled to see it: a burn of about 3.2 km/s from a 400 km LEO produces `e = 1.009`,
+ * and the throw took the whole planner down to §8.7's error screen mid-drag, losing the
+ * plan. The one thing worse than a marker that cannot be drawn is a screen that cannot be.
+ *
+ * Three branches, split at `e = 1` exactly, each the closed form for its own conic:
+ *
+ * | Class | Anomaly stepped | Position |
+ * | --- | --- | --- |
+ * | `e < 1` | mean → eccentric `E` | `x = a(cos E - e)`, `y = b sin E` |
+ * | `e = 1` | Barker's `M_p` → true `nu` | the conic equation, `r = p / (1 + cos nu)` |
+ * | `e > 1` | mean → hyperbolic `H` | `x = a(cosh H - e)`, `y = -a·sqrt(e²-1)·sinh H` |
+ *
+ * The elliptic and hyperbolic rows are the same parameterisations `tessellate.ts` uses for
+ * the same conics, which is deliberate: the marker has to land *on* the curve the arc is
+ * drawn with, and two formulations agreeing to a fraction of a pixel is a weaker guarantee
+ * than one formulation used twice.
+ *
+ * What is **not** copied from `tessellate.ts` is its near-parabolic band. That band exists
+ * because drawing a whole conic near `e = 1` samples a parameter range where `a → ∞` makes
+ * the shape formulas cancel; here the split is at `e = 1` itself, because both Kepler
+ * solvers are exact on their own side of it and the cancellation in `cosh H - e` is bounded
+ * by `|e - 1|` — nanometres for any eccentricity a plan can produce, against DEP-09's
+ * quantised inputs. Exactly `e = 1` is not reachable from a state vector in float64, and it
+ * is handled anyway rather than left to fall into a branch that would return a plausible
+ * wrong answer.
+ *
+ * @throws RangeError when the eccentricity, the semi-latus rectum or `mu` is not a number
+ * this could sample at all. A conic that is merely open is not one of those.
  */
 export const keplerianSampler = (elements: OrbitShape, mu: number): KeplerianSampler => {
   const { semiLatusRectum, eccentricity: e, inclination, raan, argp, trueAnomaly } = elements;
   const p = semiLatusRectum as number;
 
-  if (!(e >= 0 && e < 1)) {
-    throw new RangeError(`a Keplerian sampler needs an elliptic orbit, got e = ${String(e)}`);
+  if (!(e >= 0) || !Number.isFinite(e)) {
+    throw new RangeError(`eccentricity must be finite and non-negative, got ${String(e)}`);
   }
   if (!(p > 0) || !Number.isFinite(p)) {
     throw new RangeError(`semi-latus rectum must be finite and positive, got ${String(p)}`);
@@ -121,26 +168,73 @@ export const keplerianSampler = (elements: OrbitShape, mu: number): KeplerianSam
     throw new RangeError(`mu must be finite and positive, got ${String(mu)}`);
   }
 
-  const a = p / (1 - e * e);
-  const b = a * Math.sqrt(1 - e * e);
-  const n = Math.sqrt(mu / (a * a * a));
-  const startMean = meanFromEccentric(eccentricFromTrue(trueAnomaly, e), e);
   const toInertial = perifocalToInertialMatrix(raan, inclination, argp);
+  /** Perifocal metres to an inertial vector — the last step of all three branches. */
+  const at = (x: number, y: number): EciVector<Metres> =>
+    pqwToEci(toInertial, pqw(V.vec3(metres(x), metres(y), metres(0))));
+
+  if (e < 1) {
+    const a = p / (1 - e * e);
+    const b = a * Math.sqrt(1 - e * e);
+    const n = Math.sqrt(mu / (a * a * a));
+    const startMean = meanFromEccentric(eccentricFromTrue(trueAnomaly, e), e);
+
+    return (offsetSeconds) => {
+      const solved = solveKeplerElliptic(startMean + n * offsetSeconds, e);
+      if (!solved.converged) return undefined;
+      const eccentric = solved.anomaly;
+      return at(a * (Math.cos(eccentric) - e), b * Math.sin(eccentric));
+    };
+  }
+
+  if (e > 1) {
+    // Negative for `e > 1`, which is what makes `a(cosh H - e)` come out positive at
+    // periapsis; `-a` is the magnitude the semi-minor axis and the mean motion are built
+    // from. The same arrangement as `tessellate.ts`'s hyperbolic sampler.
+    const a = p / (1 - e * e);
+    const b = -a * Math.sqrt(e * e - 1);
+    const n = Math.sqrt(mu / (-a * -a * -a));
+    const startMean = meanFromHyperbolic(hyperbolicFromTrue(trueAnomaly, e), e);
+    // A true anomaly at or past the asymptote has no hyperbolic anomaly, and `atanh` says
+    // so with an infinity. Nothing on this arc can be placed, and saying that once is
+    // better than returning an `undefined` per sample for a reason that cannot change.
+    if (!Number.isFinite(startMean)) return () => undefined;
+
+    return (offsetSeconds) => {
+      const solved = solveKeplerHyperbolic(startMean + n * offsetSeconds, e);
+      if (!solved.converged) return undefined;
+      const hyperbolic = solved.anomaly;
+      return at(a * (Math.cosh(hyperbolic) - e), b * Math.sinh(hyperbolic));
+    };
+  }
+
+  // Parabolic. `q = p / 2` is the periapsis radius, and `n = sqrt(mu / 2q³)` is the rate
+  // Barker's equation is written against — the parabola has no period, so this is a mean
+  // motion in the sense of "the thing that turns time into `M_p`" and nothing more.
+  const q = p / 2;
+  const n = Math.sqrt(mu / (2 * q * q * q));
+  const startD = Math.tan((trueAnomaly as number) / 2);
+  const startMean = startD + (startD * startD * startD) / 3;
+  if (!Number.isFinite(startMean)) return () => undefined;
 
   return (offsetSeconds) => {
-    const solved = solveKeplerElliptic(startMean + n * offsetSeconds, e);
-    if (!solved.converged) return undefined;
-    const eccentric = solved.anomaly;
-    return pqwToEci(
-      toInertial,
-      pqw(
-        V.vec3(metres(a * (Math.cos(eccentric) - e)), metres(b * Math.sin(eccentric)), metres(0)),
-      ),
-    );
+    const nu = solveBarker(startMean + n * offsetSeconds) as number;
+    // The conic equation rather than a semi-axis form: a parabola has no `a`, and `r` is
+    // finite everywhere except the asymptote at `nu = pi`, which Barker never returns.
+    const denominator = 1 + Math.cos(nu);
+    if (!(denominator > 0)) return undefined;
+    const r = p / denominator;
+    return at(r * Math.cos(nu), r * Math.sin(nu));
   };
 };
 
-/** The orbital period of an elliptical arc, in seconds. */
+/**
+ * The orbital period of an elliptical arc, in seconds.
+ *
+ * Elliptic only, and deliberately without a guard: an open arc has no period, `a` comes out
+ * negative, and the square root of a negative number is `NaN` rather than a wrong answer.
+ * Its one caller checks the eccentricity first — see {@link equalTimeDots}.
+ */
 export const periodOfArc = (elements: OrbitShape, mu: number): number => {
   const a = (elements.semiLatusRectum as number) / (1 - elements.eccentricity ** 2);
   return 2 * Math.PI * Math.sqrt((a * a * a) / mu);

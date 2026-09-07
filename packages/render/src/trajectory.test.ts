@@ -1,7 +1,9 @@
-import { MU_EARTH, period, semiMajorAxis } from '@hh/astro';
+import { MU_EARTH, hyperbolicFromTrue, meanFromHyperbolic, period, semiMajorAxis } from '@hh/astro';
+import { epoch, stateFromElements } from '@hh/astro';
 import type { OrbitShape } from '@hh/astro';
 import { radians } from '@hh/math';
 import { metres } from '@hh/math';
+import { buildTimeline, createPlan, maneuverNodeFromCounts, stateAt } from '@hh/sim';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -10,7 +12,12 @@ import {
   DASH_TARGET_ORBIT,
   TRAJECTORY_PATTERNS,
 } from './style.js';
-import { DEFAULT_DOTS_PER_REVOLUTION, MAX_DOTS, equalTimeDots } from './trajectory.js';
+import {
+  DEFAULT_DOTS_PER_REVOLUTION,
+  MAX_DOTS,
+  equalTimeDots,
+  keplerianSampler,
+} from './trajectory.js';
 
 /** An orbit with a given semi-latus rectum and eccentricity, equatorial, at periapsis. */
 const orbit = (semiLatusRectumM: number, eccentricity: number, trueAnomaly = 0): OrbitShape => ({
@@ -255,5 +262,173 @@ describe('equal-time dots', () => {
     expect(() => equalTimeDots({ elements: shape, mu: MU_EARTH, durationSeconds: 0 })).toThrow(
       RangeError,
     );
+  });
+});
+
+/**
+ * The sampler on the conics an escape burn produces — the crash this covers.
+ *
+ * A prograde burn of about 3.2 km/s from a 400 km LEO leaves `e = 1.009`, and the sampler
+ * used to throw a `RangeError` for anything with `e >= 1`. It is not only the planned
+ * trajectory that is sampled through it: the **ship marker and its trail** are, so the
+ * throw escaped through the render loop and took the planner down to §8.7's error screen
+ * with the plan in it. §6.4's `L4` exists to *tell* a player their trajectory escapes,
+ * which it cannot do from an error screen.
+ *
+ * Asserted against the conic equation and the inverse of the anomaly chain rather than
+ * against the formulas the sampler uses. `r = p / (1 + e cos nu)` is a different statement
+ * from `x = a(cosh H - e)`, and recovering the time from a sampled position runs the
+ * conversions in the opposite direction from the Newton solve that produced it — so a
+ * transposed axis, a sign, or a mean motion built from `a` rather than `|a|` fails here.
+ */
+describe('sampling an arc that is not an ellipse', () => {
+  /** Perifocal metres from an equatorial, unrotated sample: the frame is the identity. */
+  const planar = (
+    at: { x: number; y: number; z: number } | undefined,
+  ): { r: number; nu: number } => {
+    if (at === undefined) return { r: Number.NaN, nu: Number.NaN };
+    return { r: Math.hypot(at.x, at.y), nu: Math.atan2(at.y, at.x) };
+  };
+
+  it('places a hyperbolic arc on its own conic', () => {
+    // e = 1.009 is what ~3.2 km/s prograde from a 400 km circular orbit produces, which is
+    // the burn that crashed the planner.
+    const e = 1.009;
+    const p = 7_000_000;
+    const sample = keplerianSampler(orbit(p, e, 0.2), MU_EARTH);
+
+    for (const offsetSeconds of [0, 60, 600, 3600, -600]) {
+      const { r, nu } = planar(sample(offsetSeconds));
+      expect(Number.isFinite(r), `offset ${String(offsetSeconds)}`).toBe(true);
+      // The conic equation, which shares no term with the parameterisation above.
+      expect(r).toBeCloseTo(p / (1 + e * Math.cos(nu)), 3);
+    }
+  });
+
+  it('advances a hyperbolic arc at the rate the mean motion says', () => {
+    const e = 1.009;
+    const p = 7_000_000;
+    const shape = orbit(p, e, 0.2);
+    const sample = keplerianSampler(shape, MU_EARTH);
+
+    // |a|, because the hyperbola's semi-major axis is negative and a mean motion built
+    // from the signed value is `NaN` — the mistake this test exists to catch.
+    const a = Math.abs(p / (1 - e * e));
+    const n = Math.sqrt(MU_EARTH / (a * a * a));
+    const startMean = meanFromHyperbolic(hyperbolicFromTrue(0.2, e), e);
+
+    for (const offsetSeconds of [120, 1200, -300]) {
+      const { nu } = planar(sample(offsetSeconds));
+      // Position back to time, through the analytic conversions rather than the solver.
+      const mean = meanFromHyperbolic(hyperbolicFromTrue(nu, e), e);
+      expect((mean - startMean) / n).toBeCloseTo(offsetSeconds, 6);
+    }
+  });
+
+  it('leaves periapsis where the conic puts it, on both open conics', () => {
+    // r_p = p / (1 + e) for every conic, and it is where the arc starts here.
+    for (const e of [1, 1.009, 2.5]) {
+      const p = 7_000_000;
+      const { r } = planar(keplerianSampler(orbit(p, e, 0), MU_EARTH)(0));
+      expect(r, `e = ${String(e)}`).toBeCloseTo(p / (1 + e), 3);
+    }
+  });
+
+  it('places a parabolic arc on its own conic', () => {
+    // Exactly `e = 1` is not reachable from a state vector in float64, and it is handled
+    // rather than left to a branch that would answer plausibly and wrongly.
+    const p = 7_000_000;
+    const sample = keplerianSampler(orbit(p, 1, 0.2), MU_EARTH);
+
+    for (const offsetSeconds of [0, 300, 3000, -300]) {
+      const { r, nu } = planar(sample(offsetSeconds));
+      expect(Number.isFinite(r), `offset ${String(offsetSeconds)}`).toBe(true);
+      expect(r).toBeCloseTo(p / (1 + Math.cos(nu)), 3);
+    }
+  });
+
+  it('runs time forwards, which no conic equation above pins', () => {
+    // `H` and time increase together, so the sign of the offset has to reach the position.
+    // A sampler that stepped backwards would satisfy every conic equation in this file.
+    // True anomaly is the statement rather than radius: this arc starts just *after*
+    // periapsis at 15 km/s, so going back ten minutes crosses it and comes out farther
+    // away — increasing radius is a fact about the leg, increasing `nu` is the direction.
+    const sample = keplerianSampler(orbit(7_000_000, 1.009, 0.2), MU_EARTH);
+    const anomalies = [-600, -60, 0, 60, 600].map((offset) => planar(sample(offset)).nu);
+    for (let i = 1; i < anomalies.length; i++) {
+      expect(anomalies[i] ?? Number.NaN).toBeGreaterThan(anomalies[i - 1] ?? Number.NaN);
+    }
+
+    // And outbound from the start, the radius does grow — the leg this arc is actually on.
+    expect(planar(sample(600)).r).toBeGreaterThan(planar(sample(0)).r);
+  });
+
+  it('still refuses an eccentricity, a `p` or a `mu` it cannot sample at all', () => {
+    // An open conic is no longer one of these. A negative eccentricity still is: it is not
+    // a conic, and sampling it would return positions on something that does not exist.
+    const shape = orbit(7_000_000, 1.009);
+    expect(() => keplerianSampler(orbit(7_000_000, -0.1), MU_EARTH)).toThrow(RangeError);
+    expect(() => keplerianSampler(orbit(0, 0.1), MU_EARTH)).toThrow(RangeError);
+    expect(() => keplerianSampler(shape, 0)).toThrow(RangeError);
+  });
+});
+
+/**
+ * The sampler against the propagator the simulation actually flies.
+ *
+ * The marker this places is the ship, and the ship's position is `@hh/sim`'s to state:
+ * `stateAt` propagates the timeline in **universal variables**, through `@hh/propagation`,
+ * while this module walks the classical anomalies of one conic. Two independent
+ * formulations of the same two-body motion, and the useful question is not whether either
+ * is self-consistent — `trajectory.test.ts` and `propagation.test.ts` each already say
+ * that — but whether the thing drawn on screen is where the thing being simulated is.
+ *
+ * It matters most on exactly the conic this suite is here for. The elliptic branch has
+ * been drawn over every contract since M2 and any disagreement would have shown as a
+ * marker sliding off its own curve; the hyperbolic branch is new, and nothing else in the
+ * repository would notice if it were subtly wrong — an escape trajectory is illegal to
+ * commit, so no golden trajectory and no par value covers one.
+ */
+describe('the drawn ship and the simulated ship are the same ship', () => {
+  const hyperbolicTimeline = (): ReturnType<typeof buildTimeline> => {
+    // ~3.2 km/s prograde, which is what opens the conic from a 7 000 km orbit.
+    const plan = createPlan([maneuverNodeFromCounts(Math.round(600 * 1024), [0, 32_000_000, 0])]);
+    return buildTimeline({
+      startEpoch: epoch(0),
+      initialState: stateFromElements(orbit(7_000_000, 0.02), MU_EARTH),
+      plan,
+      horizon: epoch(6 * 3600),
+      mu: MU_EARTH,
+    });
+  };
+
+  it('agrees with universal-variable propagation along an escape arc', () => {
+    const built = hyperbolicTimeline();
+    if (!built.ok) throw new Error(`fixture timeline failed to build: ${JSON.stringify(built)}`);
+    const timeline = built.timeline;
+    const arc = timeline.arcs[timeline.arcs.length - 1];
+    if (arc === undefined) throw new Error('the fixture has no arcs');
+    expect(arc.elements.eccentricity).toBeGreaterThan(1);
+
+    const sample = keplerianSampler(arc.elements, MU_EARTH);
+    for (const offsetSeconds of [0, 60, 600, 3600, 10_000]) {
+      const drawn = sample(offsetSeconds);
+      const flown = stateAt(timeline, epoch((arc.startEpoch as number) + offsetSeconds));
+      expect(flown.converged, `offset ${String(offsetSeconds)}`).toBe(true);
+      if (!flown.converged || drawn === undefined) continue;
+
+      const { position } = flown.state;
+      const separation = Math.hypot(
+        drawn.x - position.x,
+        drawn.y - position.y,
+        drawn.z - position.z,
+      );
+      const radius = Math.hypot(position.x, position.y, position.z);
+      // 1e-14 relative, against a worst observed 3.8e-15 over ten thousand seconds and out
+      // to 52 000 km — a few ulp, which is what two exact formulations of the same motion
+      // should differ by. The tolerance is the measured limit rather than a round number
+      // chosen to pass, per §7.6.
+      expect(separation / radius, `offset ${String(offsetSeconds)}`).toBeLessThan(1e-14);
+    }
   });
 });
