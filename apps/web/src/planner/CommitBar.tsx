@@ -30,6 +30,21 @@
  * `aria-describedby` on the button, pointing at the list. A paragraph of red text next to
  * a disabled button is invisible to someone who tabs to the button and hears "Commit
  * plan, dimmed" and nothing else. That is #139's fifth criterion and it is one attribute.
+ *
+ * It is also what makes the arrangement below free. Undo, redo, *Commit plan* and the
+ * reasons are **one row**: the bar used to stack the reasons in a block of their own
+ * between the history buttons and *Commit plan*, which cost two rows of a screen whose
+ * vertical space is contested enough that the orbit view gives up its own to keep this
+ * bar above the fold at 720p — and it spent them on a row that was two buttons and
+ * 1 300 px of nothing. The association is by id, so the list can sit after the button it
+ * describes without a screen reader losing the connection, and `role="list"` is on the
+ * `<ul>` because the CSS that lays the items out in a line removes its markers, and
+ * VoiceOver drops the list semantics with them.
+ *
+ * The list wraps rather than truncates. Six reasons can be true at once — `L1`–`L5` and
+ * `L6` — and the longest of them is 68 characters before §8.9's +40%, so on a narrow
+ * window the row becomes two or three. Truncating would be choosing which of a player's
+ * problems to hide, which is the mistake the whole component is written against.
  */
 import type { Legality } from '@hh/game';
 import type { Catalogue } from '@hh/ui';
@@ -115,8 +130,21 @@ export const CommitBar = ({
         {historyButton('redo', canRedo, onRedo)}
       </div>
 
+      <button
+        type="button"
+        class="hh-commit__button"
+        // The verdict, not a recomputation of it. `commitAllowed` is false exactly when
+        // some reason is blocking, and `L6` is never one — see the docstring.
+        disabled={!legality.commitAllowed}
+        {...(hasReasons ? { 'aria-describedby': REASONS_ID } : {})}
+        data-testid="commit"
+        onClick={onCommit}
+      >
+        {t('planner.commit', {})}
+      </button>
+
       {hasReasons ? (
-        <ul class="hh-commit__reasons" id={REASONS_ID} data-testid="commit-reasons">
+        <ul class="hh-commit__reasons" role="list" id={REASONS_ID} data-testid="commit-reasons">
           {blocking.map((reason) => (
             <li
               key={`${reason.code}:${reason.message.key}`}
@@ -141,19 +169,6 @@ export const CommitBar = ({
           ))}
         </ul>
       ) : null}
-
-      <button
-        type="button"
-        class="hh-commit__button"
-        // The verdict, not a recomputation of it. `commitAllowed` is false exactly when
-        // some reason is blocking, and `L6` is never one — see the docstring.
-        disabled={!legality.commitAllowed}
-        {...(hasReasons ? { 'aria-describedby': REASONS_ID } : {})}
-        data-testid="commit"
-        onClick={onCommit}
-      >
-        {t('planner.commit', {})}
-      </button>
     </div>
   );
 };

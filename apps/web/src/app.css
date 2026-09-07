@@ -1179,12 +1179,23 @@ button:disabled {
   opacity: 0.7;
 }
 
-/* ── Commit (#139) ───────────────────────────────────────────────────────── */
+/* ── Commit (#139) ───────────────────────────────────────────────────────── *
+ *
+ * One row: undo, redo, *Commit plan*, and whatever §6.4 has to say about the plan. It was
+ * three stacked blocks, and the middle one — the reason list — was a full-width paragraph
+ * holding a single sentence, above a button that is 130 px wide. That is two rows of a
+ * screen where the orbit view is already shrinking to keep this bar above the fold at
+ * 720p, spent on width nothing was using.
+ *
+ * The row wraps, and each part wraps within it, because the alternative is deciding which
+ * of a player's problems not to show — see `CommitBar.tsx` on why there is no truncation
+ * anywhere in this component. */
 
 .hh-commit {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
 }
 
 .hh-commit__controls {
@@ -1211,10 +1222,29 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Last on the row and the only part of it that wants space: `1fr` in flex terms, with a
+   16rem basis so that a window too narrow to hold the reasons beside the buttons drops
+   them to their own line whole rather than squeezing them into a column two words wide. */
 .hh-commit__reasons {
   margin: 0;
-  padding: 0 0 0 18px;
-  list-style: disc;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 16px;
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+}
+
+/* The marker `list-style` used to draw, drawn by the item instead: a line of reasons needs
+   a separator between them more than a column of them ever did, and a horizontal list
+   marker is not something `list-style` can place. `role="list"` on the `<ul>` is the other
+   half — see `CommitBar.tsx`. */
+.hh-commit__reason::before {
+  content: '•';
+  margin-inline-end: 6px;
+  opacity: 0.7;
 }
 
 .hh-commit__reason[data-blocking='true'] {
@@ -1225,7 +1255,6 @@ button:disabled {
 }
 
 .hh-commit__button {
-  align-self: flex-start;
   padding: 8px 18px;
   font: inherit;
   font-weight: 600;

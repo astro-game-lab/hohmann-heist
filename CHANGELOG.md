@@ -26,6 +26,15 @@ they relied on has moved.
   does.
 
 ### Changed
+- **The commit bar is one row: undo, redo, *Commit plan*, and §6.4's reasons.** It was three
+  stacked blocks, the middle one a full-width list holding a single sentence above a button
+  130 px wide — two rows of a screen where the orbit view is already shrinking to keep this
+  bar above the fold at 720p, spent on width nothing was using. Nothing is truncated to fit:
+  six reasons can be true at once and the longest is 68 characters before §8.9's +40%, so
+  the row wraps, and on a phone it becomes three. The reasons keep their association with
+  the button by `aria-describedby`, which is by id and not by position, and the list carries
+  `role="list"` because laying the items out in a line removes their markers and VoiceOver
+  drops the list semantics with them.
 - **The node editor is parked in the orbit view's top-right corner instead of following its
   node.** §8.3.5 asked for "anchored to the node" and that is what it did, with three
   consequences that cannot be fixed while the panel moves: the editor's own controls move the
