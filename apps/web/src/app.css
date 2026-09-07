@@ -1144,6 +1144,15 @@ button:disabled {
   opacity: 0.7;
 }
 
+/* §6.6's one assist that is not a switch — trajectory prediction, on and not disableable.
+   Weighted like the labels beside it so the row reads as one of the set, which is the whole
+   reason it is listed: a player who cannot find it assumes it is hidden somewhere. */
+.hh-assists__always {
+  margin: 0;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 /* ── Commit (#139) ───────────────────────────────────────────────────────── *
  *
  * One row: undo, redo, *Commit plan*, and whatever §6.4 has to say about the plan. It was

@@ -201,6 +201,22 @@ const AssistSetControl = ({
           </div>
         );
       })}
+
+      {/*
+        §6.6's *"On, cannot be disabled"*. Not a control, and deliberately not in
+        `ASSIST_IDS`: trajectory prediction is the medium rather than an assist, because
+        §6.3 makes prediction the game, and putting it in the model would mean offering a
+        toggle that must not exist.
+
+        #140 asked for it to be shown anyway, in the tray, *"because a player who cannot
+        find it in the tray will assume it is hidden somewhere"* — and that argument is
+        about the list of assists rather than about where the list is, so it comes here
+        with the rest of them.
+      */}
+      <div class="hh-assists__row" data-assist="prediction" data-testid="assist-prediction">
+        <p class="hh-assists__always">{t('planner.assists.prediction', {})}</p>
+        <p class="hh-assists__hint">{t('planner.assists.predictionHint', {})}</p>
+      </div>
     </fieldset>
   );
 };
