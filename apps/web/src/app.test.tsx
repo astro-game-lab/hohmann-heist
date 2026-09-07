@@ -82,6 +82,30 @@ describe('routing', () => {
     }
   });
 
+  /**
+   * §8.3.1: *"the physics ↗ … present on every screen's footer"*.
+   *
+   * Over the whole table plus the not-found screen, because the failure this catches is a
+   * screen that simply never rendered one — and that was the state of the app: the footer
+   * was rendered by the title and the board and by nothing else, so ten of the twelve
+   * routes had no version anywhere on them. The version is the thing `Footer.tsx` exists
+   * for (*"an identifier meant to be copied verbatim into a bug report"*), and the routes
+   * that lacked it were the planner and execution — the ones a bug is reported from.
+   */
+  it("renders §8.3.1's footer, with its version, on every route", async () => {
+    for (const [hash] of [...TABLE, ['#/nope'] as const]) {
+      window.location.hash = hash;
+      await mount();
+      expect(el('footer'), hash).not.toBeNull();
+      expect(el('footer-physics')?.getAttribute('href'), hash).toContain('docs/PHYSICS.md');
+      // §14.4's two numbers: the release on screen, the commit reachable beside it.
+      const build = el('footer-version');
+      expect(build?.textContent, hash).not.toBe('');
+      expect(build?.getAttribute('aria-label'), hash).toContain('commit');
+      render(null, container);
+    }
+  });
+
   // P3's deep links: no navigation happened, the hash was read at start-up, and the
   // screen the URL named is the one that rendered — with the contract's own content on
   // it, not a shell waiting for a fetch.

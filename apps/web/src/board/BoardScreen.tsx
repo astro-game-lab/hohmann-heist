@@ -58,7 +58,6 @@ import { brokenContracts, contracts } from '../contracts/registry.js';
 import { Icon } from '../icons/index.js';
 import { hrefFor } from '../router.js';
 import type { ContractProgress } from '../save/index.js';
-import { Footer } from '../screens/Footer.js';
 import { ScenarioProblem } from '../screens/ScenarioProblem.js';
 
 import { ContractCard, LockedCard } from './ContractCard.js';
@@ -188,7 +187,6 @@ export const BoardScreen = ({ t, resolveDynamic, records }: BoardScreenProps): J
           ))}
 
       <DailyStrip t={t} />
-      <Footer t={t} />
     </div>
   );
 };

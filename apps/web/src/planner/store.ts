@@ -528,11 +528,21 @@ export const usePlanner = (
       },
 
       setEpoch: (index, metSeconds) => {
-        apply((current) =>
-          current.model.plan.nodes[index] === undefined
-            ? null
-            : moveNode(current.model.plan, index, (scenario.startEpoch + metSeconds) as Epoch),
-        );
+        apply((current) => {
+          if (current.model.plan.nodes[index] === undefined) return null;
+          // Clamped for the same reason `nudgeEpochBy` below clamps: evaluating a plan
+          // whose node sits outside the window throws `RangeError` from
+          // `requireNodesWithinHorizon`, and that throw would happen inside `apply`'s
+          // `setState` updater. `NodeEditor` already refuses an out-of-window typed epoch
+          // and restores the field — §8.3.5 asks for rejection, not clamping, so this is
+          // the guard behind that rather than the rule, and it keeps every other caller of
+          // `setEpoch` from being able to throw.
+          const at = Math.min(
+            Math.max(scenario.startEpoch + metSeconds, scenario.startEpoch),
+            scenario.horizon,
+          ) as Epoch;
+          return moveNode(current.model.plan, index, at);
+        });
       },
 
       slideEpochTo: (index, metSeconds) => {

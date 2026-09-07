@@ -55,22 +55,23 @@ afterEach(() => {
 });
 
 describe('the title screen', () => {
-  it("renders §8.3.1's tagline and the footer", async () => {
+  it("renders §8.3.1's tagline", async () => {
     await mount();
     expect(el('title-tagline')?.textContent).toContain('Steal things in orbit');
-    expect(el('footer')).not.toBeNull();
   });
 
-  it('links the physics document and shows the version', async () => {
+  /**
+   * The footer is the shell's, not this screen's.
+   *
+   * It used to be rendered here and by the board, and by nothing else — so ten of the
+   * twelve routes had no version on them. `Screen` renders it for every route now, and
+   * `app.test.tsx` asserts that across §8.2's whole table, which is the property §8.3.1
+   * actually states (*"present on every screen's footer"*) and one this screen alone could
+   * never have shown.
+   */
+  it('leaves the footer to the shell', async () => {
     await mount();
-    expect(el('footer-physics')?.getAttribute('href')).toContain('docs/PHYSICS.md');
-
-    // §14.4: the version is visible, and the commit is reachable without a second number
-    // on screen. Both halves asserted, because the second is the one easy to lose.
-    const build = el('footer-version');
-    expect(build?.textContent).not.toBe('');
-    expect(build?.getAttribute('title')).toContain('commit');
-    expect(build?.getAttribute('aria-label')).toContain('commit');
+    expect(el('footer')).toBeNull();
   });
 
   /**
@@ -125,7 +126,10 @@ describe('the title screen', () => {
   it("offers §8.2's other three entries, routed rather than hidden", async () => {
     await mount();
     expect(el('title-daily')?.getAttribute('href')).toBe('#/daily');
-    expect(el('title-codex')?.getAttribute('href')).toContain('#/codex/');
+    // The Codex *index*, not an entry. This asserted `#/codex/` — with the slash — and so
+    // passed against `#/codex/phasing`, which is not a slug any entry has: the front door's
+    // Codex entry landed on §8.7's "no such entry" screen for the whole of M3.
+    expect(el('title-codex')?.getAttribute('href')).toBe('#/codex');
     expect(el('title-settings')?.getAttribute('href')).toBe('#/settings');
   });
 

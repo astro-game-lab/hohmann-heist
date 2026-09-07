@@ -233,6 +233,59 @@ describe('anchoring', () => {
     expect(region?.style.getPropertyValue('--hh-mark-y')).toBe('248px');
     orbit.remove();
   });
+
+  /**
+   * A card never covers a control — #272.
+   *
+   * The first mark a new player sees is anchored to the orbit view, which reaches to within
+   * 8 px of the timeline, so "under the anchor" put the card exactly on top of the commit
+   * bar: `elementFromPoint` at the centre of **Commit plan** returned the card's *More in
+   * the Codex* button, and the click could not land. A first-time player with a legal plan
+   * could not fly it.
+   *
+   * jsdom has no layout, which is why nothing here caught it and why this test has to stub
+   * three boxes: the anchor, a control directly under it, and the card itself — placement
+   * asks the card how big it is, and jsdom says zero. What is being checked is the decision,
+   * not the arithmetic: given a control in the preferred position, the card goes elsewhere.
+   */
+  it('flips above its anchor rather than covering a control below it', async () => {
+    const orbit = document.createElement('div');
+    orbit.dataset['hhAnchor'] = 'orbit';
+    orbit.getBoundingClientRect = () =>
+      ({ left: 100, top: 100, right: 500, bottom: 400, width: 400, height: 300 }) as DOMRect;
+    document.body.append(orbit);
+
+    // Exactly where "under the anchor" would put the card.
+    const control = document.createElement('button');
+    control.getBoundingClientRect = () =>
+      ({ left: 100, top: 408, right: 300, bottom: 440, width: 200, height: 32 }) as DOMRect;
+    document.body.append(control);
+
+    // Taken precisely in order to re-invoke it with an explicit `this` below, which is the
+    // one case the unbound-method rule exists to catch and the one case it is wrong about
+    // — the same exception `OrbitView.drag.test.tsx` takes.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element): DOMRect {
+      return this.classList.contains('hh-mark__card')
+        ? ({ left: 0, top: 0, right: 300, bottom: 100, width: 300, height: 100 } as DOMRect)
+        : original.call(this);
+    };
+
+    try {
+      await mount({ facts: FACTS.oneNode });
+      const region = el('coach-mark');
+      expect(region?.dataset['anchored']).toBe('true');
+      // Above the anchor, clamped to the viewport's 8 px margin — not 408 px, where the
+      // control is.
+      expect(region?.style.getPropertyValue('--hh-mark-y')).toBe('8px');
+      expect(region?.style.getPropertyValue('--hh-mark-x')).toBe('100px');
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      orbit.remove();
+      control.remove();
+    }
+  });
 });
 
 describe('the way into the Codex', () => {

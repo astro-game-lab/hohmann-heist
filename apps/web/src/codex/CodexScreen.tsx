@@ -78,7 +78,7 @@ export const CodexScreen = ({ t, slug, search, read, onRead }: CodexScreenProps)
 
   return (
     <div class="hh-codex">
-      <CodexEntryView t={t} entry={entry} openLayer={layerFrom(search)} />
+      <CodexEntryView t={t} entry={entry} openLayer={layerFrom(search)} titled={false} />
       <a class="hh-codex__back" href={hrefFor('/codex')}>
         {t('codex.backToIndex', {})}
       </a>

@@ -469,6 +469,7 @@ const samples: AllMessageParams = {
   'debrief.beatPar.report': {},
   'debrief.action.retry': {},
   'debrief.action.next': {},
+  'debrief.action.nextNamed': { index: 6, title: 'Overtake' },
   'debrief.action.share': {},
   'debrief.action.board': {},
   'debrief.next.none': {},

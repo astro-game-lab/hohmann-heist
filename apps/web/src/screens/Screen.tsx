@@ -39,6 +39,8 @@ import type { Catalogue } from '@hh/ui';
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 
+import { Footer } from './Footer.js';
+
 import { CONTENT_HEADING_ID } from '../a11y/focus.js';
 
 /**
@@ -124,6 +126,21 @@ export const Screen = ({
           {heading}
         </h1>
         {children}
+        {/*
+          §8.3.1's footer: *"the physics ↗ … present on every screen's footer"*.
+
+          Here rather than in each screen, for the reason the help affordance is in the
+          shell: it was rendered by the title and the board and by nothing else, so ten of
+          the twelve routes had no version on them at all — including the planner and
+          execution, which are where a physics or rendering problem is actually noticed and
+          where `Footer.tsx`'s own reason for existing (*"an identifier meant to be copied
+          verbatim into a bug report"*) has the most to do.
+
+          It is the last row of `.hh-screen`'s column and sizes to its content, so a screen
+          that fills the viewport gives it up from whichever region can shrink — the orbit
+          view, on the planner — rather than growing past the fold.
+        */}
+        <Footer t={t} />
       </main>
     </>
   );

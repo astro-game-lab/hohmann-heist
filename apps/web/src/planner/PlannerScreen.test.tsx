@@ -34,14 +34,27 @@ const c03 = (): NonNullable<ReturnType<typeof contractById>> => {
 /** What `onCommit` was called with, or `null` if it has not been. */
 let committed: CommittedRun | null = null;
 
-const mount = async (): Promise<void> => {
+/**
+ * C01 — the one shipped contract whose starting orbit is **not** circular.
+ *
+ * 400 × 450 km, so it has apsides to snap to. C03 does not, which is why the snap radios
+ * read "free" there correctly and why the bug below survived: every existing snap test ran
+ * on an orbit with nothing to snap to.
+ */
+const c01 = (): NonNullable<ReturnType<typeof contractById>> => {
+  const scenario = contractById('c01-shakedown');
+  if (scenario === undefined) throw new Error('c01-shakedown is not in the registry');
+  return scenario;
+};
+
+const mount = async (scenario = c03()): Promise<void> => {
   committed = null;
   await act(() => {
     render(
       <PlannerScreen
         t={catalogue.resolve}
         resolveDynamic={catalogue.resolveDynamic}
-        scenario={c03()}
+        scenario={scenario}
         onCommit={(run) => {
           committed = run;
         }}
@@ -466,6 +479,40 @@ describe('the node editor (#137)', () => {
     expect(after).toBe(before);
   });
 
+  /**
+   * A well-formed time outside the **mission window** — #271.
+   *
+   * The neighbouring test covers a malformed *part* (75 minutes). This is the other way to
+   * be invalid, and the one that got through: every field is in range, so `metFromParts`
+   * returns a number, and it was handed straight to `moveNode`. The plan was then
+   * re-evaluated, `requireNodesWithinHorizon` threw a `RangeError`, and the throw happened
+   * inside the `setState` updater in `store.ts`'s `apply` — escaping through Preact's
+   * render. The node stayed put only because the update aborted, and the field kept `99`,
+   * so every later epoch edit threw again on the stale hours.
+   *
+   * Three assertions, because the bug had three symptoms: nothing thrown, the node
+   * unmoved, and the field restored rather than clamped (§8.3.5).
+   */
+  it('restores the previous value for an epoch beyond the mission horizon', async () => {
+    await open();
+    const hours = el('editor-epoch-hours');
+    if (!(hours instanceof HTMLInputElement)) throw new Error('no hours field');
+    const before = hours.value;
+    const nodeBefore = text('plan-node-0');
+
+    // C03's horizon is three hours; 99 is well past it and every part is in range.
+    await act(() => {
+      hours.value = '99';
+      hours.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(() => {
+      hours.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    });
+
+    expect((el('editor-epoch-hours') as HTMLInputElement).value).toBe(before);
+    expect(text('plan-node-0')).toBe(nodeBefore);
+  });
+
   it('accepts full float64 Δv entry (§8.3.5)', async () => {
     await open();
     const prograde = el('editor-prograde');
@@ -702,6 +749,32 @@ describe('§8.3.5’s snap radios', () => {
     expect(el('editor-snap-free')?.getAttribute('aria-checked')).toBe('true');
     expect(el('editor-snap-periapsis')?.getAttribute('aria-checked')).toBe('false');
   });
+
+  /**
+   * The radios and the plan panel are asked the same question and must give the same
+   * answer — #270.
+   *
+   * They did not. `editorSnappedTo` compared `snapToNamedApsis(...) === node.epoch`
+   * exactly, and a snapped epoch is quantised at node construction (FR-105) while the
+   * finder's is not, so the two were never bit-equal: the editor reported every snapped
+   * node as *free* while the plan row beside it drew the apsis caret. `apsisAt`'s docstring
+   * names that exact trap — *"an exact comparison would report every snapped node as
+   * unsnapped"* — and both readings come from it now.
+   *
+   * Driven on C01 because C03's orbit is circular and has no apsis to snap to.
+   */
+  for (const kind of ['periapsis', 'apoapsis'] as const) {
+    it(`reports a node snapped to ${kind} as snapped, and agrees with the plan row`, async () => {
+      await mount(c01());
+      await press('n');
+      await click('plan-expand-0');
+      await click(`editor-snap-${kind}`);
+
+      expect(el(`editor-snap-${kind}`)?.getAttribute('aria-checked')).toBe('true');
+      expect(el('editor-snap-free')?.getAttribute('aria-checked')).toBe('false');
+      expect(el('plan-node-0')?.closest('[data-snapped]')?.getAttribute('data-snapped')).toBe(kind);
+    });
+  }
 });
 
 describe('the live preview during a gesture (#134, #135)', () => {
