@@ -29,9 +29,10 @@
  * would be a blank screen; a silently dropped edit would be a click that did nothing.
  */
 import { type Epoch } from '@hh/astro';
-import type { AssistId, AssistState, LegalityReason, LoadedScenario, PlanEdit } from '@hh/game';
+import type { AssistState, LegalityReason, LoadedScenario, PlanEdit } from '@hh/game';
 import {
   addNode,
+  decodeAssists,
   defaultAssistState,
   restrictToAllowed,
   deleteNode,
@@ -77,7 +78,7 @@ import {
   updateDeltaVDrag,
   updateEpochDrag,
 } from '@hh/ui';
-import { useCallback, useMemo, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 
 import { evaluateDrag, evaluatePlan, type Evaluation } from './evaluate.js';
 
@@ -95,13 +96,18 @@ export interface PlannerState {
   readonly model: PlannerModel;
   readonly evaluation: Evaluation;
   /**
-   * §6.6's assist set — #81's model, #140's tray.
+   * §6.6's assist set — #81's model, §8.3.12's *default assist set* setting.
    *
    * This was a lone `snapToApsis: boolean` while DEP-07's toggle was the only control the
-   * tray carried. It is the whole set now, because #129's constraint preview is the second
-   * consumer and a second boolean beside the first is how the two would come to disagree
-   * about what "an assist" is. `restrictToAllowed` has already been applied, so an assist
-   * this contract does not offer reads `false` here and cannot be switched on.
+   * planner carried. It is the whole set now, because #129's constraint preview is the
+   * second consumer and a second boolean beside the first is how the two would come to
+   * disagree about what "an assist" is.
+   *
+   * It arrives from the setting rather than from a control in the planner, and
+   * `restrictToAllowed` has already been applied, so an assist this contract does not offer
+   * reads `false` here whatever the setting says. Held in the state rather than read where
+   * it is used because a committed run has to carry the set it *was* planned under — see
+   * `CommittedRun.assists`.
    */
   readonly assists: AssistState;
   /** The last refused edit, shown until the next successful one (#133). */
@@ -138,8 +144,6 @@ export interface PlannerActions {
   readonly deselect: () => void;
   readonly addNodeAt: (epoch: Epoch) => void;
   readonly deleteIndex: (index: number) => void;
-  /** Toggle one of §6.6's assists. A no-op for one the contract does not allow. */
-  readonly setAssist: (id: AssistId, enabled: boolean) => void;
   /** §8.5.1's EVALUATED → COMMITTED. A no-op unless the verdict permits it. */
   readonly commit: () => void;
 
@@ -339,7 +343,40 @@ const restored = (
 export const usePlanner = (
   scenario: LoadedScenario,
   seed: PlannerSeed = {},
+  /**
+   * §8.3.12's *default assist set*, as the bitmask the setting stores.
+   *
+   * A mask rather than an `AssistState` because it is what the settings screen holds, what
+   * §11.6's replay records, and — the reason it matters here — a **number**, so the memo
+   * below and the effect that follows it have a dependency that does not change identity
+   * on every render of the screen above.
+   *
+   * The planner used to ignore this entirely: it started from `defaultAssistState()` on
+   * every contract, and the setting was written to the save and read by nothing. The tray
+   * that made that survivable is gone, so this is now the only thing that decides whether
+   * a run snaps to apsides or previews constraints.
+   */
+  assistMask = 0,
 ): readonly [PlannerState, PlannerActions] => {
+  /**
+   * The set this run is planned under: the setting, restricted to what the contract offers.
+   *
+   * §6.6 makes `assistsAllowed` a permission rather than a default, so the restriction is
+   * applied here and not in the setting — turning the targeting computer on before C13
+   * unlocks it is a thing a player can do in Settings and not a thing that reaches a run.
+   *
+   * A mask this build cannot decode falls back to the defaults rather than to nothing: an
+   * unreadable setting should not silently take a player's snapping away.
+   */
+  const assists = useMemo(
+    () =>
+      restrictToAllowed(
+        decodeAssists(assistMask) ?? defaultAssistState(),
+        scenario.document.assistsAllowed,
+      ),
+    [assistMask, scenario],
+  );
+
   const [state, setState] = useState<PlannerState>(() => {
     const initialPlan = seed.plan ?? EMPTY_PLAN;
     const model = createModel(initialPlan, seed.scrubEpoch ?? scenario.startEpoch);
@@ -366,7 +403,7 @@ export const usePlanner = (
           seed.plan === undefined ? model.interaction : evaluated(IDLE, restored ? selected : null),
       },
       evaluation: evaluatePlan(scenario, initialPlan),
-      assists: restrictToAllowed(defaultAssistState(), scenario.document.assistsAllowed),
+      assists,
       lastRefusal: null,
       editorFor: null,
       preview: null,
@@ -423,6 +460,19 @@ export const usePlanner = (
     },
     [scenario],
   );
+
+  /**
+   * The setting can change while the planner is open, and it must take effect.
+   *
+   * Settings is a route that renders as an *overlay* over whatever screen is showing
+   * (`SettingsOverlay` says why), so a player turning snapping off mid-plan never leaves
+   * the planner and would otherwise be looking at a screen that disagreed with the switch
+   * they had just moved. The memo above gives this a stable identity, so it runs when the
+   * mask or the contract changes and not once per render.
+   */
+  useEffect(() => {
+    setState((current) => (current.assists === assists ? current : { ...current, assists }));
+  }, [assists]);
 
   const actions = useMemo<PlannerActions>(
     () => ({
@@ -498,19 +548,6 @@ export const usePlanner = (
             ? null
             : deleteNode(current.model.plan, index),
         );
-      },
-
-      setAssist: (id, enabled) => {
-        setState((current) => {
-          // Re-restricted rather than assigned, so a caller cannot switch on an assist the
-          // contract does not offer. §6.6 makes `assistsAllowed` a permission rather than
-          // a default, and permissions belong at the write.
-          const next = restrictToAllowed(
-            { ...current.assists, [id]: enabled },
-            scenario.document.assistsAllowed,
-          );
-          return { ...current, assists: next };
-        });
       },
 
       // ── #137's overlay ───────────────────────────────────────────────────

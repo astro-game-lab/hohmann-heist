@@ -706,8 +706,6 @@ export const en: Messages = {
     'Always on. Seeing where the plan goes is the game, not a hint about it.',
   'planner.assists.effectBlind': () => 'Turning this off earns Blind.',
   'planner.assists.effectCaps': () => 'Using this caps the contract at Silver.',
-  'planner.assists.defaultOn': () => 'Changed — normally on.',
-  'planner.assists.defaultOff': () => 'Changed — normally off.',
   'planner.assists.capClean': () => 'Best available: any medal, Clean Job eligible.',
   'planner.assists.capAt': ({ medal, count }, fmt) =>
     `Best available: ${medal} — ${fmt.integer(count)} assist${count === 1 ? '' : 's'} in use.`,
@@ -731,7 +729,6 @@ export const en: Messages = {
   'keys.scrubToDeadline': () => 'Scrub to the deadline',
   'keys.zoom': () => 'Zoom the orbit view',
   'keys.recentre': () => 'Recentre the camera',
-  'keys.toggleContract': () => 'Show or hide the contract',
   'keys.nodeMenu': () => 'Open the burn’s actions',
   'keys.undo': () => 'Undo',
   'keys.redo': () => 'Redo',
@@ -745,7 +742,6 @@ export const en: Messages = {
   'keys.codex': () => 'Codex for the current concept',
 
   'planner.contract.heading': () => 'Contract',
-  'planner.contract.toggle': () => 'Contract',
   'planner.tab.contract': () => 'Contract',
 
   'planner.nodeMenu.label': ({ index }, fmt) => `Actions for burn ${fmt.integer(index)}`,
@@ -757,11 +753,8 @@ export const en: Messages = {
   'planner.nodeMenu.open': ({ index }, fmt) => `Open actions for burn ${fmt.integer(index)}`,
   'planner.plan.snappedTo': ({ kind }) => `snapped to ${kind}`,
 
-  'planner.assists.heading': () => 'Assists',
-
   'planner.tab.plan': ({ count }, fmt) => `Plan (${fmt.integer(count)})`,
   'planner.tab.readouts': () => 'Readouts',
-  'planner.tab.assists': () => 'Assists',
   'planner.tabsLabel': () => 'Planner panels',
 
   // ── The node editor (§8.3.5) ──────────────────────────────────────────────

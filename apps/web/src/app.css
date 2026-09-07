@@ -218,7 +218,7 @@ body {
 
      Never `overflow-x`. A screen that scrolls sideways is a screen whose layout has already
      failed, and §8.8 forbids the scrollbar it would put on the page — the same rule
-     `.hh-mark__card` and `.hh-editor__anchor` are both written against. */
+     `.hh-mark__card` is written against. */
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -478,6 +478,32 @@ button:disabled {
  *
  * The breakpoints are §8.3.4's own: the side panels become tabs below 1024 px, which is
  * where the wide arrangement stops fitting.
+ *
+ * ## The side column is a column of the page, not of the stage
+ *
+ * The wide layout used to be a *row inside the stage* — orbit view beside the panels —
+ * with the timeline and the commit bar stacked under both of them, spanning the full
+ * width. That arrangement has no way to say how tall the panels may be: the column
+ * stretched to the stage and its contents simply carried on past the bottom edge, over
+ * the timeline and the commit bar and out of the window. With the contract panel open
+ * (#264) that is the *ordinary* state of C05, not an edge case — its brief, four
+ * objective rows, a constraint and two setup lines are more than the stage is tall — and
+ * the Δv slider and *Commit plan* were painted over by contract prose.
+ *
+ * So the grid is on `.hh-planner` itself and the side is one of its columns, spanning
+ * from under the HUD to the bottom of the commit bar. Two things follow, and both are
+ * the fix:
+ *
+ * - the timeline and the commit bar are placed in column 1, so they end where the panels
+ *   begin rather than running underneath them; and
+ * - the side column has a definite height and therefore something to overflow, so
+ *   `overflow-y: auto` on it means what it says. The panels scroll against the column
+ *   instead of against the document, which is what keeps the orbit view, the timeline
+ *   and the commit bar on screen while a long contract is being read.
+ *
+ * The DOM order is the narrow layout's reading order — HUD, orbit view, panels,
+ * timeline, commit bar — and the grid places out of it rather than the other way round,
+ * so nothing here needs `order` and the focus order is the visual one at both widths.
  */
 
 /*
@@ -541,12 +567,50 @@ button:disabled {
 }
 
 @media (min-width: 1024px) {
-  .hh-planner__stage {
-    flex-direction: row;
+  /* Four explicit rows — HUD, stage, timeline, commit bar — and one flexible one among
+     them, so the orbit view is again the region that gives space back. The refusal is
+     conditional and lands in an implicit fifth row when it is rendered, which is why it
+     is not in the template: an empty row here would cost its `gap` on every screen that
+     has nothing to refuse. */
+  .hh-planner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
   }
 
+  .hh-planner > .hh-hud {
+    grid-area: 1 / 1 / 2 / -1;
+  }
+
+  .hh-planner__stage {
+    grid-area: 2 / 1 / 3 / 2;
+  }
+
+  .hh-planner > .hh-timeline {
+    grid-area: 3 / 1 / 4 / 2;
+  }
+
+  .hh-planner > .hh-commit {
+    grid-area: 4 / 1 / 5 / 2;
+  }
+
+  .hh-planner__refusal {
+    grid-area: 5 / 1 / 6 / 2;
+  }
+
+  /* `-1` is the last line of the *explicit* grid, so the column ends level with the
+     commit bar whether or not a refusal has opened a row below it. `min-block-size: 0`
+     for the usual reason — without it the column's automatic minimum is its content and
+     the overflow it is meant to scroll pushes the grid open instead. */
   .hh-planner__side {
-    flex: 0 0 300px;
+    grid-area: 2 / 2 / -1 / 3;
+    min-block-size: 0;
+    overflow-y: auto;
+    /* Room under the last panel for the shell's fixed help affordance, which sits in this
+       corner on every route and would otherwise cover the final row of whichever panel is
+       last. Scrolled clear rather than moved: the affordance is the shell's, and the
+       planner is not the screen that gets to relocate it. */
+    padding-block-end: 3rem;
   }
 
   /* Every panel is visible in the wide layout; the tab strip is not. See the note above
@@ -899,14 +963,14 @@ button:disabled {
 
 /* ── §8.3.3's contract, in the planner (#264) ────────────────────────────── *
  *
- * Scrolls within the panel rather than growing it: C07's objective is three numbers and a
- * long sentence, and the timeline must stay visible at every height (§8.3.4).
+ * The longest thing in the side column — C07's objective is three numbers and a long
+ * sentence — and it does not scroll itself. It used to ask to, with `overflow-y: auto`
+ * and `max-height: 100%`, and that pair never did anything: a percentage maximum against
+ * a panel of automatic height resolves to `none`, so the section grew and took the column
+ * with it. The column is the scroller now (see the planner's grid above), which is the
+ * one place on this screen that has a height to scroll against, and one scrollbar for the
+ * four panels is also the one a player can find.
  */
-
-.hh-contract {
-  overflow-y: auto;
-  max-height: 100%;
-}
 
 .hh-contract__title {
   margin: 0 0 4px;
@@ -1029,32 +1093,19 @@ button:disabled {
   display: block;
 }
 
-/* ── The assist tray (#133's toggle; #140 brings the rest in M3) ──────────── */
+/* ── §6.6's assists, in Settings (#140, FR-411) ───────────────────────────── *
+ *
+ * These rules were the planner's assist tray, which is gone: seven switches in the panel
+ * column over the same seven §8.3.12 already stored, with the stored copy read by nothing.
+ * One control now, in the settings group, and it inherited FR-411 along with the job —
+ * *"MUST show which assists affect medal eligibility and what the current cap is"* — which
+ * is what the cap and the effect lines below are for. The row layout comes from the
+ * settings screen's own `.hh-setting__option`; what is here is the part FR-411 adds.
+ */
 
-/* The disclosure is a button inside the heading rather than beside it, so the whole
-   heading is the hit target and the heading level still describes the region (§8.8). */
-.hh-assists__disclosure {
-  width: 100%;
-  padding: 0;
-  text-align: left;
-  background: none;
-  border: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-.hh-assists__disclosure::before {
-  content: '▸ ';
-}
-
-.hh-assists__disclosure[aria-expanded='true']::before {
-  content: '▾ ';
-}
-
-/* FR-411's cap. Outside the disclosure, so it is legible while the tray is shut — it is
-   the consequence of what is inside. Coloured by what it says rather than by severity:
-   a cap is a fact about what this run can earn, not a problem to fix. */
+/* The cap, first in the group: it is the consequence of the switches under it. Coloured by
+   what it says rather than by severity — a cap is a fact about what a run can earn, not a
+   problem to fix. */
 .hh-assists__cap {
   margin: 4px 0 8px;
   font-size: 0.9em;
@@ -1068,13 +1119,8 @@ button:disabled {
   color: var(--medal-silver);
 }
 
-.hh-assists__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.hh-assists__row {
+  margin: 0 0 12px;
 }
 
 .hh-assists__effect {
@@ -1092,35 +1138,38 @@ button:disabled {
   color: var(--medal-silver);
 }
 
-.hh-assists__changed {
-  margin: 2px 0 0;
-  font-size: 0.8em;
-  opacity: 0.75;
+.hh-assists__hint {
+  margin: 4px 0 0;
+  font-size: 0.9em;
+  opacity: 0.7;
 }
 
+/* §6.6's one assist that is not a switch — trajectory prediction, on and not disableable.
+   Weighted like the labels beside it so the row reads as one of the set, which is the whole
+   reason it is listed: a player who cannot find it assumes it is hidden somewhere. */
 .hh-assists__always {
   margin: 0;
   font-weight: 600;
   opacity: 0.85;
 }
 
-.hh-assists__toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.hh-assists__hint {
-  margin: 4px 0 0;
-  opacity: 0.7;
-}
-
-/* ── Commit (#139) ───────────────────────────────────────────────────────── */
+/* ── Commit (#139) ───────────────────────────────────────────────────────── *
+ *
+ * One row: undo, redo, *Commit plan*, and whatever §6.4 has to say about the plan. It was
+ * three stacked blocks, and the middle one — the reason list — was a full-width paragraph
+ * holding a single sentence, above a button that is 130 px wide. That is two rows of a
+ * screen where the orbit view is already shrinking to keep this bar above the fold at
+ * 720p, spent on width nothing was using.
+ *
+ * The row wraps, and each part wraps within it, because the alternative is deciding which
+ * of a player's problems not to show — see `CommitBar.tsx` on why there is no truncation
+ * anywhere in this component. */
 
 .hh-commit {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
 }
 
 .hh-commit__controls {
@@ -1147,10 +1196,29 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Last on the row and the only part of it that wants space: `1fr` in flex terms, with a
+   16rem basis so that a window too narrow to hold the reasons beside the buttons drops
+   them to their own line whole rather than squeezing them into a column two words wide. */
 .hh-commit__reasons {
   margin: 0;
-  padding: 0 0 0 18px;
-  list-style: disc;
+  padding: 0;
+  /* No markers: the reasons are sentences beside a row of buttons, and a bullet in front of
+     each one made the row look like a nested list of the controls to its left. What
+     separates them is the space between them, which is why the column gap is wider than the
+     6px the buttons use. `role="list"` on the `<ul>` is what keeps the semantics a marker
+     would otherwise have carried — see `CommitBar.tsx`. */
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 24px;
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  /* One step down from the row it shares: 15/16 of the base at every interface scale,
+     because §8.3.12's setting moves the root and a pixel here would not follow it. The
+     reasons are the longest thing on the row and the least often present, and they read
+     as an annotation to the buttons rather than as a fourth control. */
+  font-size: 0.9375em;
 }
 
 .hh-commit__reason[data-blocking='true'] {
@@ -1161,7 +1229,6 @@ button:disabled {
 }
 
 .hh-commit__button {
-  align-self: flex-start;
   padding: 8px 18px;
   font: inherit;
   font-weight: 600;
@@ -1173,60 +1240,65 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* The overlay's placement. Anchored beside the node when the orbit view can say where it
-   is drawn; docked at the stage's edge when it cannot — an overlay pointing at nothing is
-   worse than one that is merely nearby. Never a backdrop and never a scroll lock: it is
-   not modal, and the rest of the planner stays usable while it is open. */
+/* The overlay's berth — one place, the orbit view's top-right corner, whichever node is
+   open and wherever that node is drawn. Never a backdrop and never a scroll lock: it is
+   not modal, and the rest of the planner stays usable while it is open.
+ *
+ * It used to follow its node, which is what §8.3.5 asked for and what the panel is still
+ * named after. Three things were wrong with it in use, and none of them are fixable while
+ * the panel moves:
+ *
+ * - the editor's own controls move the node, so the panel ran away from the finger using
+ *   it. That was patched by freezing the anchor for the duration of a pointer gesture,
+ *   which left the keyboard route — steppers driven by arrow keys — still moving;
+ * - it covers the trajectory it is describing, and the part of the trajectory it covers
+ *   is precisely the part the player is editing; and
+ * - anchored low it ran past the bottom of the stage, so it needed a `max-height` and an
+ *   inner scrollbar, and *that* put **Delete** and **Done** behind a scroll in a panel
+ *   whose whole job is to be read while dragging something else.
+ *
+ * Parked, all three go away: the panel does not move, does not cover the working half of
+ * the view, and starts at the top of the stage rather than wherever the node happens to
+ * be — which is what lets it be shown whole. `right: 8px` is the same inset the zoom and
+ * recentre controls use in the corner below, so the two line up down the edge of the
+ * view.
+ *
+ * The bound is the stage, and it is a bound rather than a height. The panel is 447 px
+ * tall with every row open, so it needs no scrolling in a stage taller than that — every
+ * window from about 820 px up, which is most of them, and there the scrollbar is simply
+ * absent. Below that the alternative is not "no scrollbar", it is the panel painting over
+ * the timeline and the commit bar, which is the bug the rest of this stylesheet's planner
+ * work exists to fix. So it scrolls only where it cannot fit, `overflow-x: hidden`
+ * because a panel a few fields wide that scrolls sideways has already failed, and its
+ * footer — **Delete** and **Done** — stays reachable either way.
+ *
+ * The `max(20rem, …)` is for the narrow layout, where the orbit view is a fifth of a
+ * phone screen and the stage alone would leave three fields visible above a scrollbar.
+ * There the panel is allowed past the bottom of the view and over the tab strip below it,
+ * which is where it already sat before the view stopped being the whole stage — and it is
+ * still well clear of the timeline, which the narrow layout puts a panel's height further
+ * down. In `rem`, so it grows with §8.3.12's interface scale rather than clipping at it. */
+
 /* 360px rather than 320: the Δv rows carry a label, a full-precision number field and two
    32 px steppers, and at 320 the row's content box was 300 px against 369 px of content —
    a horizontal scrollbar on a panel that is only ever a few fields wide. The `min-width`
    rules below are what make the row *able* to shrink; this is what stops it having to. */
 .hh-editor__anchor {
-  --hh-anchor-width: min(360px, calc(100% - 16px));
-
   position: absolute;
   z-index: 2;
-  width: var(--hh-anchor-width);
-  max-height: calc(100% - 16px);
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  inline-size: min(360px, calc(100% - 16px));
+  max-block-size: max(20rem, calc(100% - 16px));
   overflow-y: auto;
-  /* Never `auto`. A panel that can scroll sideways is a panel whose layout has already
-     failed, and it hides the failure instead of showing it. */
   overflow-x: hidden;
   background: var(--bg-panel);
   color: var(--fg);
 }
 
-/* Clamped to the stage, so the overlay is beside its node where there is room and at the
-   edge where there is not. Measured in CSS rather than in JavaScript because `100%` here
-   is the stage's width and stays correct through every resize and re-frame without a
-   layout read. Without the clamp the panel runs off the right edge on a narrow layout,
-   which puts a horizontal scrollbar on the whole page. */
-.hh-editor__anchor[data-anchored='true'] {
-  left: clamp(8px, var(--hh-anchor-x, 8px), calc(100% - var(--hh-anchor-width) - 8px));
-  top: clamp(8px, var(--hh-anchor-y, 8px), calc(100% - 48px));
-
-  /* And bounded by what is left *below the offset*, which the `max-height` above cannot
-     know about: it is a fraction of the stage, while `top` can already be within 48 px of
-     the stage's bottom. A panel anchored low therefore ran past the end of the stage, and
-     with the planner itself overflowing the window that put **Delete** and **Done** off
-     the bottom of the screen entirely — 52 px past the fold at 1280×720, with no way to
-     scroll to them, because scrolling the page moves the orbit view out from under the
-     node the panel is anchored to.
-
-     Same form as `.hh-mark`'s bound, and for the same reason. `max` keeps the panel from
-     collapsing when the anchor is itself near the bottom; `overflow-y: auto` above then
-     scrolls the panel's own content, so its footer is always reachable. */
-  max-block-size: max(9rem, calc(100% - var(--hh-anchor-y, 8px) - 8px));
-}
-
-.hh-editor__anchor[data-anchored='false'] {
-  right: 8px;
-  top: 8px;
-}
-
 /* ── The node editor overlay (§8.3.5, #137) ──────────────────────────────── *
  *
- * Anchored and **never modal**: no backdrop, no scroll lock, nothing that would stop the
+ * Parked and **never modal**: no backdrop, no scroll lock, nothing that would stop the
  * rest of the planner being used while it is open. It is a panel that happens to float.
  */
 
@@ -2662,10 +2734,11 @@ a.hh-card__link:focus-visible {
   pointer-events: none;
 }
 
-/* Clamped in CSS against the viewport rather than positioned in JavaScript, exactly as
-   `.hh-editor__anchor` is clamped against the stage: the clamp survives every resize and
-   every re-frame without a layout read, and without it a mark anchored to the commit bar
-   runs off the bottom of a short window. */
+/* Clamped in CSS against the viewport rather than positioned in JavaScript: the clamp
+   survives every resize and every re-frame without a layout read, and without it a mark
+   anchored to the commit bar runs off the bottom of a short window. A mark points at a
+   region and is dismissed in a second, which is why this one still follows its anchor
+   where the node editor above stopped — nothing is dragged while it is up. */
 .hh-mark[data-anchored='true'] {
   inset-inline-start: clamp(8px, var(--hh-mark-x, 8px), calc(100vw - var(--hh-mark-width) - 8px));
   inset-block-start: clamp(8px, var(--hh-mark-y, 8px), calc(100vh - 8rem));

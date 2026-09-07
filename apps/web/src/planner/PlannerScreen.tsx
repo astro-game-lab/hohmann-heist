@@ -14,9 +14,9 @@
  * only shows up on a rotating phone: the two trees are different components, so switching
  * unmounts one and mounts the other, and every piece of local state in them is gone.
  *
- * So there is **one tree**. The same `PlanPanel`, `Readouts` and `AssistTray` instances
- * are rendered at every width; what changes is whether they sit in a grid column or
- * inside a tab panel, and that is CSS plus one `hidden` attribute. The plan, the
+ * So there is **one tree**. The same `PlanPanel`, `Readouts` and `ContractPanel`
+ * instances are rendered at every width; what changes is whether they sit in a grid column
+ * or inside a tab panel, and that is CSS plus one `hidden` attribute. The plan, the
  * selection and the scrub position live above all of it in `usePlanner` regardless.
  *
  * The tab strip is therefore *also* present at every width and hidden by CSS above the
@@ -30,6 +30,23 @@
  * It is rendered outside the tab panel in both layouts, which is why it appears once here
  * and not twice.
  *
+ * ## Five siblings, in the narrow layout's order
+ *
+ * The HUD, the stage, the side panels, the timeline and the commit bar are siblings, in
+ * that order, and the wide layout is a grid that places out of it — the panels into a
+ * column of their own, the timeline and the commit bar into the column beside it. The
+ * side used to be *inside* the stage, which made the wide layout a row with the timeline
+ * and the commit bar stacked under the whole of it; a panel column taller than the stage
+ * then had nothing to be bounded by and painted straight over both. `app.css` has the
+ * layout half of that story.
+ *
+ * What belongs here is why the order is this one and not the grid's. It is the narrow
+ * layout's reading order, so below the breakpoint the boxes stack correctly with no
+ * `order` and no second tree, and at both widths the focus order is the visual one —
+ * which a grid that reorders its items cannot promise. The stage keeps the node editor
+ * and the context menu because both are positioned in the orbit view's pixel space
+ * (§8.3.5), and the stage is now exactly the orbit view's box.
+ *
  * ## Capabilities do not shrink with the viewport
  *
  * #123's second criterion asks for the narrow layout to have *"the same capabilities, not
@@ -38,7 +55,7 @@
  */
 import { arcAt, fromEpochTicks, type Plan, type Timeline } from '@hh/sim';
 import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
-import type { LoadedScenario } from '@hh/game';
+import type { AssistState, LoadedScenario } from '@hh/game';
 import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
 import {
@@ -52,13 +69,12 @@ import {
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
-import { AssistTray } from './AssistTray.js';
 import { NodeContextMenu } from './NodeContextMenu.js';
 import { bandsFor } from './constraint-bands.js';
-import { ContractPanel, contractPanelSession } from './ContractPanel.js';
+import { ContractPanel } from './ContractPanel.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
-import { useKeybindings } from '../settings/context.js';
+import { useKeybindings, useSetting } from '../settings/context.js';
 import { actionFor, isTypingTarget } from './keys.js';
 import { HudBar } from './HudBar.js';
 import { OrbitView } from './OrbitView.js';
@@ -72,7 +88,7 @@ import type { Evaluation } from './evaluate.js';
 import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf, type PlannerSeed } from './store.js';
 
 /** Which side panel the narrow layout is showing. Ignored above the breakpoint. */
-type Tab = 'plan' | 'readouts' | 'assists' | 'contract';
+type Tab = 'plan' | 'readouts' | 'contract';
 
 export interface PlannerScreenProps {
   readonly t: Catalogue['resolve'];
@@ -99,12 +115,31 @@ export interface PlannerScreenProps {
   readonly onCoachMarkSeen: (key: string) => void;
   /** Open the Codex over this screen, from a mark's *More in the Codex* (#161). */
   readonly onOpenCodex: (slug: string) => void;
+  /**
+   * Open §8.5.3's keyboard help — the shell's overlay, from the HUD's own control.
+   *
+   * The HUD has had that control since #127 and it did nothing: the overlay's state lives
+   * in `app.tsx`, because `?` is bound on every screen, and nothing carried the opener
+   * down here. The shell also painted a second, working copy of the same button into the
+   * corner of every route, so the planner had two — one dead, one floating over the panel
+   * column. This prop is the wire that lets there be one.
+   */
+  readonly onOpenHelp: () => void;
 }
 
 /** What crossing §8.5.1's last edge carries with it. */
 export interface CommittedRun {
   readonly plan: Plan;
   readonly evaluation: Evaluation;
+  /**
+   * §6.6's set as it stood at the commit — FR-301's *"a medal must reflect the assists
+   * actually enabled"*.
+   *
+   * Carried rather than re-read on the other side, because the setting can be changed
+   * while a run is flying: the debrief for this plan has to score the plan that was flown,
+   * not the switches the player is looking at afterwards.
+   */
+  readonly assists: AssistState;
   /** Where the scrub head was, so aborting can put it back (#145). */
   readonly scrubEpoch: Epoch;
   /** Which node was selected, likewise. */
@@ -133,30 +168,40 @@ export const PlannerScreen = ({
   coachMarksSeen,
   onCoachMarkSeen,
   onOpenCodex,
+  onOpenHelp,
 }: PlannerScreenProps): JSX.Element => {
-  const [state, actions] = usePlanner(scenario, seed ?? {});
+  /**
+   * §6.6's assists, from §8.3.12's setting — the only place they are chosen now.
+   *
+   * The planner used to carry a tray of seven switches (#140) beside a setting of the same
+   * seven that nothing read. One control, and it is the one that was already stored,
+   * already in the replay code's bitmask, and already reachable from this screen without
+   * unmounting it — Settings is an overlay over the planner, so a mid-plan change is two
+   * clicks and no lost work. `usePlanner` restricts it to what this contract offers.
+   */
+  const assistMask = useSetting('gameplay.assists');
+  const [state, actions] = usePlanner(scenario, seed ?? {}, assistMask);
   const [tab, setTab] = useState<Tab>('plan');
-  // Seeded from the session's value and written back on every change, so the preference
-  // survives the unmount a contract change causes — `contractPanelSession` says why it
-  // lives there rather than in component state or in the save (#264).
-  const [contractOpen, setContractOpen] = useState(contractPanelSession.open);
-  const toggleContract = useCallback(() => {
-    setContractOpen((was) => {
-      contractPanelSession.open = !was;
-      return !was;
-    });
-  }, []);
-  // Where the overlay's node is drawn, reported by the orbit view. `null` when it is off
-  // screen, or when the plan produced no trajectory to draw it on — see below.
-  const [anchor, setAnchor] = useState<{ readonly x: number; readonly y: number } | null>(null);
+  /**
+   * Where the open editor's node is drawn, reported by the orbit view, or `null` when it
+   * is off screen or the plan produced no trajectory to draw it on.
+   *
+   * A ref rather than state, and that is a consequence of the overlay no longer moving
+   * (see `.hh-editor__anchor` below). Nothing renders from this any more: its one reader
+   * is `nodeMenu`, which opens §8.5.2's menu at the node's drawn position and is an event
+   * handler, so it can read the current value at the moment it needs it. As state it
+   * re-rendered the whole planner on every frame in which the node moved — sixty times a
+   * second through a drag — to produce identical markup.
+   */
+  const anchor = useRef<{ readonly x: number; readonly y: number } | null>(null);
   /**
    * §8.5.2's context menu: which node it is acting on, and where it is anchored (#136).
    *
-   * The position is carried here rather than derived from `anchor`, because the two answer
-   * different questions. `anchor` is *where the node is drawn*, which is what §8.3.5's
-   * overlay follows; a menu opens *where the player asked*, which for a right-click two
-   * pixels off the marker is two pixels off the marker. The keyboard route has no pointer
-   * position and falls back to the node's own — see `openMenuForSelected` below.
+   * The position is carried here rather than read from `anchor`, because the two answer
+   * different questions. `anchor` is *where the node is drawn*; a menu opens *where the
+   * player asked*, which for a right-click two pixels off the marker is two pixels off the
+   * marker. The keyboard route has no pointer position and falls back to the node's own,
+   * which is the only thing `anchor` is still consulted for — see `nodeMenu` below.
    */
   const [menu, setMenu] = useState<{
     readonly nodeId: NodeId;
@@ -164,52 +209,14 @@ export const PlannerScreen = ({
   } | null>(null);
 
   /**
-   * Whether a pointer is currently held down inside the overlay.
-   *
-   * §8.3.5 anchors the editor to its node, and the editor's own controls *move* that node
-   * — so the two combine into a control that runs away from the finger using it. Dragging
-   * the epoch slider from T+0 to T+40m moved the slider 348 px across the stage and 75 px
-   * down, which is several times its own length: the thumb is released almost immediately
-   * and the drag cannot be completed at all. The same applies in miniature to the
-   * steppers, which walk out from under a repeated click.
-   *
-   * So the anchor is **suspended while the overlay is being operated by pointer**, and
-   * resumes on release. Not while it is merely open: following the node is the behaviour
-   * §8.3.5 asks for, and it is right when the node moves for a reason outside the panel —
-   * a drag in the orbit view, or a nudge from the keyboard, where nothing is being held.
-   * The freeze is scoped to exactly the case where following is self-defeating.
-   *
-   * A ref rather than state: it is read inside a callback that must keep a stable
-   * identity (`onAnchor` is in the orbit view's effect dependencies), and re-rendering on
-   * press would be work for something no one can see.
-   */
-  const anchorHeld = useRef(false);
-
-  /**
-   * The orbit view's anchor report, gated by the freeze above.
+   * The orbit view's anchor report.
    *
    * `useCallback` with no dependencies because `onAnchor` is a dependency of the effect
    * that installs the canvas listeners: a fresh identity per render would tear down and
    * rebuild the hit index, the framing and every listener sixty times a second.
    */
   const reportAnchor = useCallback((at: { readonly x: number; readonly y: number } | null) => {
-    if (anchorHeld.current) return;
-    setAnchor(at);
-  }, []);
-
-  // Released on the window, not the panel: a drag that leaves the slider still ends the
-  // gesture, and a pointer released outside would otherwise leave the anchor frozen for
-  // the rest of the session.
-  useEffect(() => {
-    const release = (): void => {
-      anchorHeld.current = false;
-    };
-    window.addEventListener('pointerup', release);
-    window.addEventListener('pointercancel', release);
-    return () => {
-      window.removeEventListener('pointerup', release);
-      window.removeEventListener('pointercancel', release);
-    };
+    anchor.current = at;
   }, []);
 
   const { model } = state;
@@ -365,8 +372,8 @@ export const PlannerScreen = ({
    * and the reasoning.
    *
    * Gated on §6.6's `constraints` assist, which is the flag #129 provides and #81's model
-   * scores: disabling it earns *Blind*. It reaches here from the same `AssistState` the tray
-   * writes, so there is one answer to "is preview on" rather than a prop and a setting.
+   * scores: disabling it earns *Blind*. It reaches here from the `AssistState` §8.3.12's
+   * setting supplies, so there is one answer to "is preview on" rather than two.
    *
    * A plan the engine could not evaluate has no constraints to band. That is not the same
    * as a legal plan and the timeline shows nothing rather than pretending it is clear —
@@ -493,9 +500,6 @@ export const PlannerScreen = ({
         case 'redo':
           actions.redo();
           break;
-        case 'toggleContract':
-          toggleContract();
-          break;
         case 'nodeMenu':
           // §8.8's canvas-parity rule: every pointer action on the orbit view has a
           // keyboard route, and this is the menu's. Anchored at the node's drawn position
@@ -505,7 +509,7 @@ export const PlannerScreen = ({
           if (at !== null) {
             const node = model.plan.nodes[at];
             if (node !== undefined)
-              setMenu({ nodeId: nodeIdOf(node), at: anchor ?? { x: 16, y: 16 } });
+              setMenu({ nodeId: nodeIdOf(node), at: anchor.current ?? { x: 16, y: 16 } });
           }
           break;
         case 'commit':
@@ -553,7 +557,7 @@ export const PlannerScreen = ({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [actions, anchor, menu, model, rebinds, scenario, state, toggleContract]);
+  }, [actions, menu, model, rebinds, scenario, state]);
 
   /**
    * §8.5.1's exit to EXECUTION.
@@ -583,6 +587,7 @@ export const PlannerScreen = ({
     onCommit({
       plan: committedPlan,
       evaluation,
+      assists: state.assists,
       scrubEpoch: model.scrub.epoch,
       selectedNodeId: lastSelected.current,
     });
@@ -614,9 +619,7 @@ export const PlannerScreen = ({
         burnCount={burnCount}
         startEpoch={scenario.startEpoch}
         scrubEpoch={model.scrub.epoch}
-        onOpenHelp={() => undefined}
-        contractOpen={contractOpen}
-        onToggleContract={toggleContract}
+        onOpenHelp={onOpenHelp}
       />
 
       <div class="hh-planner__stage">
@@ -658,105 +661,6 @@ export const PlannerScreen = ({
           onAnchor={reportAnchor}
         />
 
-        <div class="hh-planner__side">
-          <div class="hh-planner__tabs" role="tablist" aria-label={t('planner.tabsLabel', {})}>
-            {(
-              [
-                ['plan', t('planner.tab.plan', { count: model.plan.nodes.length })],
-                ['readouts', t('planner.tab.readouts', {})],
-                ['assists', t('planner.tab.assists', {})],
-                ['contract', t('planner.tab.contract', {})],
-              ] as const
-            ).map(([name, label]) => (
-              <button
-                key={name}
-                type="button"
-                role="tab"
-                id={`hh-tab-${name}`}
-                aria-selected={tab === name}
-                aria-controls={`hh-panel-${name}`}
-                data-testid={`planner-tab-${name}`}
-                onClick={() => {
-                  setTab(name);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {panel(
-            'plan',
-            <PlanPanel
-              t={t}
-              plan={model.plan}
-              startEpoch={scenario.startEpoch}
-              selectedIndex={index}
-              snappedKinds={snappedKinds}
-              dragging={
-                dragPreview === null || draggingInteraction === null
-                  ? null
-                  : {
-                      index: dragPreview.index,
-                      // An epoch drag carries ticks; a Δv drag leaves the epoch alone, so
-                      // the plan's own value is the live one for it.
-                      metSeconds:
-                        draggingInteraction.drag.kind === 'epoch'
-                          ? metAt(
-                              scenario.startEpoch,
-                              fromEpochTicks(draggingInteraction.drag.ticks),
-                            )
-                          : metAt(
-                              scenario.startEpoch,
-                              model.plan.nodes[dragPreview.index]?.epoch ?? scenario.startEpoch,
-                            ),
-                      progradeMps: dragPreview.progradeMps,
-                      radialMps: dragPreview.radialMps,
-                    }
-              }
-              onSelect={actions.selectIndex}
-              onDelete={actions.deleteIndex}
-              onExpand={actions.openEditor}
-              onOpenMenu={(nodeIndex) => {
-                const node = model.plan.nodes[nodeIndex];
-                if (node !== undefined) {
-                  setMenu({ nodeId: nodeIdOf(node), at: anchor ?? { x: 16, y: 16 } });
-                }
-              }}
-              onAdd={() => {
-                // §8.5.3's `N`: add a node at the scrub head. The pointer route — clicking
-                // the trajectory — is #133 and lands with the rest of the interactions.
-                actions.addNodeAt(model.scrub.epoch);
-              }}
-            />,
-          )}
-          {panel(
-            'readouts',
-            <Readouts t={t} orbit={orbit} approach={approach} startEpoch={scenario.startEpoch} />,
-          )}
-          {/*
-            The wide layout's collapsible half of #264: the section is in the column with
-            the other three and `contractOpen` decides whether it is there. In the narrow
-            layout the tab strip decides instead, which is why the panel is still mounted
-            when it is merely on another tab — that is #123's guarantee and a fourth panel
-            inherits it.
-          */}
-          {contractOpen || tab === 'contract'
-            ? panel(
-                'contract',
-                <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
-              )
-            : null}
-          {panel(
-            'assists',
-            <AssistTray
-              t={t}
-              assists={state.assists}
-              allowed={scenario.document.assistsAllowed ?? []}
-              onToggle={actions.setAssist}
-            />,
-          )}
-        </div>
         {menu === null || menuIndex === null ? null : (
           <NodeContextMenu
             t={t}
@@ -777,35 +681,14 @@ export const PlannerScreen = ({
             }}
           />
         )}
+        {/*
+          The overlay's berth is the top-right corner of the orbit view, at every width
+          and for every node. No position is written from here at all — `app.css` has the
+          whole of it, which is the point. See `.hh-editor__anchor` there for why the
+          panel stopped following the node §8.3.5 anchors it to.
+        */}
         {editorNode === undefined || editorIndex === null ? null : (
-          <div
-            class="hh-editor__anchor"
-            data-anchored={anchor !== null}
-            // Suspends the anchor for the duration of the gesture — see `anchorHeld`.
-            // On the container rather than on each control, so a stepper, a radio, the
-            // slider and a text field all get it without four copies of the same line.
-            onPointerDown={() => {
-              anchorHeld.current = true;
-            }}
-            // §8.3.5's "anchored to the node". Absolute over the stage when the orbit
-            // view can say where the node is drawn; docked at the edge when it cannot —
-            // the node is off screen, or the plan produced no trajectory — because an
-            // overlay pointing at nothing is worse than one that is merely nearby.
-            // The position goes out as custom properties and the *clamping* is CSS's,
-            // against the stage's own width — `clamp(…, calc(100% - …))`. Doing it here
-            // would mean measuring the stage and the panel on every frame of a re-frame
-            // ease; doing it there costs nothing and cannot go stale. Without it the
-            // overlay runs off the right edge on a narrow layout, which is a horizontal
-            // scrollbar on the whole page.
-            style={
-              anchor === null
-                ? undefined
-                : {
-                    '--hh-anchor-x': `${String(anchor.x + 16)}px`,
-                    '--hh-anchor-y': `${String(anchor.y)}px`,
-                  }
-            }
-          >
+          <div class="hh-editor__anchor">
             <NodeEditor
               t={t}
               node={editorNode}
@@ -835,6 +718,92 @@ export const PlannerScreen = ({
               onClose={actions.closeEditor}
             />
           </div>
+        )}
+      </div>
+
+      <div class="hh-planner__side">
+        <div class="hh-planner__tabs" role="tablist" aria-label={t('planner.tabsLabel', {})}>
+          {(
+            [
+              ['plan', t('planner.tab.plan', { count: model.plan.nodes.length })],
+              ['readouts', t('planner.tab.readouts', {})],
+              ['contract', t('planner.tab.contract', {})],
+            ] as const
+          ).map(([name, label]) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              id={`hh-tab-${name}`}
+              aria-selected={tab === name}
+              aria-controls={`hh-panel-${name}`}
+              data-testid={`planner-tab-${name}`}
+              onClick={() => {
+                setTab(name);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {panel(
+          'plan',
+          <PlanPanel
+            t={t}
+            plan={model.plan}
+            startEpoch={scenario.startEpoch}
+            selectedIndex={index}
+            snappedKinds={snappedKinds}
+            dragging={
+              dragPreview === null || draggingInteraction === null
+                ? null
+                : {
+                    index: dragPreview.index,
+                    // An epoch drag carries ticks; a Δv drag leaves the epoch alone, so
+                    // the plan's own value is the live one for it.
+                    metSeconds:
+                      draggingInteraction.drag.kind === 'epoch'
+                        ? metAt(scenario.startEpoch, fromEpochTicks(draggingInteraction.drag.ticks))
+                        : metAt(
+                            scenario.startEpoch,
+                            model.plan.nodes[dragPreview.index]?.epoch ?? scenario.startEpoch,
+                          ),
+                    progradeMps: dragPreview.progradeMps,
+                    radialMps: dragPreview.radialMps,
+                  }
+            }
+            onSelect={actions.selectIndex}
+            onDelete={actions.deleteIndex}
+            onExpand={actions.openEditor}
+            onOpenMenu={(nodeIndex) => {
+              const node = model.plan.nodes[nodeIndex];
+              if (node !== undefined) {
+                setMenu({ nodeId: nodeIdOf(node), at: anchor.current ?? { x: 16, y: 16 } });
+              }
+            }}
+            onAdd={() => {
+              // §8.5.3's `N`: add a node at the scrub head. The pointer route — clicking
+              // the trajectory — is #133 and lands with the rest of the interactions.
+              actions.addNodeAt(model.scrub.epoch);
+            }}
+          />,
+        )}
+        {panel(
+          'readouts',
+          <Readouts t={t} orbit={orbit} approach={approach} startEpoch={scenario.startEpoch} />,
+        )}
+        {/*
+          #264's fourth panel, and no longer optional. It was collapsible, with a control in
+          the HUD and `B` to toggle it, on the theory that the brief is read once and then in
+          the way; in use it is the opposite — the objective, the Δv budget, the deadline and
+          the par are what a player checks against on every burn, and a panel that has to be
+          summoned to answer "how close is close enough" is one that gets summoned every
+          time. The column scrolls, so its cost is a scroll rather than a hidden region.
+        */}
+        {panel(
+          'contract',
+          <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
         )}
       </div>
 

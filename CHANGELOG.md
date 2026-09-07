@@ -11,6 +11,80 @@ they relied on has moved.
 
 ## [Unreleased]
 
+### Fixed
+- **The planner's panel column painted over the timeline and the commit bar.** The wide
+  layout was a row *inside* the stage — orbit view beside the panels — with the timeline and
+  the commit bar stacked under the whole width. That arrangement can express no height for
+  the panels: the column stretched to the stage and its contents simply carried on past the
+  bottom edge, over the Δv slider and **Commit plan** and out of the window, which also gave
+  the page a scrollbar it should never have. With the contract panel open (#264) that is the
+  ordinary state of C05, not an edge case. The grid is on the planner itself now and the
+  panels are one of its columns, running from under the HUD to the bottom of the commit bar,
+  so the timeline and the commit bar end where the panels begin and the panels scroll against
+  their own column instead of against the document. jsdom has no layout, so what a test can
+  hold is the shape the grid places out of — the five regions and their order — and one now
+  does.
+
+### Changed
+- **§6.6's assists are chosen in Settings, and the planner's assist tray is gone — and this
+  fixes a bug rather than only moving a panel.** There were two controls over the same seven
+  switches: the tray in the planner's panel column, and §8.3.12's *default assist set* in the
+  save. The second was written and **read by nothing**. The planner started every contract
+  from `defaultAssistState()`, and — worse — `ContractScreen` scored the run and built its
+  replay code from those same defaults, so a run planned with the tray's switches moved was
+  judged as though they had not been. FR-301 asks for the opposite in as many words: *"MUST
+  NOT award a medal the player did not earn under the assists actually enabled."*
+  One control now, and it is the one that was already stored, already in §11.6's replay
+  bitmask, and already reachable without unmounting the planner — Settings renders as an
+  overlay over the screen you are on. `usePlanner` reads it, restricted to what the contract
+  offers, and reacts to a change made while a plan is open; the committed run carries the set
+  it was planned under, so the debrief scores the flight rather than the switches as they
+  stand afterwards. FR-411's medal effects and the resulting cap moved with the switches:
+  each row in Settings states its effect *and its direction* — turning closest-approach
+  markers off earns **Blind**, turning the targeting computer on caps at **Silver** — with
+  the cap stated above them.
+- **The contract panel is always there, and the control that summoned it is gone.** #264
+  shipped it collapsible — a toggle in the HUD, `B` to flip it, and a session preference so
+  a player who wanted it up did not re-open it on every contract. What that preference was
+  recording is that everyone who opened it left it open: the objective, the Δv budget, the
+  deadline and the par are checked against on every burn, not read once, so a panel that had
+  to be summoned to answer "how close is close enough" was summoned every time. It is now the
+  fourth panel unconditionally; the column scrolls, so what it costs is a scroll rather than
+  a hidden region. `B` is unbound and out of §8.5.3's table rather than left as a key that
+  does nothing.
+- **One *Keyboard help* on the planner instead of two.** The shell paints a help affordance
+  into the corner of every route, because there are twelve routes and only two have chrome
+  to put a control in — and the planner is one of the two, so it had the shell's floating
+  copy *and* its own in the HUD. Worse, the HUD's had never been wired: the overlay's state
+  lives in the shell, and nothing carried the opener down to the screen. The HUD's control
+  now opens it, and the shell's is unmounted while the planner is showing — unmounted rather
+  than hidden, because a button that is only invisible is still in the tab order. Every other
+  route keeps the floating one.
+- **The planner's *Settings* is a button rather than a link**, so the three controls at that
+  end of the HUD read as one row of the same thing. It is still the `#/settings` route, which
+  renders as an overlay over whatever screen is showing, so the plan survives it.
+- **The commit bar is one row: undo, redo, *Commit plan*, and §6.4's reasons.** It was three
+  stacked blocks, the middle one a full-width list holding a single sentence above a button
+  130 px wide — two rows of a screen where the orbit view is already shrinking to keep this
+  bar above the fold at 720p, spent on width nothing was using. Nothing is truncated to fit:
+  six reasons can be true at once and the longest is 68 characters before §8.9's +40%, so
+  the row wraps, and on a phone it becomes three. The reasons keep their association with
+  the button by `aria-describedby`, which is by id and not by position, and the list carries
+  `role="list"` because laying the items out in a line removes their markers and VoiceOver
+  drops the list semantics with them.
+- **The node editor is parked in the orbit view's top-right corner instead of following its
+  node.** §8.3.5 asked for "anchored to the node" and that is what it did, with three
+  consequences that cannot be fixed while the panel moves: the editor's own controls move the
+  node, so the panel ran away from the pointer using it — patched for pointer gestures by
+  freezing the anchor, which left the keyboard steppers still moving it; it covered the part
+  of the trajectory being edited; and anchored low it needed a maximum height and an inner
+  scrollbar, which put **Delete** and **Done** behind a scroll. Parked, it is a fixed berth
+  aligned with the zoom and recentre controls down the same edge, and it needs no scrolling at
+  all in any window tall enough to hold it — the bound remains, because the alternative on a
+  short window is the panel painting over the timeline. §8.3.5 is updated to match. The
+  anchor the orbit view reports is now a ref rather than state: nothing renders from it, and
+  as state it re-rendered the planner on every frame in which the node moved.
+
 ## [0.2.0] — 2026-09-07
 
 > **Two of M3's exit criteria were not met at this tag, and this is the record of that.**

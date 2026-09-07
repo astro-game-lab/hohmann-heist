@@ -39,7 +39,7 @@ import type { BudgetEvaluation, BurnCountEvaluation } from '@hh/game';
 import type { Catalogue } from '@hh/ui';
 import type { JSX } from 'preact';
 
-import { hrefFor } from '../router.js';
+import { hrefFor, navigate } from '../router.js';
 import { Value } from './Value.js';
 
 export interface HudBarProps {
@@ -58,10 +58,8 @@ export interface HudBarProps {
   readonly startEpoch: Epoch;
   /** Where the scrub head is. MET is read from here, never from a clock (FR-403). */
   readonly scrubEpoch: Epoch;
+  /** Opens §8.5.3's overlay. The shell owns it — see the docstring. */
   readonly onOpenHelp: () => void;
-  /** Whether §8.3.3's contract panel is showing — #264. */
-  readonly contractOpen: boolean;
-  readonly onToggleContract: () => void;
 }
 
 export const HudBar = ({
@@ -73,8 +71,6 @@ export const HudBar = ({
   startEpoch,
   scrubEpoch,
   onOpenHelp,
-  contractOpen,
-  onToggleContract,
 }: HudBarProps): JSX.Element => {
   const metSeconds = metAt(startEpoch, scrubEpoch);
   // `fraction` is `Infinity` for a zero budget with any spend, which would make the bar's
@@ -144,28 +140,26 @@ export const HudBar = ({
         <span data-testid="hud-met">{t('planner.hud.met', { metSeconds })}</span>
       </div>
 
+      <button type="button" class="hh-hud__control" data-testid="hud-help" onClick={onOpenHelp}>
+        {t('planner.hud.help', {})}
+      </button>
       {/*
-        #264's discoverable control, beside `?` and `⚙` where §8.3.3's other
-        always-available affordances live. `aria-pressed` rather than a label that changes:
-        the control's name is what it shows, and its state is the button's own — a control
-        that renamed itself between "Show contract" and "Hide contract" would be announced
-        as a different control each time it was used.
+        A button rather than the link this was, so the three controls at this end of the
+        HUD are one row of the same thing rather than two buttons and a piece of underlined
+        text. It is a real navigation — `#/settings` is a §8.2 route — but the route renders
+        as an overlay over whatever screen is showing, so nothing here is unmounted and the
+        plan survives it; `SettingsOverlay` says how at length.
       */}
       <button
         type="button"
         class="hh-hud__control"
-        aria-pressed={contractOpen}
-        data-testid="hud-contract-toggle"
-        onClick={onToggleContract}
+        data-testid="hud-settings"
+        onClick={() => {
+          navigate('/settings');
+        }}
       >
-        {t('planner.contract.toggle', {})}
-      </button>
-      <button type="button" class="hh-hud__control" onClick={onOpenHelp}>
-        {t('planner.hud.help', {})}
-      </button>
-      <a class="hh-hud__control" href={hrefFor('/settings')}>
         {t('planner.hud.settings', {})}
-      </a>
+      </button>
     </header>
   );
 };

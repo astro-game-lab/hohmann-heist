@@ -19,7 +19,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { contractById } from '../contracts/registry.js';
 import { Briefing } from '../screens/Briefing.js';
-import { contractPanelSession } from './ContractPanel.js';
 import { PlannerScreen } from './PlannerScreen.js';
 
 const catalogue = createCatalogue();
@@ -53,6 +52,7 @@ const mountPlanner = async (id = 'c07-slot-machine'): Promise<void> => {
         coachMarksSeen={[]}
         onCoachMarkSeen={() => undefined}
         onOpenCodex={() => undefined}
+        onOpenHelp={() => undefined}
       />,
       container,
     );
@@ -73,26 +73,9 @@ const mountBriefing = async (id = 'c07-slot-machine'): Promise<void> => {
   });
 };
 
-/**
- * Open the panel through the HUD control, which is the discoverable route.
- *
- * Idempotent: the preference persists for the session by design, so a second click would
- * *close* a panel a previous test had left open. That is the feature working, and a helper
- * that ignored it would be testing itself.
- */
-const openContract = async (): Promise<void> => {
-  if (el('contract-panel') !== null) return;
-  await act(() => {
-    el('hud-contract-toggle')?.click();
-  });
-};
-
 beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
-  // The session preference outlives a component, which is exactly what #264 asks for — so
-  // each test starts from the documented default rather than from its predecessor.
-  contractPanelSession.open = false;
 });
 
 afterEach(() => {
@@ -107,7 +90,6 @@ describe('the panel and the briefing cannot drift (#264’s second criterion)', 
     render(null, container);
 
     await mountPlanner(id);
-    await openContract();
     const fromPanel = text(testId);
 
     expect(fromPanel, `${id} · ${testId}`).toBe(fromBriefing);
@@ -142,103 +124,67 @@ describe('the panel and the briefing cannot drift (#264’s second criterion)', 
   });
 });
 
-describe('opening and closing it (#264)', () => {
-  it('is closed on a first visit', async () => {
+describe('the panel is always there (#264)', () => {
+  it('is showing on a first visit, with no control to summon it', async () => {
     await mountPlanner();
-    expect(el('contract-panel')).toBeNull();
-  });
-
-  it('opens from the HUD control, which is beside ? and ⚙', async () => {
-    await mountPlanner();
-    await openContract();
     expect(el('contract-panel')).not.toBeNull();
+    // The HUD's toggle and its `B` binding are gone with the collapsing: everyone who
+    // opened the panel left it open, which is what the session preference was recording.
+    expect(el('hud-contract-toggle')).toBeNull();
   });
 
-  it('reports its state on the control rather than renaming it', async () => {
-    await mountPlanner();
-    const toggle = el('hud-contract-toggle');
-    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
-    const before = toggle?.textContent;
-    await openContract();
-    expect(el('hud-contract-toggle')?.getAttribute('aria-pressed')).toBe('true');
-    // A control that renamed itself would be announced as a different control each time.
-    expect(el('hud-contract-toggle')?.textContent).toBe(before);
-  });
-
-  it('opens from the keyboard too', async () => {
-    await mountPlanner();
-    await press('b');
-    expect(el('contract-panel')).not.toBeNull();
-    await press('b');
-    expect(el('contract-panel')).toBeNull();
-  });
-
-  it('offers a fourth tab in the narrow strip', async () => {
-    await mountPlanner();
-    // #123's strip already carries plan, readouts and assists; a fourth costs no new state
-    // machinery because every panel is mounted at once and hidden with `hidden`.
-    expect(el('planner-tab-contract')).not.toBeNull();
-  });
-
-  it('stays open across a contract change, for the session', async () => {
+  it('survives a contract change, because it is not a preference any more', async () => {
     await mountPlanner('c03-cold-open');
-    await openContract();
     expect(el('contract-panel')).not.toBeNull();
 
-    // A contract change unmounts the whole planner, which is why component state cannot
-    // carry this and `contractPanelSession` exists. #264: *"a player who wants it up does
-    // not re-open it on every contract."*
     render(null, container);
     await mountPlanner('c07-slot-machine');
     expect(el('contract-panel')).not.toBeNull();
     expect(text('contract-title')).toContain(contract('c07-slot-machine').document.title);
   });
 
-  it('is not written to save data', async () => {
-    await mountPlanner('c03-cold-open');
-    await openContract();
-    // *"Not saved to storage: this is a view preference, and `apps/web/src/save/` is for
-    // progress."* Asserted against storage itself rather than by inspecting the save
-    // module, so any route to persistence would fail it.
-    const stored = Object.keys(localStorage).map((key) => localStorage.getItem(key) ?? '');
-    expect(stored.some((value) => value.includes('contract') && value.includes('open'))).toBe(
-      false,
-    );
-  });
-
-  it('shows the panel when its tab is selected, without the HUD toggle', async () => {
+  it('is one of four tabs in the narrow strip', async () => {
     await mountPlanner();
+    // #123's strip already carried plan, readouts and assists; the fourth costs no new
+    // state machinery because every panel is mounted at once and hidden with `hidden`.
+    expect(el('planner-tab-contract')).not.toBeNull();
     await act(() => {
       el('planner-tab-contract')?.click();
     });
     expect(el('contract-panel')).not.toBeNull();
   });
+
+  it('is not written to save data', async () => {
+    await mountPlanner('c03-cold-open');
+    // *"Not saved to storage: this is a view preference, and `apps/web/src/save/` is for
+    // progress."* Nothing about the panel is a preference now, and the assertion is kept
+    // as the guard it was: no route to persistence, checked against storage itself.
+    const stored = Object.keys(localStorage).map((key) => localStorage.getItem(key) ?? '');
+    expect(stored.some((value) => value.includes('contract') && value.includes('open'))).toBe(
+      false,
+    );
+  });
 });
 
-describe('opening it changes nothing (§8.8, #264)', () => {
+describe('showing it changes nothing (§8.8, #264)', () => {
   it('leaves the plan, the selection and the scrub head alone', async () => {
     await mountPlanner('c03-cold-open');
     await press('n');
     await press(']');
-    const plan = text('plan-panel');
-    const met = text('hud-met');
-    const selected = el('plan-node-0')?.getAttribute('aria-pressed');
-
-    await openContract();
-    expect(text('plan-panel')).toBe(plan);
-    expect(text('hud-met')).toBe(met);
-    expect(el('plan-node-0')?.getAttribute('aria-pressed')).toBe(selected);
-
-    await openContract();
-    expect(text('plan-panel')).toBe(plan);
-    expect(text('hud-met')).toBe(met);
+    // The panel is on screen throughout — there is no opening act left to perform — so
+    // what this asserts is the other half of #264's rule: a planner *with* the contract
+    // showing edits exactly as one without it did. The panel takes a scenario and a
+    // catalogue and no callbacks, which is why there is nothing here that could.
+    expect(el('contract-panel')).not.toBeNull();
+    expect(text('plan-panel')).toContain('1');
+    expect(text('hud-met')).not.toBe('');
+    expect(el('plan-node-0')?.getAttribute('aria-pressed')).toBe('true');
   });
 });
 
 describe('every string comes from the catalogue (FR-910, D14)', () => {
   it('resolves the brief itself by key', async () => {
     await mountPlanner();
-    await openContract();
     // The brief is data — a `briefKey` on the contract — so a panel showing it must go
     // through `resolveDynamic` rather than carrying prose.
     expect(text('contract-brief')).not.toBe('');
@@ -247,7 +193,6 @@ describe('every string comes from the catalogue (FR-910, D14)', () => {
 
   it('names the contract by index and title', async () => {
     await mountPlanner();
-    await openContract();
     expect(text('contract-title')).toContain(contract('c07-slot-machine').document.title);
   });
 });

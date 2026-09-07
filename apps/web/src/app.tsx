@@ -216,6 +216,8 @@ interface BodyContext {
   readonly onCoachMarkSeen: (key: string) => void;
   /** Open the Codex over the planner, without unmounting it. See `CodexOverlay`. */
   readonly onOpenCodex: (slug: string) => void;
+  /** Open §8.5.3's overlay from a screen that carries its own control for it. */
+  readonly onOpenHelp: () => void;
 }
 
 /** §8.7's replay rows, for `/#/replay?s=…&r=…`. */
@@ -338,6 +340,7 @@ const bodyFor = (route: Route, context: BodyContext): JSX.Element => {
           coachMarksSeen={save.flags.coachMarksSeen}
           onCoachMarkSeen={context.onCoachMarkSeen}
           onOpenCodex={context.onOpenCodex}
+          onOpenHelp={context.onOpenHelp}
           {...(nextScenario === undefined
             ? {}
             : {
@@ -503,6 +506,16 @@ const AppShell = ({
 
   const [scope, setScope] = useState<KeyScope | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  /**
+   * The pointer route to the overlay, for a screen that has somewhere to put it.
+   *
+   * `useCallback` because it goes down through `bodyFor` into the contract screen and the
+   * planner, and a fresh identity per render would be one more thing for those to memo
+   * around. The state stays here for the reason `?` does — see the handler below.
+   */
+  const openHelp = useCallback(() => {
+    setHelpOpen(true);
+  }, []);
 
   /**
    * §8.5.3's `C` — the Codex for the current concept (#161).
@@ -708,24 +721,32 @@ const AppShell = ({
               onCodexRead,
               onCoachMarkSeen,
               onOpenCodex: setCodexSlug,
+              onOpenHelp: openHelp,
             })
           )}
         </ErrorBoundary>
         {/*
         §8.5.3's `?` needs a pointer route too — the keyboard-only path cannot be the only
-        path (#124). One affordance in the shell rather than one per screen, for the same
-        reason the handler is here.
+        path (#124). One affordance in the shell rather than one per screen, because there
+        are twelve routes and only two of them have chrome to put a control in.
+
+        The planner is one of the two, and it is the exception: its HUD carries the same
+        control, so the shell's copy was a second *Keyboard help* on the one screen that
+        did not need it — floating over the panel column, at that. `scope` is how the
+        contract screen already tells the shell which phase is showing (see the handler
+        above), so this costs no new channel. Unmounted rather than hidden: a button that
+        is only invisible is still in the tab order.
       */}
-        <button
-          type="button"
-          class="hh-help-affordance"
-          data-testid="open-help"
-          onClick={() => {
-            setHelpOpen(true);
-          }}
-        >
-          {t('help.open', {})}
-        </button>
+        {scope === 'planner' ? null : (
+          <button
+            type="button"
+            class="hh-help-affordance"
+            data-testid="open-help"
+            onClick={openHelp}
+          >
+            {t('help.open', {})}
+          </button>
+        )}
         {helpOpen ? (
           <HelpOverlay
             t={t}
