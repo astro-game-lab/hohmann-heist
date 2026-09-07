@@ -348,3 +348,67 @@ describe('the tessellation cache', () => {
     expect(cache.stats.misses).toBe(afterFirst);
   });
 });
+
+describe('a plan that escapes Earth (§6.4’s L4)', () => {
+  /**
+   * The scene the crash happened in, built from a burn big enough to open the conic.
+   *
+   * ~3.2 km/s prograde from a 7 000 km orbit leaves `e > 1`. Every layer here has to cope:
+   * the arc is tessellated as a hyperbola (it already was), drawn as a dashed path rather
+   * than as equal-time dots (it already was — dots per *revolution* is not a thing an open
+   * arc has), and the ship marker and its trail are sampled on it, which is where
+   * `keplerianSampler` threw and took the whole planner to §8.7's error screen.
+   */
+  const escaping = (): SceneRequest => {
+    const plan = createPlan([maneuverNodeFromCounts(Math.round(600 * 1024), [0, 32_000_000, 0])]);
+    const result = buildTimeline({
+      startEpoch: epoch(0),
+      initialState: stateFromElements(orbit(7_000_000), MU_EARTH),
+      plan,
+      horizon: epoch(6 * 3600),
+      mu: MU_EARTH,
+    });
+    if (!result.ok) throw new Error(`fixture timeline failed to build: ${JSON.stringify(result)}`);
+    const timeline = result.timeline;
+    const open = timeline.arcs[timeline.arcs.length - 1];
+    expect(open?.elements.eccentricity ?? 0).toBeGreaterThan(1);
+
+    return request({
+      timeline,
+      scrubEpoch: epoch(1200),
+      ship: {
+        id: 'ship',
+        kind: 'ship',
+        elements: open?.elements ?? orbit(7_000_000),
+        mu: MU_EARTH,
+        offsetSeconds: 600,
+      },
+      nodes: timeline.impulses.map((impulse, index) => ({
+        id: `node-${String(index)}`,
+        state: impulse.after,
+        selected: false,
+      })),
+    });
+  };
+
+  it('builds a frame instead of throwing', () => {
+    expect(() => buildScene(escaping())).not.toThrow();
+  });
+
+  it('still draws the ship, which is the region the throw came from', () => {
+    const { scene } = buildScene(escaping());
+    expect(scene.layers.markers?.length ?? 0).toBeGreaterThan(0);
+    // And the trail behind it, which is the other sampler call on the same arc.
+    expect(scene.layers.trails?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('draws the open arc as a dashed path rather than as equal-time dots', () => {
+    const { scene } = buildScene(escaping());
+    const planned = scene.layers['planned-trajectory'] ?? [];
+    // §9.3's dots are discs; an arc with no period falls back to a dashed polyline, which
+    // is the branch `equalTimeDots` refuses to serve. Both are §6.4's `L4` being shown
+    // rather than hidden: the player has to see the thing they are being told about.
+    expect(planned.some((primitive) => primitive.kind === 'polyline')).toBe(true);
+    expect(planned.every((primitive) => primitive.kind !== 'disc')).toBe(true);
+  });
+});
