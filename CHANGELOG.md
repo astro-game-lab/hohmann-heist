@@ -11,6 +11,27 @@ they relied on has moved.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-07
+
+> **Two of M3's exit criteria were not met at this tag, and this is the record of that.**
+>
+> §14.1's M3 row asks for *"Contracts 01–07; contract board; medals and par; settings; two
+> colour palettes; keyboard-complete planner; Codex entries for Acts I–II; axe clean.
+> **Public alpha announced.**"* Everything but the last is shipped and checked below.
+>
+> Outstanding:
+>
+> - **§13's eight playtest sessions have not been run** — #209, the M3 round, and #208, the
+>   round waived at `v0.1.0` and deferred to run here alongside it. §14.1's own note on that
+>   waiver says M3's criteria *"are unchanged and are not waivable by this precedent"*, so
+>   this is a second deliberate call rather than the first one continuing.
+> - **The public alpha has not been announced** — #278.
+>
+> What that costs is what it cost at `v0.1.0`, now over seven contracts instead of one:
+> the alpha's usability is **unmeasured**, not good or bad, and the first external signal
+> will arrive as whatever a player volunteers. Nothing here should be described as
+> playtested.
+
 ### Added
 - **The two teaching surfaces: §8.6's coach marks and §8.3.10's Codex (#159, #160, #161,
   #163).** The game could already be played and could not yet explain itself. Both halves land
@@ -273,6 +294,57 @@ they relied on has moved.
   a rule may not suppress the focus ring without drawing one another way.
 
 ### Fixed
+- **Twelve bugs found by exploratory testing of the built app (#265–#276).** Driven through
+  the Playwright MCP server against the preview build rather than read out of the code, and
+  worth recording as a group because of *why* the suite was green throughout: jsdom has no
+  layout, so nothing that overflows a viewport can fail a test there, and no user-agent
+  stylesheet, so an unstyled button computes the same either way. The two worst were found
+  by clicking.
+
+  **A coach mark covered *Commit plan* and swallowed its clicks (#272).** The first mark a
+  new player sees is anchored to the orbit view, which reaches to within 8 px of the
+  timeline, so "under the anchor" was exactly on top of the commit bar — `elementFromPoint`
+  at the button's centre returned the card's *More in the Codex* button. A first-time player
+  with a legal plan could not fly it. Placement now tries four positions and takes the first
+  that covers no control; the first attempt at the fix reserved the commit bar *by name* and
+  merely moved the problem onto the HUD, which is why the rule is stated as what it is.
+
+  **The frame never fitted the viewport (#265, #268, #269).** `body` carried
+  `min-height: 100vh`, but `#app` and `main` were plain blocks, so the screen heading's
+  `margin-block-start` collapsed out through both and applied *outside* that box: every route
+  was ~21 px too tall, including ones whose content fitted easily. `#app` is a flex column of
+  exactly `100dvh` now — flex stops the collapse, and the definite height is what lets a
+  `flex: 1` child resolve against the window instead of its own content. That is what let the
+  planner's orbit view shrink to bring **Commit plan** back on screen at 1280×720 and 1366×768,
+  where it had been entirely below the fold, and what stopped the title screen's canvas sizing
+  the grid row that was supposed to be sizing it.
+
+  **Buttons rendered as browser chrome (#267).** There was no bare `button` rule; the four
+  scoped ones mostly set padding without clearing the user-agent defaults, so **Accept**,
+  **Commit plan**, 36 of Settings' 37 controls and the help affordance on all twelve routes
+  drew Chrome's `2px outset` bevel. It was the same grey in all five palettes, so a third of
+  the interactive surface did not respond to §8.3.12's colour setting at all.
+
+  **Two readings of one node disagreed (#270).** `editorSnappedTo` compared
+  `snapToNamedApsis(...) === node.epoch` exactly; a snapped epoch is quantised at node
+  construction (FR-105) and the finder's is not, so the editor reported every snapped node as
+  *free* while the plan row beside it drew the apsis caret. `apsisAt`'s docstring names that
+  exact trap, and both readings come from it now.
+
+  **A typed epoch past the horizon threw (#271).** `requireNodesWithinHorizon` fired inside
+  `apply`'s `setState` updater and escaped through Preact's render; the node stayed put only
+  because the update aborted, and the field kept the rejected value so every later edit threw
+  again. `nudgeEpochBy` twenty lines away had clamped against exactly this since it was
+  written. Typed entry now refuses out-of-window input the way §8.3.5 asks — *"previous value
+  restored, never silently clamped"* — with a clamp behind it.
+
+  And four that pointed nowhere: the debrief's **Next contract** was hardcoded disabled from
+  M2 and told every player C01 was the last contract in a build with seven (#273); the title's
+  **Codex** entry linked to a slug no entry has (#274); the footer specified for *"every
+  screen"* was on two of twelve, so the planner and execution carried no version (#275); every
+  Codex entry printed its title twice (#276); and there was no favicon, which made a 404 the
+  only console error on a clean load (#266).
+
 - **Coach marks were two flags pretending to be one (#159).** §8.3.12's Gameplay group carried
   a `gameplay.coachMarks` boolean and §6.6 carried the `coach_marks` assist, and nothing tied
   them together: turning marks off in Settings and turning them off in the assist tray were
