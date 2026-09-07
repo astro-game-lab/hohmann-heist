@@ -36,9 +36,8 @@
  *
  * `@hh/ui`'s table names a region — `orbit`, `timeline`, `commit`, `burns`, `readouts` —
  * and each is marked with `data-hh-anchor` where it is drawn. The measured position goes
- * out as custom properties and CSS clamps it to the viewport, which is the arrangement
- * `.hh-editor__anchor` already uses and for the same reason: the clamp stays correct
- * through every resize without a layout read.
+ * out as custom properties and CSS clamps it to the viewport rather than JavaScript
+ * clamping it here: the clamp stays correct through every resize without a layout read.
  *
  * If the anchor is not on screen — wrong tab, narrow layout, a region this contract does
  * not have — the mark **docks** rather than floating unattached. A hint pointing at

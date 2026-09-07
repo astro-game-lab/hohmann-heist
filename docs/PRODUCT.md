@@ -898,17 +898,19 @@ This is the game. It gets the most specification.
 │                                                   │  Δv_rel   0.02 m/s   ✓   │
 │                                                   ├──────────────────────────┤
 │                                                   │  ASSISTS      ▣▣▣□□      │ ⑤ assist tray
-├───────────────────────────────────────────────────┴──────────────────────────┤
-│ ② TIMELINE                                                                   │
-│  0h        2h        4h        6h        8h       10h       12h    ▐ 14h     │
-│  ├─────────┼─────────┼─────────┼─────────┼─────────┼─────────┼─────┼──────┤  │
-│  │◆1                                                          ◆2  ✓        │  │
-│  ●────────────────────────────────────────────────────────────────────       │
-│  ▲ scrub T+00:00:00                                        deadline ▐        │
-│                                                                              │
-│           [ ⟲ UNDO ]  [ ⟳ ]                    [ ▶ COMMIT PLAN ]              │
-└──────────────────────────────────────────────────────────────────────────────┘
+├───────────────────────────────────────────────────┤                          │
+│ ② TIMELINE                                        │  the panel column        │
+│  0h     2h     4h     6h     8h   ▐ 10h           │  continues past the      │
+│  ├──────┼──────┼──────┼──────┼──────┤             │  timeline and the        │
+│  │◆1                        ◆2  ✓   │             │  commit bar, and         │
+│  ●──────────────────────────────    │             │  scrolls on its own      │
+│  ▲ scrub T+00:00:00      deadline ▐ │             │  when it is taller       │
+│                                                   │  than the window         │
+│    [ ⟲ UNDO ]  [ ⟳ ]   [ ▶ COMMIT PLAN ]          │                          │
+└───────────────────────────────────────────────────┴──────────────────────────┘
 ```
+
+The panel column is a column of the screen rather than of the orbit view: it runs from under the HUD to the bottom of the commit bar and scrolls within itself. The timeline and the commit bar therefore end at its edge rather than passing under it, and a panel taller than the window scrolls against its own column rather than against the page — the orbit view, the timeline and the commit bar stay where they are while a long contract is read.
 
 **Regions:**
 
@@ -965,7 +967,9 @@ The three side panels collapse into a tab strip. The timeline stays visible at a
 
 #### 8.3.5 Node editor (overlay)
 
-Opened by `⤢` on a node, by double-clicking a node marker, or by `E` with a node selected. Anchored to the node, never modal.
+Opened by `⤢` on a node, by double-clicking a node marker, or by `E` with a node selected. Parked in the orbit view's top-right corner, never modal.
+
+It was specified as *anchored to the node*, and was built that way. Three things follow from a panel that moves, and none of them are fixable while it does: the editor's own controls move the node, so the panel runs away from the pointer dragging its slider; it covers the part of the trajectory the player is editing; and anchored low it needs a maximum height and an inner scrollbar, which puts **Delete** and **Done** behind a scroll. A fixed berth — aligned with the zoom and recentre controls down the same edge of the view — costs the pointing-at-the-node affordance, which the node marker's own selection highlight already provides, and buys a panel that can be read while something else is being dragged.
 
 ```
         ┌────────────────────────────────────┐

@@ -112,6 +112,35 @@ describe('the five regions of §8.3.4 (#123)', () => {
     }
   });
 
+  it('keeps the side panels beside the stage rather than inside it', async () => {
+    await mount();
+    const planner = container.querySelector('.hh-planner');
+    const stage = container.querySelector('.hh-planner__stage');
+    const side = container.querySelector('.hh-planner__side');
+    expect(side).not.toBeNull();
+    // The wide layout is a grid over these five, and it can only put the timeline and the
+    // commit bar in the column *beside* the panels — rather than under the whole width,
+    // where a panel column taller than the stage painted over them — if the panels are a
+    // sibling of the stage. jsdom has no layout engine, so this is the shape the grid
+    // places out of, asserted where it can be: the regions and their order, which is also
+    // the narrow layout's reading order and therefore the focus order at both widths.
+    expect(stage?.contains(side ?? null)).toBe(false);
+    expect(
+      [...(planner?.children ?? [])]
+        .map((child) => child.className)
+        .filter((name) => name.length > 0),
+    ).toStrictEqual([
+      'hh-hud',
+      'hh-planner__stage',
+      'hh-planner__side',
+      'hh-timeline',
+      'hh-commit',
+      // The coach mark's live region, last and always mounted — it is `position: fixed`
+      // and so takes part in neither the grid nor the flow. `CoachMark.tsx` says why.
+      'hh-mark',
+    ]);
+  });
+
   it('mounts all three panels at once, so a layout switch cannot lose their state', async () => {
     await mount();
     // The narrow layout hides two of them with `hidden`; it does not unmount them. That
@@ -678,17 +707,20 @@ describe('commit (#139)', () => {
   });
 });
 
-describe('the overlay is anchored, and is not modal (§8.3.5)', () => {
-  it('docks at the stage edge when the node’s drawn position is unknown', async () => {
-    // jsdom has no 2-D context, so the orbit view draws nothing and reports no anchor —
-    // which is the same state a real browser reaches when the node is off screen. The
-    // overlay still appears, at the edge, rather than at (0, 0) pointing at nothing.
+describe('the overlay is parked, and is not modal (§8.3.5)', () => {
+  it('writes no position of its own, wherever the node is drawn', async () => {
+    // The berth is the orbit view's top-right corner and it is entirely `app.css`'s — see
+    // `.hh-editor__anchor`. The panel used to follow its node, which meant an inline
+    // `style` recomputed as the node moved, and a panel that moved out from under the
+    // pointer dragging its own slider. Nothing to assert about pixels here — jsdom has no
+    // layout — but "the component writes no position" is the half that made it possible.
     await mount();
     await press('n');
     await click('plan-expand-0');
     const anchor = container.querySelector('.hh-editor__anchor');
     expect(anchor).not.toBeNull();
-    expect(anchor?.getAttribute('data-anchored')).toBe('false');
+    expect(anchor?.getAttribute('style')).toBeNull();
+    expect(anchor?.getAttribute('data-anchored')).toBeNull();
   });
 
   it('lives inside the stage, so it is positioned in the orbit view’s pixel space', async () => {

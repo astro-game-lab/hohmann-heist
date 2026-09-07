@@ -1,11 +1,15 @@
 /**
  * §8.3.5's node editor. #137, FR-410.
  *
- * Anchored to the node and **never modal**, which is the constraint that shapes
- * everything else here: the orbit view, the timeline and the plan panel all stay live
- * and interactive while it is open, so it cannot trap focus, cannot own the Escape key
- * unconditionally, and cannot assume the node it is editing still exists in the same
- * place after a change made somewhere else.
+ * Parked in the orbit view's top-right corner and **never modal**, which is the
+ * constraint that shapes everything else here: the orbit view, the timeline and the plan
+ * panel all stay live and interactive while it is open, so it cannot trap focus, cannot
+ * own the Escape key unconditionally, and cannot assume the node it is editing still
+ * exists in the same place after a change made somewhere else.
+ *
+ * §8.3.5 says "anchored to the node", and it was, until the panel's own controls dragged
+ * the node out from under the pointer holding them. `.hh-editor__anchor` in `app.css`
+ * has the full account of why it stopped moving.
  *
  * ## The result block is the reason this screen exists
  *

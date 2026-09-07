@@ -11,6 +11,34 @@ they relied on has moved.
 
 ## [Unreleased]
 
+### Fixed
+- **The planner's panel column painted over the timeline and the commit bar.** The wide
+  layout was a row *inside* the stage — orbit view beside the panels — with the timeline and
+  the commit bar stacked under the whole width. That arrangement can express no height for
+  the panels: the column stretched to the stage and its contents simply carried on past the
+  bottom edge, over the Δv slider and **Commit plan** and out of the window, which also gave
+  the page a scrollbar it should never have. With the contract panel open (#264) that is the
+  ordinary state of C05, not an edge case. The grid is on the planner itself now and the
+  panels are one of its columns, running from under the HUD to the bottom of the commit bar,
+  so the timeline and the commit bar end where the panels begin and the panels scroll against
+  their own column instead of against the document. jsdom has no layout, so what a test can
+  hold is the shape the grid places out of — the five regions and their order — and one now
+  does.
+
+### Changed
+- **The node editor is parked in the orbit view's top-right corner instead of following its
+  node.** §8.3.5 asked for "anchored to the node" and that is what it did, with three
+  consequences that cannot be fixed while the panel moves: the editor's own controls move the
+  node, so the panel ran away from the pointer using it — patched for pointer gestures by
+  freezing the anchor, which left the keyboard steppers still moving it; it covered the part
+  of the trajectory being edited; and anchored low it needed a maximum height and an inner
+  scrollbar, which put **Delete** and **Done** behind a scroll. Parked, it is a fixed berth
+  aligned with the zoom and recentre controls down the same edge, and it needs no scrolling at
+  all in any window tall enough to hold it — the bound remains, because the alternative on a
+  short window is the panel painting over the timeline. §8.3.5 is updated to match. The
+  anchor the orbit view reports is now a ref rather than state: nothing renders from it, and
+  as state it re-rendered the planner on every frame in which the node moved.
+
 ## [0.2.0] — 2026-09-07
 
 > **Two of M3's exit criteria were not met at this tag, and this is the record of that.**
