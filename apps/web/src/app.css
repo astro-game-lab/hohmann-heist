@@ -225,6 +225,14 @@ body {
   min-block-size: 0;
   overflow-y: auto;
   overflow-x: hidden;
+
+  /* The containing block for anything absolutely positioned inside a screen, and it has to
+     be stated for `overflow` above to mean anything to those elements. Settings' hidden
+     file input is `.hh-sr-only`, which is `position: absolute`; with no positioned ancestor
+     it resolved against the *initial* containing block at its static position — 4 383 px
+     down — and a 1 px box that far out gave the document a 3 539 px scroll range of its
+     own, on top of the frame's. One screen-reader-only input, scrolling the whole page. */
+  position: relative;
 }
 
 @keyframes hh-screen-in {

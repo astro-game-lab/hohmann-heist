@@ -69,33 +69,45 @@ interface Position {
 const GAP_PX = 8;
 
 /**
- * Regions a card may never cover, whatever its anchor says.
+ * Everything a player can click, so a card can be checked for covering one.
  *
- * The commit bar is the planner's primary action, and the timeline strip is how a burn is
- * placed. A hint is transient and dismissible; the controls under it are not, so when the
- * two want the same pixels the hint moves.
- *
- * This is not belt-and-braces — it is the bug. The first mark a new player sees is
- * anchored to `orbit`, the orbit view reaches to within 8 px of the timeline, and "under
- * the anchor" put the card exactly on top of the commit bar: `elementFromPoint` at the
- * centre of **Commit plan** returned the card's *More in the Codex* button, and a click on
- * *Commit plan* could not land at all. A first-time player with a legal plan could not fly
- * it — and coach marks are shown to precisely the players who would not know why.
+ * Broad on purpose: the rule is about *controls*, not about a list of regions somebody
+ * remembered to reserve. The first version of this fix did reserve regions by name, and
+ * moved the bug rather than fixing it — the card stopped covering the commit bar and
+ * started covering the HUD's own buttons and a plan row instead.
  */
-const RESERVED_ANCHORS = ['commit', 'timeline'] as const;
+const CONTROLS = 'button, a[href], input, select, textarea, summary, [role="slider"]';
 
-/** The top of the highest reserved region below `from`, or the viewport's bottom. */
-const floorBelow = (from: number): number => {
-  let floor = window.innerHeight;
-  for (const name of RESERVED_ANCHORS) {
-    const el = document.querySelector<HTMLElement>(`[data-hh-anchor="${name}"]`);
-    if (el === null) continue;
+/** Whether two boxes share any pixel. Touching edges do not count. */
+const overlaps = (a: DOMRect, b: { x: number; y: number; w: number; h: number }): boolean =>
+  a.left < b.x + b.w && a.right > b.x && a.top < b.y + b.h && a.bottom > b.y;
+
+/**
+ * Whether a card at this position would cover something the player can click.
+ *
+ * This is the invariant the whole placement exists to keep, and it is the bug stated
+ * directly. The first mark a new player sees is anchored to the orbit view, which reaches
+ * to within 8 px of the timeline, so "under the anchor" was exactly on top of the commit
+ * bar: `elementFromPoint` at the centre of **Commit plan** returned the card's *More in
+ * the Codex* button, and the click could not land at all. A first-time player with a legal
+ * plan could not fly it — and coach marks are shown to precisely the players who would not
+ * know why.
+ *
+ * A hint is transient and dismissible; the controls under it are not. When the two want
+ * the same pixels, the hint moves.
+ */
+const coversAControl = (
+  card: HTMLElement,
+  at: { x: number; y: number; w: number; h: number },
+): boolean => {
+  for (const el of document.querySelectorAll<HTMLElement>(CONTROLS)) {
+    // The card's own buttons are not something it can cover.
+    if (card.contains(el)) continue;
     const rect = el.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) continue;
-    // Only regions that actually start below the card's top can constrain it.
-    if (rect.top >= from && rect.top < floor) floor = rect.top;
+    if (rect.width === 0 || rect.height === 0) continue;
+    if (overlaps(rect, at)) return true;
   }
-  return floor;
+  return false;
 };
 
 /**
@@ -103,35 +115,60 @@ const floorBelow = (from: number): number => {
  *
  * Under rather than over, because the anchors are things the player is looking at or
  * pointing at, and a card above one covers the thing it is about on a short viewport.
- * Returns `null` when the anchor is not in the document, which is what docks the card.
+ * Returns `null` when nothing works, which is what docks the card.
  *
- * ## Flip, then dock
+ * ## Candidates, in order of preference
  *
- * Under the anchor is the preference, not the rule. `cardHeight` is measured from the
- * rendered card, so this knows whether the card actually fits in the space under the
- * anchor before the reserved regions begin — and if it does not, it tries above the
- * anchor, and docks if that fails too. Docking already exists for an anchor that is not on
- * screen; a screen with no room for the card is the same situation from the card's point
- * of view.
+ * Under the anchor is the preference, not the rule. The card's own box is measured from
+ * the rendered element, because §8.3.12's interface scale and §8.9's +40% string length
+ * both falsify any constant — and each candidate is tried in turn until one covers no
+ * control:
  *
- * A card anchored *to* a reserved region is placed under it as usual: `floorBelow` only
- * considers regions starting below the card, so the commit bar does not block a mark that
- * is about the commit bar.
+ * 1. **Under the anchor.** The original placement, and still right for a small anchor
+ *    with room beneath it.
+ * 2. **Above the anchor**, the standard popover flip.
+ * 3. **Inside the anchor**, top-left then bottom-left. Only a large region can host a card
+ *    at all, and the planner's large region is the orbit view — a card in its corner
+ *    covers some canvas, which is a surface rather than a control, and covers no button.
+ *
+ * Every candidate is clamped to the viewport before it is tested, so what is checked is
+ * where the card will actually be rather than where it was asked to go — the CSS clamp
+ * would otherwise move it onto something after this had approved it.
+ *
+ * If none is clear the card docks — the same fallback as an anchor that is not on screen.
+ * With the planner fitting the viewport, candidate 3 is clear for the `orbit` anchor and
+ * candidate 1 for the small ones, so the fallback is a genuine last resort rather than the
+ * usual answer.
  */
-const measure = (anchor: string, cardHeight: number): Position | null => {
+const measure = (anchor: string, card: HTMLElement | null): Position | null => {
   const target = document.querySelector<HTMLElement>(`[data-hh-anchor="${anchor}"]`);
-  if (target === null) return null;
+  if (target === null || card === null) return null;
   const rect = target.getBoundingClientRect();
   // A region that is present but collapsed — a panel on another tab — is not somewhere to
   // point at either, and it measures as a zero box rather than as absent.
   if (rect.width === 0 && rect.height === 0) return null;
 
-  const below = rect.bottom + GAP_PX;
-  if (below + cardHeight <= floorBelow(below)) return { x: rect.left, y: below };
+  const { width: w, height: h } = card.getBoundingClientRect();
+  if (w === 0 || h === 0) return { x: rect.left, y: rect.bottom + GAP_PX };
 
-  const above = rect.top - GAP_PX - cardHeight;
-  if (above >= 0) return { x: rect.left, y: above };
+  const clamp = (value: number, max: number): number => Math.min(Math.max(value, 8), max);
+  const at = (x: number, y: number): { x: number; y: number; w: number; h: number } => ({
+    x: clamp(x, Math.max(8, window.innerWidth - w - 8)),
+    y: clamp(y, Math.max(8, window.innerHeight - h - 8)),
+    w,
+    h,
+  });
 
+  const candidates = [
+    at(rect.left, rect.bottom + GAP_PX),
+    at(rect.left, rect.top - GAP_PX - h),
+    at(rect.left + GAP_PX, rect.top + GAP_PX),
+    at(rect.left + GAP_PX, rect.bottom - GAP_PX - h),
+  ];
+
+  for (const candidate of candidates) {
+    if (!coversAControl(card, candidate)) return { x: candidate.x, y: candidate.y };
+  }
   return null;
 };
 
@@ -190,9 +227,10 @@ export const CoachMark = ({
       return undefined;
     }
     const remeasure = (): void => {
-      // Zero before the first paint, which resolves to "under the anchor" — the same
-      // answer as before — and is corrected on the pass that follows.
-      setAt(measure(anchor, cardRef.current?.getBoundingClientRect().height ?? 0));
+      // The card is already in the DOM by the time a layout effect runs — docked, on the
+      // first pass — so its box is real. Docked and anchored are the same width and the
+      // same height, so what is measured here is what will be placed.
+      setAt(measure(anchor, cardRef.current));
     };
     remeasure();
     window.addEventListener('resize', remeasure);
