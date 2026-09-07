@@ -38,8 +38,9 @@
  * bar above the fold at 720p — and it spent them on a row that was two buttons and
  * 1 300 px of nothing. The association is by id, so the list can sit after the button it
  * describes without a screen reader losing the connection, and `role="list"` is on the
- * `<ul>` because the CSS that lays the items out in a line removes its markers, and
- * VoiceOver drops the list semantics with them.
+ * `<ul>` because the CSS that lays the items out in a line drops its markers — a bullet in
+ * front of each reason made the row read as a list *of* the buttons beside it — and
+ * VoiceOver drops the list semantics along with them.
  *
  * The list wraps rather than truncates. Six reasons can be true at once — `L1`–`L5` and
  * `L6` — and the longest of them is 68 characters before §8.9's +40%, so on a narrow

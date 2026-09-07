@@ -1228,23 +1228,23 @@ button:disabled {
 .hh-commit__reasons {
   margin: 0;
   padding: 0;
+  /* No markers: the reasons are sentences beside a row of buttons, and a bullet in front of
+     each one made the row look like a nested list of the controls to its left. What
+     separates them is the space between them, which is why the column gap is wider than the
+     6px the buttons use. `role="list"` on the `<ul>` is what keeps the semantics a marker
+     would otherwise have carried — see `CommitBar.tsx`. */
   list-style: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 16px;
+  gap: 2px 24px;
   flex: 1 1 16rem;
   min-inline-size: 0;
-}
-
-/* The marker `list-style` used to draw, drawn by the item instead: a line of reasons needs
-   a separator between them more than a column of them ever did, and a horizontal list
-   marker is not something `list-style` can place. `role="list"` on the `<ul>` is the other
-   half — see `CommitBar.tsx`. */
-.hh-commit__reason::before {
-  content: '•';
-  margin-inline-end: 6px;
-  opacity: 0.7;
+  /* One step down from the row it shares: 15/16 of the base at every interface scale,
+     because §8.3.12's setting moves the root and a pixel here would not follow it. The
+     reasons are the longest thing on the row and the least often present, and they read
+     as an annotation to the buttons rather than as a fourth control. */
+  font-size: 0.9375em;
 }
 
 .hh-commit__reason[data-blocking='true'] {
