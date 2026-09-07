@@ -60,8 +60,7 @@ const c01 = (): NonNullable<ReturnType<typeof contractById>> => {
  */
 const mount = async (scenario = c03(), assists?: AssistState): Promise<void> => {
   committed = null;
-  const stored =
-    assists === undefined ? {} : { 'gameplay.assists': encodeAssists(assists) };
+  const stored = assists === undefined ? {} : { 'gameplay.assists': encodeAssists(assists) };
   await act(() => {
     render(
       <SettingsProvider stored={stored} onChange={() => undefined}>

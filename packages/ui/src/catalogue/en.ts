@@ -753,7 +753,6 @@ export const en: Messages = {
   'planner.nodeMenu.open': ({ index }, fmt) => `Open actions for burn ${fmt.integer(index)}`,
   'planner.plan.snappedTo': ({ kind }) => `snapped to ${kind}`,
 
-
   'planner.tab.plan': ({ count }, fmt) => `Plan (${fmt.integer(count)})`,
   'planner.tab.readouts': () => 'Readouts',
   'planner.tabsLabel': () => 'Planner panels',
