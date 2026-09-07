@@ -262,7 +262,7 @@ The complete verb list for v1.0. If a verb is not here, it does not exist.
 | **Delete node** | Planner | `Del`, or the node's ✕ | |
 | **Scrub time** | Planner | Drag the timeline, `←`/`→`, or `Home`/`End` | Purely a view operation; changes nothing |
 | **Focus** | Planner | `Tab` cycles ship/target/Earth; scroll to zoom; drag to pan | |
-| **Toggle assist** | Planner | Assist tray | See §6.6 |
+| **Toggle assist** | Settings | §8.3.12's *default assist set* | See §6.6. It was a tray in the planner; one control, and the setting was already the stored one |
 | **Solve** (Lambert) | Planner, Act V+ | The targeting computer panel | Unlocked content, not a default |
 | **Commit** | Planner | `Enter`, or the button | Only enabled when the plan is legal (§6.4) |
 | **Playback control** | Execution | `Space` pause, `1`–`5` speed, `S` skip to end | |
@@ -610,7 +610,7 @@ Specific and quantitative, because "simplified" is not an answer.
 | DEP-04 | **Intercept tolerance** 1 000 m | `@hh/game/objectives` | As above, for grab-and-go objectives. | Yes |
 | DEP-05 | **Time acceleration** during execution, up to 100 000× | `@hh/game/playback` | Nobody watches a 17-day transfer. | Yes — the speed is in the HUD |
 | DEP-06 | **Fixed Sun direction** for the duration of a contract | `@hh/game/eclipse` | Avoids an ephemeris dependency. The Sun moves 0.041°/h; over a 12 h contract that is 0.5° of umbra rotation, well inside the eclipse-window tolerance. Contracts longer than 3 days (C07, C11) do not use eclipse constraints. | Yes — Codex, and the briefing says "sun-fixed approximation" |
-| DEP-07 | **Node snapping** to apsis / node crossing within 30 s | `@hh/game/planner` | Hitting periapsis to the millisecond is not the fun part. Disable-able. | No, but the assist tray lists it |
+| DEP-07 | **Node snapping** to apsis / node crossing within 30 s | `@hh/game/planner` | Hitting periapsis to the millisecond is not the fun part. Disable-able. | No, but §8.3.12's assist set lists it |
 | DEP-08 | **Altitude floor** at 100 km is an instant fail | `@hh/game/legality` | Stands in for drag and reentry, which are not modelled. | Yes — drawn as a red shell |
 | DEP-09 | **Node epochs quantised** to 1/1024 s; Δv components to 1e-4 m/s | `@hh/game/plan` | Exact representability for replay codes and cross-platform verification (§11.4). Both quanta are far below any perceptible or scoring-relevant threshold. | No |
 | DEP-10 | The transverse (T̂) axis is **labelled "prograde"** | `@hh/game/ui-labels` | Player vocabulary. They coincide for circular orbits and differ by the flight-path angle otherwise. | Yes — Codex "Prograde vs transverse" |
@@ -897,7 +897,7 @@ This is the game. It gets the most specification.
 │                                                   │  0.31 km  @ T+12:09:52   │
 │                                                   │  Δv_rel   0.02 m/s   ✓   │
 │                                                   ├──────────────────────────┤
-│                                                   │  ASSISTS      ▣▣▣□□      │ ⑤ assist tray
+│                                                   │  CONTRACT                │ ⑤ contract
 ├───────────────────────────────────────────────────┤                          │
 │ ② TIMELINE                                        │  the panel column        │
 │  0h     2h     4h     6h     8h   ▐ 10h           │  continues past the      │
@@ -922,7 +922,7 @@ It carries a fourth panel below the three the diagram names: §8.3.3's contract,
 | ② | Timeline | Full mission window, node markers, scrub head, deadline wall, constraint bands, objective-met tick | Horizontal on desktop; the primary time control |
 | ③ | Plan panel | The ordered node list, each expandable to a numeric editor | Reorders automatically by epoch; DOM list, keyboard navigable |
 | ④ | Readouts | Osculating elements at the scrub head, and the closest-approach block | Plain units by default; hover/focus reveals full precision |
-| ⑤ | Assist tray | Toggles from §6.6, with the medal-eligibility indicator | Collapsed by default; expanding it never pauses anything |
+| ⑤ | Contract | §8.3.3's brief, objective, budget, deadline, par and constraints | Always present. §6.6's assists were this region until they became one control in §8.3.12 |
 
 **Orbit view rules:**
 
@@ -1225,7 +1225,7 @@ Grouped, all persisted locally, all applying immediately.
 | --- | --- |
 | **Display** | Units (metric km/m·s⁻¹ **default**, or SI-only for P2); angle display (degrees **default** / radians); time format; theme (dark **default** / light / system); UI scale (90–150%) |
 | **Accessibility** | Colour-vision palette (default / deuteranopia / protanopia / tritanopia / high contrast); reduce motion; disable background animation; increase line weights; screen-reader verbosity (terse / verbose) |
-| **Gameplay** | Default assist set; coach marks on/off; confirm before commit; auto-skip playback after N attempts |
+| **Gameplay** | The assist set — §6.6's seven switches, with FR-411's medal effects and the cap they add up to, and the only place they are chosen; coach marks on/off; confirm before commit; auto-skip playback after N attempts |
 | **Audio** | Master, effects, ambience — three sliders, all default to a modest level, muted by default on first load until the player interacts (browser autoplay policy) |
 | **Input** | Full keybinding remap; pointer sensitivity; invert scroll-zoom |
 | **Data** | Handle (for the leaderboard); export save (JSON download); import save; clear all local data; what we store (links to §11.12) |
@@ -1578,7 +1578,7 @@ Requirement IDs are stable and permanent. Every issue cites the FRs it satisfies
 
 | ID | Requirement |
 | --- | --- |
-| FR-401 | The planner MUST render the orbit view, timeline, plan panel, readouts, and assist tray per §8.3.4, in both wide and narrow layouts. |
+| FR-401 | The planner MUST render the orbit view, timeline, plan panel, readouts, and the contract per §8.3.4, in both wide and narrow layouts. |
 | FR-402 | The predicted trajectory MUST update within 16 ms of any node edit (NFR-011). |
 | FR-403 | Scrubbing MUST be a pure view operation that never mutates the plan. |
 | FR-404 | The camera MUST auto-frame per §8.4, and manual pan/zoom MUST suspend auto-framing until explicitly recentred. |
@@ -1588,7 +1588,7 @@ Requirement IDs are stable and permanent. Every issue cites the FRs it satisfies
 | FR-408 | The commit control MUST be disabled with a specific inline reason whenever the plan is illegal, and MUST NOT be disabled merely because the objective is unmet. |
 | FR-409 | Constraint-violating intervals MUST be drawn on the timeline and, where geometric, on the orbit view. |
 | FR-410 | The node editor MUST show the resulting orbit's apoapsis, periapsis, and period as deltas against the pre-burn orbit, updating live. |
-| FR-411 | The assist tray MUST show which assists affect medal eligibility and what the current cap is. |
+| FR-411 | Wherever §6.6's assists are chosen MUST show which of them affect medal eligibility and what the current cap is. That was the planner's assist tray; it is §8.3.12's *default assist set* since the tray was removed. |
 
 ### 10.6 Targeting tools (FR-5xx)
 

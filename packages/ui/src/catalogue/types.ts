@@ -617,7 +617,6 @@ export interface UiMessageParams {
   readonly 'planner.plan.snappedTo': { readonly kind: string };
 
   // ⑤ Assist tray (#133's snap toggle only; #140 brings the rest in M3)
-  readonly 'planner.assists.heading': Record<string, never>;
 
   // §6.6's assist set, as the tray renders it (#140). One name and one description each,
   // because the tray is where a player learns the vocabulary.
@@ -640,8 +639,6 @@ export interface UiMessageParams {
   /** The two medal effects, phrased apart on purpose — see `AssistTray.tsx`. */
   readonly 'planner.assists.effectBlind': Record<string, never>;
   readonly 'planner.assists.effectCaps': Record<string, never>;
-  readonly 'planner.assists.defaultOn': Record<string, never>;
-  readonly 'planner.assists.defaultOff': Record<string, never>;
   /** FR-411's cap, stated as a medal rather than as a warning. */
   readonly 'planner.assists.capClean': Record<string, never>;
   readonly 'planner.assists.capAt': { readonly medal: string; readonly count: number };
@@ -650,7 +647,6 @@ export interface UiMessageParams {
   // Narrow layout (#123): the tab strip the three side panels collapse into.
   readonly 'planner.tab.plan': { readonly count: number };
   readonly 'planner.tab.readouts': Record<string, never>;
-  readonly 'planner.tab.assists': Record<string, never>;
   readonly 'planner.tabsLabel': Record<string, never>;
 
   // ── The node editor overlay (§8.3.5, #137) ────────────────────────────────

@@ -14,9 +14,9 @@
  * only shows up on a rotating phone: the two trees are different components, so switching
  * unmounts one and mounts the other, and every piece of local state in them is gone.
  *
- * So there is **one tree**. The same `PlanPanel`, `Readouts` and `AssistTray` instances
- * are rendered at every width; what changes is whether they sit in a grid column or
- * inside a tab panel, and that is CSS plus one `hidden` attribute. The plan, the
+ * So there is **one tree**. The same `PlanPanel`, `Readouts` and `ContractPanel`
+ * instances are rendered at every width; what changes is whether they sit in a grid column
+ * or inside a tab panel, and that is CSS plus one `hidden` attribute. The plan, the
  * selection and the scrub position live above all of it in `usePlanner` regardless.
  *
  * The tab strip is therefore *also* present at every width and hidden by CSS above the
@@ -55,7 +55,7 @@
  */
 import { arcAt, fromEpochTicks, type Plan, type Timeline } from '@hh/sim';
 import { R_EARTH_EQ, elementsFromState, metAt, type Epoch } from '@hh/astro';
-import type { LoadedScenario } from '@hh/game';
+import type { AssistState, LoadedScenario } from '@hh/game';
 import { apsisAt, isProximityEvaluation, snapToNamedApsis } from '@hh/game';
 import type { Catalogue, NodeId } from '@hh/ui';
 import {
@@ -69,13 +69,12 @@ import {
 import type { JSX } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 
-import { AssistTray } from './AssistTray.js';
 import { NodeContextMenu } from './NodeContextMenu.js';
 import { bandsFor } from './constraint-bands.js';
 import { ContractPanel } from './ContractPanel.js';
 import { CommitBar } from './CommitBar.js';
 import { NodeEditor } from './NodeEditor.js';
-import { useKeybindings } from '../settings/context.js';
+import { useKeybindings, useSetting } from '../settings/context.js';
 import { actionFor, isTypingTarget } from './keys.js';
 import { HudBar } from './HudBar.js';
 import { OrbitView } from './OrbitView.js';
@@ -89,7 +88,7 @@ import type { Evaluation } from './evaluate.js';
 import { indexOfNodeId, selectedIndex, usePlanner, nodeIdOf, type PlannerSeed } from './store.js';
 
 /** Which side panel the narrow layout is showing. Ignored above the breakpoint. */
-type Tab = 'plan' | 'readouts' | 'assists' | 'contract';
+type Tab = 'plan' | 'readouts' | 'contract';
 
 export interface PlannerScreenProps {
   readonly t: Catalogue['resolve'];
@@ -132,6 +131,15 @@ export interface PlannerScreenProps {
 export interface CommittedRun {
   readonly plan: Plan;
   readonly evaluation: Evaluation;
+  /**
+   * §6.6's set as it stood at the commit — FR-301's *"a medal must reflect the assists
+   * actually enabled"*.
+   *
+   * Carried rather than re-read on the other side, because the setting can be changed
+   * while a run is flying: the debrief for this plan has to score the plan that was flown,
+   * not the switches the player is looking at afterwards.
+   */
+  readonly assists: AssistState;
   /** Where the scrub head was, so aborting can put it back (#145). */
   readonly scrubEpoch: Epoch;
   /** Which node was selected, likewise. */
@@ -162,7 +170,17 @@ export const PlannerScreen = ({
   onOpenCodex,
   onOpenHelp,
 }: PlannerScreenProps): JSX.Element => {
-  const [state, actions] = usePlanner(scenario, seed ?? {});
+  /**
+   * §6.6's assists, from §8.3.12's setting — the only place they are chosen now.
+   *
+   * The planner used to carry a tray of seven switches (#140) beside a setting of the same
+   * seven that nothing read. One control, and it is the one that was already stored,
+   * already in the replay code's bitmask, and already reachable from this screen without
+   * unmounting it — Settings is an overlay over the planner, so a mid-plan change is two
+   * clicks and no lost work. `usePlanner` restricts it to what this contract offers.
+   */
+  const assistMask = useSetting('gameplay.assists');
+  const [state, actions] = usePlanner(scenario, seed ?? {}, assistMask);
   const [tab, setTab] = useState<Tab>('plan');
   /**
    * Where the open editor's node is drawn, reported by the orbit view, or `null` when it
@@ -354,8 +372,8 @@ export const PlannerScreen = ({
    * and the reasoning.
    *
    * Gated on §6.6's `constraints` assist, which is the flag #129 provides and #81's model
-   * scores: disabling it earns *Blind*. It reaches here from the same `AssistState` the tray
-   * writes, so there is one answer to "is preview on" rather than a prop and a setting.
+   * scores: disabling it earns *Blind*. It reaches here from the `AssistState` §8.3.12's
+   * setting supplies, so there is one answer to "is preview on" rather than two.
    *
    * A plan the engine could not evaluate has no constraints to band. That is not the same
    * as a legal plan and the timeline shows nothing rather than pretending it is clear —
@@ -569,6 +587,7 @@ export const PlannerScreen = ({
     onCommit({
       plan: committedPlan,
       evaluation,
+      assists: state.assists,
       scrubEpoch: model.scrub.epoch,
       selectedNodeId: lastSelected.current,
     });
@@ -708,7 +727,6 @@ export const PlannerScreen = ({
             [
               ['plan', t('planner.tab.plan', { count: model.plan.nodes.length })],
               ['readouts', t('planner.tab.readouts', {})],
-              ['assists', t('planner.tab.assists', {})],
               ['contract', t('planner.tab.contract', {})],
             ] as const
           ).map(([name, label]) => (
@@ -786,15 +804,6 @@ export const PlannerScreen = ({
         {panel(
           'contract',
           <ContractPanel t={t} resolveDynamic={resolveDynamic} scenario={scenario} />,
-        )}
-        {panel(
-          'assists',
-          <AssistTray
-            t={t}
-            assists={state.assists}
-            allowed={scenario.document.assistsAllowed ?? []}
-            onToggle={actions.setAssist}
-          />,
         )}
       </div>
 

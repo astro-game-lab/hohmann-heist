@@ -26,6 +26,23 @@ they relied on has moved.
   does.
 
 ### Changed
+- **§6.6's assists are chosen in Settings, and the planner's assist tray is gone — and this
+  fixes a bug rather than only moving a panel.** There were two controls over the same seven
+  switches: the tray in the planner's panel column, and §8.3.12's *default assist set* in the
+  save. The second was written and **read by nothing**. The planner started every contract
+  from `defaultAssistState()`, and — worse — `ContractScreen` scored the run and built its
+  replay code from those same defaults, so a run planned with the tray's switches moved was
+  judged as though they had not been. FR-301 asks for the opposite in as many words: *"MUST
+  NOT award a medal the player did not earn under the assists actually enabled."*
+  One control now, and it is the one that was already stored, already in §11.6's replay
+  bitmask, and already reachable without unmounting the planner — Settings renders as an
+  overlay over the screen you are on. `usePlanner` reads it, restricted to what the contract
+  offers, and reacts to a change made while a plan is open; the committed run carries the set
+  it was planned under, so the debrief scores the flight rather than the switches as they
+  stand afterwards. FR-411's medal effects and the resulting cap moved with the switches:
+  each row in Settings states its effect *and its direction* — turning closest-approach
+  markers off earns **Blind**, turning the targeting computer on caps at **Silver** — with
+  the cap stated above them.
 - **The contract panel is always there, and the control that summoned it is gone.** #264
   shipped it collapsible — a toggle in the HUD, `B` to flip it, and a session preference so
   a player who wanted it up did not re-open it on every contract. What that preference was

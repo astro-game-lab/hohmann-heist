@@ -1093,32 +1093,19 @@ button:disabled {
   display: block;
 }
 
-/* ── The assist tray (#133's toggle; #140 brings the rest in M3) ──────────── */
+/* ── §6.6's assists, in Settings (#140, FR-411) ───────────────────────────── *
+ *
+ * These rules were the planner's assist tray, which is gone: seven switches in the panel
+ * column over the same seven §8.3.12 already stored, with the stored copy read by nothing.
+ * One control now, in the settings group, and it inherited FR-411 along with the job —
+ * *"MUST show which assists affect medal eligibility and what the current cap is"* — which
+ * is what the cap and the effect lines below are for. The row layout comes from the
+ * settings screen's own `.hh-setting__option`; what is here is the part FR-411 adds.
+ */
 
-/* The disclosure is a button inside the heading rather than beside it, so the whole
-   heading is the hit target and the heading level still describes the region (§8.8). */
-.hh-assists__disclosure {
-  width: 100%;
-  padding: 0;
-  text-align: left;
-  background: none;
-  border: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-.hh-assists__disclosure::before {
-  content: '▸ ';
-}
-
-.hh-assists__disclosure[aria-expanded='true']::before {
-  content: '▾ ';
-}
-
-/* FR-411's cap. Outside the disclosure, so it is legible while the tray is shut — it is
-   the consequence of what is inside. Coloured by what it says rather than by severity:
-   a cap is a fact about what this run can earn, not a problem to fix. */
+/* The cap, first in the group: it is the consequence of the switches under it. Coloured by
+   what it says rather than by severity — a cap is a fact about what a run can earn, not a
+   problem to fix. */
 .hh-assists__cap {
   margin: 4px 0 8px;
   font-size: 0.9em;
@@ -1132,13 +1119,8 @@ button:disabled {
   color: var(--medal-silver);
 }
 
-.hh-assists__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.hh-assists__row {
+  margin: 0 0 12px;
 }
 
 .hh-assists__effect {
@@ -1156,26 +1138,9 @@ button:disabled {
   color: var(--medal-silver);
 }
 
-.hh-assists__changed {
-  margin: 2px 0 0;
-  font-size: 0.8em;
-  opacity: 0.75;
-}
-
-.hh-assists__always {
-  margin: 0;
-  font-weight: 600;
-  opacity: 0.85;
-}
-
-.hh-assists__toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .hh-assists__hint {
   margin: 4px 0 0;
+  font-size: 0.9em;
   opacity: 0.7;
 }
 

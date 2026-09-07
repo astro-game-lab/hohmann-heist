@@ -41,13 +41,7 @@
  */
 import { R_EARTH_EQ } from '@hh/astro';
 import type { AssistState, LoadedScenario, Outcome } from '@hh/game';
-import {
-  buildFlightLog,
-  defaultAssistState,
-  encodeAssists,
-  evaluateOutcome,
-  restrictToAllowed,
-} from '@hh/game';
+import { buildFlightLog, encodeAssists, evaluateOutcome } from '@hh/game';
 import { canonicalJson, replayFromPlan } from '@hh/sim';
 import type { PersonalBest } from '@hh/ui';
 import type { Catalogue } from '@hh/ui';
@@ -110,19 +104,6 @@ export interface ContractScreenProps {
  * change to the UI, and §14.4 makes an engine bump require a `docs/PHYSICS.md` change.
  */
 const ENGINE_MAJOR = 1;
-
-/**
- * The assists this run used, as §6.6's model states them.
- *
- * The planner does not yet own a full assist tray — that is #140, which renders this same
- * model — so what a run uses today is the contract's permitted set at its defaults. When
- * the tray lands it supplies the player's own state and nothing here changes shape.
- *
- * `restrictToAllowed` is what keeps that honest: a contract that does not list an assist
- * cannot have used it, whatever the defaults say.
- */
-const assistsFor = (scenario: LoadedScenario): AssistState =>
-  restrictToAllowed(defaultAssistState(), scenario.document.assistsAllowed);
 
 /**
  * §11.6's replay, as text.
@@ -215,9 +196,15 @@ export const ContractScreen = ({
     // assumed, because the alternative is a crash on the screen after the commit.
     if (timeline === null || !legality.evaluable) return null;
 
-    // §6.6's set for this contract, used by the scoring and recorded in the replay.
-
-    const assists = assistsFor(scenario);
+    // §6.6's set this plan was built under, used by the scoring and recorded in the replay.
+    //
+    // It comes back on the committed run rather than being recomputed here, and that is
+    // FR-301 — *"a medal must reflect the assists actually enabled"*. It used to be
+    // `restrictToAllowed(defaultAssistState(), …)`: the contract's permitted set at its
+    // defaults, which was right only while nothing could change them. §8.3.12's setting can,
+    // and a run scored from the defaults would have handed a Clean Job to a player who
+    // planned it with the targeting computer on.
+    const { assists } = run;
 
     const outcome = evaluateOutcome({
       timeline,

@@ -13,12 +13,15 @@
  * planner, which is exactly what §8.8's canvas-parity rule says must carry the same
  * information.
  */
+import type { AssistId, AssistState } from '@hh/game';
+import { defaultAssistState, encodeAssists, restrictToAllowed } from '@hh/game';
 import { createCatalogue } from '@hh/ui';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { contractById } from '../contracts/registry.js';
+import { SettingsProvider } from '../settings/context.js';
 import { PlannerScreen, type CommittedRun } from './PlannerScreen.js';
 import { scrubStepFor } from './TimelineStrip.js';
 
@@ -47,25 +50,44 @@ const c01 = (): NonNullable<ReturnType<typeof contractById>> => {
   return scenario;
 };
 
-const mount = async (scenario = c03()): Promise<void> => {
+/**
+ * Mount the planner, optionally under a chosen assist set.
+ *
+ * The set arrives from §8.3.12's setting now rather than from a tray in the panel column,
+ * so a test that wants snapping off says so the way a player does: through the settings
+ * context, as the bitmask the save stores. `undefined` leaves the provider's defaults,
+ * which is every assist at §6.6's own default.
+ */
+const mount = async (scenario = c03(), assists?: AssistState): Promise<void> => {
   committed = null;
+  const stored =
+    assists === undefined ? {} : { 'gameplay.assists': encodeAssists(assists) };
   await act(() => {
     render(
-      <PlannerScreen
-        t={catalogue.resolve}
-        resolveDynamic={catalogue.resolveDynamic}
-        scenario={scenario}
-        onCommit={(run) => {
-          committed = run;
-        }}
-        coachMarksSeen={[]}
-        onCoachMarkSeen={() => undefined}
-        onOpenCodex={() => undefined}
-        onOpenHelp={() => undefined}
-      />,
+      <SettingsProvider stored={stored} onChange={() => undefined}>
+        <PlannerScreen
+          t={catalogue.resolve}
+          resolveDynamic={catalogue.resolveDynamic}
+          scenario={scenario}
+          onCommit={(run) => {
+            committed = run;
+          }}
+          coachMarksSeen={[]}
+          onCoachMarkSeen={() => undefined}
+          onOpenCodex={() => undefined}
+          onOpenHelp={() => undefined}
+        />
+      </SettingsProvider>,
       container,
     );
   });
+};
+
+/** §6.6's defaults with some assists forced off — what a settings change produces. */
+const without = (...ids: readonly AssistId[]): AssistState => {
+  const state = { ...defaultAssistState() };
+  for (const id of ids) state[id] = false;
+  return state;
 };
 
 const el = (testId: string): HTMLElement | null =>
@@ -92,21 +114,24 @@ afterEach(() => {
 describe('the five regions of §8.3.4 (#123)', () => {
   it('renders every one of them', async () => {
     await mount();
-    // ① HUD, ② timeline, ③ plan, ④ readouts, ⑤ assists — and the orbit view between them.
+    // ① HUD, ② timeline, ③ plan, ④ readouts — and the orbit view between them. §8.3.4's
+    // fifth region was the assist tray; §6.6's switches are §8.3.12's setting now and the
+    // contract took its place in the column.
     expect(el('hud-contract')).not.toBeNull();
     expect(el('timeline-track')).not.toBeNull();
     expect(el('plan-panel')).not.toBeNull();
     expect(el('readouts')).not.toBeNull();
-    expect(el('assist-tray')).not.toBeNull();
+    expect(el('contract-panel')).not.toBeNull();
     expect(el('orbit-view')).not.toBeNull();
+    expect(el('assist-tray')).toBeNull();
   });
 
   it('keeps the timeline outside the tab strip, in both layouts', async () => {
     await mount();
     const timeline = el('timeline-track');
     const panels = container.querySelectorAll('.hh-planner__panel');
-    // Plan, readouts, contract and assists — the contract is no longer conditional.
-    expect(panels.length).toBe(4);
+    // Plan, readouts and the contract, which is no longer conditional.
+    expect(panels.length).toBe(3);
     // §8.3.4: "the timeline stays visible at all times ... must never be behind a tab."
     // Structural rather than visual: no tab panel contains it at any width.
     for (const panel of panels) {
@@ -150,14 +175,15 @@ describe('the five regions of §8.3.4 (#123)', () => {
     // scrub position — made structural, since there is only one component tree.
     expect(el('plan-panel')).not.toBeNull();
     expect(el('readouts')).not.toBeNull();
-    expect(el('assist-tray')).not.toBeNull();
+    expect(el('contract-panel')).not.toBeNull();
   });
 
   it('offers the narrow layout’s tabs without a second copy of any panel', async () => {
     await mount();
     expect(el('planner-tab-plan')).not.toBeNull();
     expect(el('planner-tab-readouts')).not.toBeNull();
-    expect(el('planner-tab-assists')).not.toBeNull();
+    expect(el('planner-tab-contract')).not.toBeNull();
+    expect(el('planner-tab-assists')).toBeNull();
     expect(container.querySelectorAll('[data-testid="plan-panel"]')).toHaveLength(1);
   });
 
@@ -337,52 +363,64 @@ describe('the closest-approach block (#132)', () => {
   });
 });
 
-describe('the assist tray, wired to the planner (#140)', () => {
-  // The tray's own behaviour is `AssistTray.test.tsx`, which drives it against #81's model
-  // directly. What is asserted here is the *wiring*: that a toggle reaches the store and
-  // changes the flag DEP-07 actually reads. Those are different claims, and the second one
-  // is the one that broke when the store held a lone `snapToApsis` boolean.
-  const expand = async (): Promise<void> => {
-    await act(() => {
-      el('assist-disclosure')?.click();
-    });
+describe('§6.6’s assists, from §8.3.12’s setting', () => {
+  // The planner used to carry a tray of seven switches, and the setting of the same seven
+  // was written to the save and read by nothing — two answers to "is snapping on", and a
+  // run scored from neither. What is asserted here is the wiring that replaced it: the
+  // setting reaches the store, the store's flag is the one DEP-07 reads, and a contract's
+  // own permission still overrides both.
+
+  /** Plan one burn and commit, so the run's own assist set can be read back. */
+  const flyOne = async (): Promise<void> => {
+    await press('n');
+    const commit = el('commit');
+    if (commit === null || (commit as HTMLButtonElement).disabled) {
+      throw new Error('the one-node plan did not become committable');
+    }
+    await click('commit');
   };
 
-  it('offers the snap toggle, on by default', async () => {
+  it('starts from §6.6’s defaults when the setting says nothing', async () => {
     await mount();
-    await expand();
-    const toggle = el('assist-snapping');
-    expect(toggle).toBeInstanceOf(HTMLInputElement);
-    // §6.6's assists start enabled and are opted out of.
-    expect((toggle as HTMLInputElement).checked).toBe(true);
+    await flyOne();
+    // A save that has never touched the setting is a save with no `gameplay.assists` key,
+    // and what a run gets is §6.6's own defaults rather than nothing — a mask this build
+    // could not decode would land here too, which is why `usePlanner` falls back to these
+    // rather than to an empty set.
+    expect(committed?.assists).toStrictEqual(
+      restrictToAllowed(defaultAssistState(), c03().document.assistsAllowed),
+    );
   });
 
-  it('can be turned off, and the planner keeps the new state', async () => {
-    await mount();
-    await expand();
-    const toggle = el('assist-snapping');
-    if (!(toggle instanceof HTMLInputElement)) throw new Error('no snap toggle');
-    await act(() => {
-      toggle.checked = false;
-      toggle.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    expect((el('assist-snapping') as HTMLInputElement).checked).toBe(false);
+  it('takes an assist away from the run when the setting does', async () => {
+    await mount(c03(), without('snapping'));
+    await flyOne();
+    // The flag DEP-07 reads, arriving from Settings — this is the wire that did not exist:
+    // the setting was stored and the planner started from the defaults regardless.
+    expect(committed?.assists.snapping).toBe(false);
+    expect(committed?.assists.elements).toBe(true);
   });
 
-  it('shows FR-411’s cap without needing the tray open', async () => {
-    await mount();
-    expect(el('assist-cap')).not.toBeNull();
+  it('restricts the setting to what the contract offers', async () => {
+    // C03's `assistsAllowed` omits both capping assists, so a save with the targeting
+    // computer switched on does not get one — §6.6 makes `assistsAllowed` a permission
+    // rather than a default, and `usePlanner` applies it. Settings cannot know which
+    // contract is loaded, so this restriction is the whole of what keeps the mask honest.
+    const all = { ...defaultAssistState(), targeting_computer: true, porkchop: true };
+    await mount(c03(), all);
+    await flyOne();
+    expect(committed?.assists.targeting_computer).toBe(false);
+    expect(committed?.assists.porkchop).toBe(false);
   });
 
-  it('offers only the assists C03 allows', async () => {
-    await mount();
-    await expand();
-    // C03's `assistsAllowed` omits both capping assists, so neither is rendered — and the
-    // scenario is the real one, so this is a statement about shipped content rather than
-    // about a fixture.
-    expect(el('assist-targeting_computer')).toBeNull();
-    expect(el('assist-porkchop')).toBeNull();
-    expect(el('assist-elements')).not.toBeNull();
+  it('carries the set the plan was built under across the commit (FR-301)', async () => {
+    await mount(c03(), without('constraints'));
+    await flyOne();
+    // *"A medal must reflect the assists actually enabled."* The debrief scores from this
+    // rather than from the setting as it stands afterwards — a player who turns an assist
+    // off while the run is flying has not changed the run.
+    expect(committed?.assists.constraints).toBe(false);
+    expect(committed?.assists.snapping).toBe(true);
   });
 });
 
@@ -823,12 +861,6 @@ describe('the live preview during a gesture (#134, #135)', () => {
 });
 
 describe('§6.5’s constraint bands, end to end (#129)', () => {
-  const expandAssists = async (): Promise<void> => {
-    await act(() => {
-      el('assist-disclosure')?.click();
-    });
-  };
-
   const bandsOf = (state?: string): readonly HTMLElement[] =>
     [...container.querySelectorAll('[data-testid="timeline-band"]')].filter(
       (band) => state === undefined || (band as HTMLElement).dataset['state'] === state,
@@ -853,31 +885,23 @@ describe('§6.5’s constraint bands, end to end (#129)', () => {
     expect(text).toContain('would break');
   });
 
-  it('removes the preview when §6.6’s constraints assist is switched off', async () => {
-    await mount();
-    await expandAssists();
-    const toggle = el('assist-constraints');
-    if (!(toggle instanceof HTMLInputElement)) throw new Error('no constraints assist');
-    await act(() => {
-      toggle.checked = false;
-      toggle.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+  it('removes the preview when §6.6’s constraints assist is off', async () => {
+    await mount(c03(), without('constraints'));
     expect(bandsOf('preview')).toHaveLength(0);
   });
 
-  it('leaves the plan untouched when the assist is toggled', async () => {
+  it('leaves the plan untouched whichever way the assist is set', async () => {
     await mount();
     await press('n');
     const before = text('plan-panel');
-    await expandAssists();
-    const toggle = el('assist-constraints');
-    if (!(toggle instanceof HTMLInputElement)) throw new Error('no constraints assist');
-    await act(() => {
-      toggle.checked = false;
-      toggle.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+
     // #129: *"with it off the bands are absent and the plan is unchanged"*. An assist is a
-    // display and scoring choice; it must never edit what the player built.
+    // display and scoring choice; it must never edit what the player built. The switch is
+    // in Settings now, so "toggled" is a fresh mount under the other setting — and the
+    // same gesture has to produce the same plan.
+    await mount(c03(), without('constraints'));
+    await press('n');
+    expect(bandsOf('preview')).toHaveLength(0);
     expect(text('plan-panel')).toBe(before);
   });
 });

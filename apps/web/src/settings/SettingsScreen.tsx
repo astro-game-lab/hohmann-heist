@@ -28,8 +28,15 @@
  * grouping would be visual only, which is exactly the failure NFR-017's audit exists to
  * catch.
  */
-import type { AssistId } from '@hh/game';
-import { ASSIST_IDS, decodeAssists, encodeAssists } from '@hh/game';
+import type { AssistEffect, AssistId } from '@hh/game';
+import {
+  ASSISTS,
+  ASSIST_IDS,
+  cappingAssists,
+  decodeAssists,
+  encodeAssists,
+  medalCap,
+} from '@hh/game';
 import type { Catalogue, MessageKey } from '@hh/ui';
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
@@ -67,7 +74,7 @@ export interface SettingsScreenProps {
   readonly onClearSave: () => void;
 }
 
-/** The catalogue key naming each assist, matching the tray's (#140). */
+/** The catalogue key naming each assist (#140). */
 const ASSIST_NAME_KEYS = {
   elements: 'planner.assists.elements',
   closest_approach: 'planner.assists.closestApproach',
@@ -78,12 +85,54 @@ const ASSIST_NAME_KEYS = {
   coach_marks: 'planner.assists.coachMarks',
 } as const satisfies Record<AssistId, MessageKey>;
 
+/** What each assist does, in a sentence. Shown under its switch. */
+const ASSIST_HINT_KEYS = {
+  elements: 'planner.assists.elementsHint',
+  closest_approach: 'planner.assists.closestApproachHint',
+  snapping: 'planner.assists.snappingHint',
+  constraints: 'planner.assists.constraintsHint',
+  targeting_computer: 'planner.assists.targetingComputerHint',
+  porkchop: 'planner.assists.porkchopHint',
+  coach_marks: 'planner.assists.coachMarksHint',
+} as const satisfies Record<AssistId, MessageKey>;
+
+/**
+ * How each medal effect is phrased. Three distinct sentences, by design.
+ *
+ * `none` renders nothing rather than "no effect": a row that says nothing about medals is
+ * unambiguous, and a row that says "no effect on medals" invites the reader to wonder what
+ * the effect is. §6.6's three kinds are not symmetric and a uniform badge would be wrong
+ * about half of them — turning *off* the closest-approach readout earns *Blind*, which is a
+ * distinction rather than a penalty, while turning *on* the targeting computer caps at
+ * Silver.
+ */
+const ASSIST_EFFECT_KEYS: Record<AssistEffect, MessageKey | null> = {
+  none: null,
+  blindWhenDisabled: 'planner.assists.effectBlind',
+  capsWhenEnabled: 'planner.assists.effectCaps',
+};
+
 /**
  * §8.3.12's "default assist set", as seven checkboxes over one stored bitmask.
  *
  * The mask is `@hh/game`'s own encoding — the one §11.6 records in a replay code — so the
  * setting cannot disagree with the thing it seeds. Rendering it as a slider over 0–127
  * would be technically faithful and useless.
+ *
+ * ## This is now the only place assists are chosen, so it carries FR-411
+ *
+ * *"The assist tray MUST show which assists affect medal eligibility and what the current
+ * cap is."* That tray was the planner's fourth panel and is gone — it was seven switches
+ * over the same seven the save already held, and the save's copy was read by nothing, so
+ * the game had two answers to "is snapping on" and scored the run from neither. One
+ * control now, and it is this one; what it inherited with the job is the requirement.
+ *
+ * So each row states its effect **and its direction**, in words, and the cap is stated
+ * above them, where the tray put it: it is the consequence of the switches rather than one
+ * more of them. What cannot move here is the contract's own permission — §6.6's
+ * `assistsAllowed` is per contract and this screen is not on one, so an assist the current
+ * contract does not offer is still off in the run whatever this says. `usePlanner` applies
+ * that restriction, and the cap here is therefore the worst case rather than a promise.
  */
 const AssistSetControl = ({
   t,
@@ -98,6 +147,8 @@ const AssistSetControl = ({
   // arrive from a control here; it can arrive from a hand-edited file, and `inDomain`
   // already refuses it on the way in, so this is belt to that brace.
   const state = decodeAssists(mask) ?? decodeAssists(0);
+  const cap = state === undefined ? 'clean' : medalCap(state);
+  const capping = state === undefined ? [] : cappingAssists(state);
 
   return (
     <fieldset class="hh-setting hh-setting--assists" data-testid="setting-gameplay.assists">
@@ -105,20 +156,51 @@ const AssistSetControl = ({
       <p class="hh-setting__note">
         {t(SETTING_NOTES['gameplay.assists'] ?? 'settings.assists.hint', {})}
       </p>
-      {ASSIST_IDS.map((id) => (
-        <label key={id} class="hh-setting__option">
-          <input
-            type="checkbox"
-            checked={state?.[id] === true}
-            data-testid={`assist-${id}`}
-            onInput={(event) => {
-              if (state === undefined) return;
-              onChange(encodeAssists({ ...state, [id]: event.currentTarget.checked }));
-            }}
-          />
-          <span>{t(ASSIST_NAME_KEYS[id], {})}</span>
-        </label>
-      ))}
+
+      {/* FR-411's cap. First, because it is what the switches below add up to. */}
+      <p class="hh-assists__cap" data-testid="assist-cap" data-cap={cap}>
+        {cap === 'clean'
+          ? t('planner.assists.capClean', {})
+          : t('planner.assists.capAt', {
+              medal: t('planner.assists.medalSilver', {}),
+              count: capping.length,
+            })}
+      </p>
+
+      {ASSIST_IDS.map((id) => {
+        const effect = ASSIST_EFFECT_KEYS[ASSISTS[id].effect];
+        const hintId = `hh-assist-${id}-hint`;
+        return (
+          <div key={id} class="hh-assists__row" data-assist={id}>
+            <label class="hh-setting__option">
+              <input
+                type="checkbox"
+                checked={state?.[id] === true}
+                aria-describedby={hintId}
+                data-testid={`assist-${id}`}
+                onInput={(event) => {
+                  if (state === undefined) return;
+                  onChange(encodeAssists({ ...state, [id]: event.currentTarget.checked }));
+                }}
+              />
+              {/* The state is the checkbox's own, never a second label saying "on". */}
+              <span>{t(ASSIST_NAME_KEYS[id], {})}</span>
+            </label>
+            <p class="hh-assists__hint" id={hintId}>
+              {t(ASSIST_HINT_KEYS[id], {})}
+            </p>
+            {effect === null ? null : (
+              <p
+                class="hh-assists__effect"
+                data-testid={`assist-${id}-effect`}
+                data-effect={ASSISTS[id].effect}
+              >
+                {t(effect, {})}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </fieldset>
   );
 };

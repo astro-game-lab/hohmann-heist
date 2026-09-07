@@ -706,8 +706,6 @@ export const en: Messages = {
     'Always on. Seeing where the plan goes is the game, not a hint about it.',
   'planner.assists.effectBlind': () => 'Turning this off earns Blind.',
   'planner.assists.effectCaps': () => 'Using this caps the contract at Silver.',
-  'planner.assists.defaultOn': () => 'Changed — normally on.',
-  'planner.assists.defaultOff': () => 'Changed — normally off.',
   'planner.assists.capClean': () => 'Best available: any medal, Clean Job eligible.',
   'planner.assists.capAt': ({ medal, count }, fmt) =>
     `Best available: ${medal} — ${fmt.integer(count)} assist${count === 1 ? '' : 's'} in use.`,
@@ -755,11 +753,9 @@ export const en: Messages = {
   'planner.nodeMenu.open': ({ index }, fmt) => `Open actions for burn ${fmt.integer(index)}`,
   'planner.plan.snappedTo': ({ kind }) => `snapped to ${kind}`,
 
-  'planner.assists.heading': () => 'Assists',
 
   'planner.tab.plan': ({ count }, fmt) => `Plan (${fmt.integer(count)})`,
   'planner.tab.readouts': () => 'Readouts',
-  'planner.tab.assists': () => 'Assists',
   'planner.tabsLabel': () => 'Planner panels',
 
   // ── The node editor (§8.3.5) ──────────────────────────────────────────────

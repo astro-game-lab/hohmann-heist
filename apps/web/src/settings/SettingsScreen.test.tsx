@@ -227,6 +227,41 @@ describe('changing a setting', () => {
     expect(el('assist-porkchop')).toHaveProperty('checked', false);
   });
 
+  it('states the medal effect and its direction on the assists that have one (FR-411)', async () => {
+    await mount();
+    // *"The assist tray MUST show which assists affect medal eligibility and what the
+    // current cap is."* The tray is gone and this group is the only place the assists are
+    // chosen, so the requirement is this group's now.
+    //
+    // §6.6's three kinds are not symmetric and the interface must not imply they are:
+    // turning the closest-approach readout *off* earns Blind, turning the targeting
+    // computer *on* caps at Silver, and node snapping does neither.
+    expect(el('assist-closest_approach-effect')?.dataset['effect']).toBe('blindWhenDisabled');
+    expect(el('assist-targeting_computer-effect')?.dataset['effect']).toBe('capsWhenEnabled');
+    expect(el('assist-snapping-effect')).toBeNull();
+  });
+
+  it('states the cap the current set produces, above the switches that produce it', async () => {
+    await mount();
+    // The defaults cap nothing, which is §6.7's point about Clean Job: it is available to a
+    // player who has left every default alone.
+    expect(el('assist-cap')?.dataset['cap']).toBe('clean');
+
+    await act(() => {
+      el('assist-targeting_computer')?.click();
+    });
+    expect(el('assist-cap')?.dataset['cap']).toBe('silver');
+  });
+
+  it('describes each assist, so the switch is not the only thing to go on', async () => {
+    await mount();
+    const hint = document.getElementById('hh-assist-snapping-hint');
+    expect(hint?.textContent).not.toBe('');
+    // Associated with the control rather than merely beside it — the same rule the commit
+    // bar's reasons follow.
+    expect(el('assist-snapping')?.getAttribute('aria-describedby')).toBe('hh-assist-snapping-hint');
+  });
+
   it('asks before resetting everything, and does nothing if refused', async () => {
     const onStored = vi.fn();
     await mount({ onStored });
